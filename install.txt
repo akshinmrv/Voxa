@@ -1,0 +1,24 @@
+# ── Core pipeline (required) ─────────────────────────────
+openai-whisper          # transcription
+edge-tts                # default TTS engine
+pysrt                   # subtitle handling
+deep-translator         # Google translation backend
+openai                  # OpenAI translation backend
+tqdm                    # progress bars
+requests                # Ollama HTTP calls
+torch
+torchaudio
+omegaconf
+transformers<4.40
+
+# ── Audio processing (required) ──────────────────────────
+soundfile               # WAV read/write
+noisereduce             # noise reduction
+numpy
+
+# ── Optional TTS engines ─────────────────────────────────
+piper-tts               # only needed for --tts piper (offline)
+# TTS                   # uncomment for --tts xtts (Coqui voice cloning)
+
+# ── Dev / testing (optional) ─────────────────────────────
+# pytest                # run the unit test suite:  pytest -q

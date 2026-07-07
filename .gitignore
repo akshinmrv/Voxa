@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+venv/
+.venv/
+
+# AutoDub working / output artifacts
+*_work/
+*.srt
+autodub.log
+state.json
+run.sh
+
+# Media (input videos / generated audio are user data, not source)
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.wav
+*.mp3
+
+# Secrets / environment
+.env
+*.key
+*.pem
+
+# Editor / OS / tooling
+.claude/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
