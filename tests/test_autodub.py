@@ -7,6 +7,8 @@ runtime deps (whisper/torch/ffmpeg) are not required — autodub guards those im
 
 Run:  pytest -q
 """
+import pytest
+
 import autodub
 
 
@@ -179,6 +181,26 @@ def test_load_config_defaults_missing_and_invalid(tmp_path):
     bad = tmp_path / "bad.json"
     bad.write_text("{not valid json", encoding="utf-8")
     assert autodub.load_config_defaults(str(bad)) == {}
+
+
+# ── Scoped unsafe torch.load (security hardening) ────────
+def test_allow_unsafe_torch_load_scopes_and_restores():
+    if autodub.torch is None:
+        pytest.skip("torch not installed")
+    original = autodub.torch.load
+    with autodub._allow_unsafe_torch_load():
+        assert autodub.torch.load is not original   # patched only inside the block
+    assert autodub.torch.load is original           # restored afterwards
+
+
+def test_apply_runtime_patches_leaves_torch_load_safe():
+    # The global weights_only=False patch must be gone: _apply_runtime_patches
+    # must NOT replace torch.load process-wide.
+    if autodub.torch is None:
+        pytest.skip("torch not installed")
+    before = autodub.torch.load
+    autodub._apply_runtime_patches()
+    assert autodub.torch.load is before
 
 
 # ── Structured (JSON) logging ────────────────────────────

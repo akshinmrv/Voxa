@@ -4,7 +4,7 @@ AutoDub Pro v4.0 - Professional Video Translation and Dubbing Tool
 FIXED: Audio distortion and Piper silence issues (Linux/Fedora compatible)
 Added: XTTS v2 voice cloning support
 """
-import sys, os, asyncio, subprocess, argparse, json, re, time, logging, shutil, functools, random
+import sys, os, asyncio, subprocess, argparse, json, re, time, logging, shutil, functools, random, contextlib
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Optional, Tuple
@@ -122,11 +122,26 @@ def forced_load(uri, **kwargs):
 
 def _apply_runtime_patches():
     """Apply library patches needed at runtime (safe no-op when deps are absent)."""
-    if torch is not None:
-        torch.load = functools.partial(torch.load, weights_only=False)
     if torchaudio is not None:
         torchaudio.load = forced_load
     os.environ["COQUI_TOS_AGREED"] = "1"
+
+
+@contextlib.contextmanager
+def _allow_unsafe_torch_load():
+    """Temporarily allow full (weights_only=False) torch.load for TRUSTED local model
+    checkpoints (XTTS / Whisper) that store non-tensor objects, then restore the safe
+    default. This replaces the former process-wide patch, which left arbitrary-pickle
+    deserialization enabled for every torch.load in the process."""
+    if torch is None:
+        yield
+        return
+    original = torch.load
+    torch.load = functools.partial(torch.load, weights_only=False)
+    try:
+        yield
+    finally:
+        torch.load = original
 
 
 def _check_runtime_deps() -> bool:
@@ -188,7 +203,10 @@ def load_xtts_model():
         from TTS.api import TTS
         logging.info("🔄 Loading XTTS v2 model (first run may take a while)...")
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+        # XTTS checkpoints store config objects, so they need weights_only=False —
+        # scoped to this trusted local load only (see _allow_unsafe_torch_load).
+        with _allow_unsafe_torch_load():
+            tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
         logging.info(f"✓ XTTS v2 loaded on {device.upper()}")
         return tts
     except ImportError:
@@ -1279,7 +1297,9 @@ async def process_video(video_path: str, args, logger: Logger):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"⚙️  Using device: {device.upper()}")
         try:
-            model = whisper.load_model(args.whisper_model, device=device)
+            # Whisper loads a trusted local checkpoint; keep the safe default elsewhere.
+            with _allow_unsafe_torch_load():
+                model = whisper.load_model(args.whisper_model, device=device)
             result = model.transcribe(str(audio_clean), fp16=(device == "cuda"), verbose=False)
             segments = result['segments']
             logger.info(f"🌍 Detected language: {result.get('language', 'unknown')}")
