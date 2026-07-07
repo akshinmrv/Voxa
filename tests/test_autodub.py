@@ -107,22 +107,38 @@ def test_param_error_detection():
 
 # ── Usage tracking ───────────────────────────────────────
 def test_record_usage_accumulates():
-    for k in autodub._openai_usage:
-        autodub._openai_usage[k] = 0
-
-    class _Usage:
-        prompt_tokens = 10
-        completion_tokens = 5
-        total_tokens = 15
-
-    autodub._record_openai_usage(_Usage())
-    autodub._record_openai_usage(_Usage())
-    assert autodub._openai_usage["calls"] == 2
-    assert autodub._openai_usage["total_tokens"] == 30
+    autodub._llm_usage.pop("openai", None)
+    autodub._record_llm_usage("openai", 10, 5)
+    autodub._record_llm_usage("openai", 10, 5)
+    u = autodub._llm_usage["openai"]
+    assert u["calls"] == 2
+    assert u["input_tokens"] == 20
+    assert u["output_tokens"] == 10
 
 
-# ── Batch passthrough when no client ─────────────────────
-def test_batch_returns_input_when_no_client(monkeypatch):
+# ── Provider registry ────────────────────────────────────
+def test_provider_registry_has_openai_and_anthropic():
+    assert "openai" in autodub.LLM_PROVIDERS
+    assert "anthropic" in autodub.LLM_PROVIDERS
+    for name, info in autodub.LLM_PROVIDERS.items():
+        assert callable(info["chat"])
+        assert info["default_model"]
+        assert info["env_key"]
+
+
+# ── Batch passthrough when no client (both providers) ─────
+def test_openai_batch_returns_input_when_no_client(monkeypatch):
     monkeypatch.setattr(autodub, "get_openai_client", lambda api_key=None: None)
     out = autodub.translate_openai_batch(["a", "b", "c"], "ru", "gpt-5")
     assert out == ["a", "b", "c"]
+
+
+def test_anthropic_batch_returns_input_when_no_client(monkeypatch):
+    monkeypatch.setattr(autodub, "get_anthropic_client", lambda api_key=None: None)
+    out = autodub.translate_llm_batch(["a", "b"], "ru", "anthropic")
+    assert out == ["a", "b"]
+
+
+def test_llm_single_returns_source_on_failure(monkeypatch):
+    monkeypatch.setattr(autodub, "get_anthropic_client", lambda api_key=None: None)
+    assert autodub.translate_llm("hello", "ru", "anthropic") == "hello"

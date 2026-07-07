@@ -54,9 +54,9 @@ except ImportError:
 # ─────────────────────────────────────────────
 #  OpenAI translation config
 # ─────────────────────────────────────────────
-# Default model — easily swappable (e.g. "gpt-5", "gpt-5-mini", or any future model).
-# Override at runtime with --openai_model.
+# Default models — easily swappable. Override at runtime with --<provider>_model.
 DEFAULT_OPENAI_MODEL = "gpt-5"
+DEFAULT_ANTHROPIC_MODEL = "claude-opus-4-8"
 
 # Language map for Ollama
 LANG_MAP = {
@@ -474,8 +474,8 @@ def detect_emotion(text: str) -> Optional[str]:
 
 def translate_with_retry(text: str, target_lang: str, translator_type: str,
                          ollama_model: str, max_retries: int = 3,
-                         openai_model: Optional[str] = None,
-                         openai_api_key: Optional[str] = None) -> str:
+                         llm_model: Optional[str] = None,
+                         llm_api_key: Optional[str] = None) -> str:
     for attempt in range(max_retries):
         try:
             if translator_type == "google":
@@ -486,10 +486,9 @@ def translate_with_retry(text: str, target_lang: str, translator_type: str,
                 translated = translate_ollama(text, target_lang, ollama_model)
                 if translated and translated != text:
                     return translated
-            elif translator_type == "openai":
-                translated = translate_openai(text, target_lang,
-                                              openai_model or DEFAULT_OPENAI_MODEL,
-                                              openai_api_key)
+            elif translator_type in LLM_PROVIDERS:
+                translated = translate_llm(text, target_lang, translator_type,
+                                           llm_model, llm_api_key)
                 # Accept any non-empty result: an identical translation (e.g. proper
                 # nouns/numbers) is legitimate, unlike the google/ollama echo-on-failure.
                 if translated and translated.strip():
@@ -536,10 +535,11 @@ def translate_ollama(text: str, target_lang: str, model_name: str) -> str:
 
 
 # ─────────────────────────────────────────────
-#  OpenAI translation
+#  LLM translation providers (OpenAI, Anthropic, …)
 # ─────────────────────────────────────────────
 
 _openai_client = None
+_anthropic_client = None
 
 
 def get_openai_client(api_key: Optional[str] = None):
@@ -565,45 +565,67 @@ def get_openai_client(api_key: Optional[str] = None):
     return _openai_client
 
 
-# ── Usage / cost tracking ────────────────────────────────
-_openai_usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+def get_anthropic_client(api_key: Optional[str] = None):
+    """Lazily create and cache a single Anthropic client instance."""
+    global _anthropic_client
+    if _anthropic_client is not None:
+        return _anthropic_client
+    try:
+        import anthropic
+    except ImportError:
+        logging.error("❌ 'anthropic' package not installed. Run: pip install anthropic")
+        return None
+    key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        logging.error("❌ Anthropic API key not found. "
+                      "Set the ANTHROPIC_API_KEY environment variable or pass --anthropic_api_key")
+        return None
+    try:
+        _anthropic_client = anthropic.Anthropic(api_key=key, max_retries=5)
+    except Exception as e:
+        logging.error(f"❌ Failed to initialize Anthropic client: {e}")
+        return None
+    return _anthropic_client
+
+
+# ── Usage / cost tracking (per provider) ─────────────────
+_llm_usage: Dict[str, Dict[str, int]] = {}
 
 # Optional price table: model prefix -> ($ per 1M input tokens, $ per 1M output tokens).
-# Left empty by default because OpenAI pricing changes over time — fill in the models you
-# use to get cost estimates. When a model is not listed, only token counts are reported.
-OPENAI_PRICING: Dict[str, Tuple[float, float]] = {
+# Left empty by default because pricing changes over time — fill in the models you use to
+# get cost estimates. When a model is not listed, only token counts are reported.
+LLM_PRICING: Dict[str, Tuple[float, float]] = {
     # "gpt-5": (1.25, 10.0),
-    # "gpt-5-mini": (0.25, 2.0),
+    # "claude-opus-4-8": (5.0, 25.0),
 }
 
 
-def _record_openai_usage(usage):
-    if usage is None:
-        return
-    _openai_usage["calls"] += 1
-    _openai_usage["prompt_tokens"] += getattr(usage, "prompt_tokens", 0) or 0
-    _openai_usage["completion_tokens"] += getattr(usage, "completion_tokens", 0) or 0
-    _openai_usage["total_tokens"] += getattr(usage, "total_tokens", 0) or 0
+def _record_llm_usage(provider: str, input_tokens: int, output_tokens: int):
+    u = _llm_usage.setdefault(provider, {"calls": 0, "input_tokens": 0, "output_tokens": 0})
+    u["calls"] += 1
+    u["input_tokens"] += input_tokens or 0
+    u["output_tokens"] += output_tokens or 0
 
 
-def _estimate_openai_cost(model: str, prompt_tokens: int, completion_tokens: int) -> Optional[float]:
-    for prefix, (in_price, out_price) in OPENAI_PRICING.items():
+def _estimate_llm_cost(model: str, input_tokens: int, output_tokens: int) -> Optional[float]:
+    for prefix, (in_price, out_price) in LLM_PRICING.items():
         if model.startswith(prefix):
-            return (prompt_tokens / 1e6) * in_price + (completion_tokens / 1e6) * out_price
+            return (input_tokens / 1e6) * in_price + (output_tokens / 1e6) * out_price
     return None
 
 
-def log_openai_usage_summary(model: str):
-    u = _openai_usage
-    if u["calls"] == 0:
+def log_llm_usage_summary(provider: str, model: str):
+    u = _llm_usage.get(provider)
+    if not u or u["calls"] == 0:
         return
-    cost = _estimate_openai_cost(model, u["prompt_tokens"], u["completion_tokens"])
-    cost_str = f", est. cost ${cost:.4f}" if cost is not None else " (set OPENAI_PRICING for cost)"
-    logging.info(f"💰 OpenAI usage: {u['calls']} calls, {u['total_tokens']} tokens "
-                 f"(prompt {u['prompt_tokens']}, completion {u['completion_tokens']}){cost_str}")
+    total = u["input_tokens"] + u["output_tokens"]
+    cost = _estimate_llm_cost(model, u["input_tokens"], u["output_tokens"])
+    cost_str = f", est. cost ${cost:.4f}" if cost is not None else " (set LLM_PRICING for cost)"
+    logging.info(f"💰 {provider} usage: {u['calls']} calls, {total} tokens "
+                 f"(input {u['input_tokens']}, output {u['output_tokens']}){cost_str}")
 
 
-# ── Robust request helper: param degradation + exponential backoff ──
+# ── OpenAI request helper: param degradation + exponential backoff ──
 _OPENAI_TRANSIENT = ("rate limit", "ratelimit", "429", "timeout", "timed out", "overloaded",
                      "temporarily unavailable", "503", "502", "500", "504",
                      "connection", "econnreset")
@@ -626,8 +648,8 @@ def _is_param_error(err) -> bool:
 
 def _openai_chat(client, messages, model: str, want_json: bool = False,
                  max_backoff_retries: int = 5) -> str:
-    """One chat completion with graceful parameter degradation and exponential backoff
-    on rate-limit / 5xx errors. Records token usage. Raises on unrecoverable failure."""
+    """One OpenAI chat completion with graceful parameter degradation and exponential
+    backoff on rate-limit / 5xx errors. Records token usage. Raises on unrecoverable failure."""
     combos = [(True, want_json), (False, want_json)]
     if want_json:
         combos += [(True, False), (False, False)]   # drop json mode if unsupported
@@ -648,7 +670,9 @@ def _openai_chat(client, messages, model: str, want_json: bool = False,
                 if use_json:
                     kwargs["response_format"] = {"type": "json_object"}
                 resp = client.chat.completions.create(**kwargs)
-                _record_openai_usage(getattr(resp, "usage", None))
+                usage = getattr(resp, "usage", None)
+                _record_llm_usage("openai", getattr(usage, "prompt_tokens", 0),
+                                  getattr(usage, "completion_tokens", 0))
                 return resp.choices[0].message.content or ""
             except Exception as e:
                 last_err = e
@@ -663,6 +687,48 @@ def _openai_chat(client, messages, model: str, want_json: bool = False,
     raise last_err if last_err else RuntimeError("OpenAI request failed")
 
 
+# ── Provider chat adapters: (system, user, model, want_json, api_key) -> text ──
+
+def _openai_chat_text(system: str, user: str, model: str, want_json: bool,
+                      api_key: Optional[str]) -> str:
+    client = get_openai_client(api_key)
+    if client is None:
+        raise RuntimeError("OpenAI client unavailable (missing package or API key)")
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    return _openai_chat(client, messages, model, want_json=want_json)
+
+
+def _anthropic_chat_text(system: str, user: str, model: str, want_json: bool,
+                         api_key: Optional[str]) -> str:
+    # want_json is advisory only — Claude has no JSON mode; the prompt requests JSON.
+    client = get_anthropic_client(api_key)
+    if client is None:
+        raise RuntimeError("Anthropic client unavailable (missing package or API key)")
+    # No temperature: current Claude models (Opus 4.x) reject sampling params.
+    # The SDK retries 429/5xx automatically (max_retries set on the client).
+    resp = client.messages.create(
+        model=model,
+        max_tokens=4096,
+        system=system,
+        messages=[{"role": "user", "content": user}],
+    )
+    usage = getattr(resp, "usage", None)
+    _record_llm_usage("anthropic", getattr(usage, "input_tokens", 0),
+                      getattr(usage, "output_tokens", 0))
+    parts = [getattr(b, "text", "") for b in (resp.content or [])
+             if getattr(b, "type", None) == "text"]
+    return "".join(parts)
+
+
+# Provider registry — register a new LLM by adding its chat adapter here.
+LLM_PROVIDERS: Dict[str, Dict] = {
+    "openai": {"chat": _openai_chat_text, "default_model": DEFAULT_OPENAI_MODEL,
+               "env_key": "OPENAI_API_KEY"},
+    "anthropic": {"chat": _anthropic_chat_text, "default_model": DEFAULT_ANTHROPIC_MODEL,
+                  "env_key": "ANTHROPIC_API_KEY"},
+}
+
+
 _TRANSLATION_PREFIX_RE = re.compile(
     r'^\s*(translation|translated|перевод|traduction|翻译|çeviri|tərcümə)\s*[:：\-]\s*',
     re.IGNORECASE)
@@ -675,19 +741,11 @@ def _clean_line(text: str) -> str:
     return t.strip().strip('"').strip("'").strip()
 
 
-def translate_openai(text: str, target_lang: str, model: str,
-                     api_key: Optional[str] = None) -> str:
-    """
-    Translate a single subtitle line into natural, native-sounding target language
-    using the OpenAI Chat Completions API. Returns the original text on failure so
-    the caller's retry/fallback chain can take over.
-    """
-    client = get_openai_client(api_key)
-    if client is None:
-        return text
-
+def _llm_translate_single(text: str, target_lang: str, model: str, chat_fn,
+                          api_key: Optional[str] = None) -> str:
+    """Translate one subtitle line via any provider chat adapter. Returns the source
+    text on failure so the caller's retry/fallback chain can take over."""
     full_lang = LANG_MAP.get(target_lang.lower(), target_lang)
-
     system_prompt = (
         f"You are a professional subtitle translator and native-level localization expert "
         f"for {full_lang}. Translate the user's line into {full_lang} so it sounds completely "
@@ -698,26 +756,26 @@ def translate_openai(text: str, target_lang: str, model: str,
         f"Do NOT add quotes, notes, explanations, transliteration or any extra text — "
         f"output ONLY the translated line."
     )
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": text},
-    ]
-
     try:
-        result = _openai_chat(client, messages, model, want_json=False)
+        result = chat_fn(system_prompt, text, model, False, api_key)
     except Exception as e:
-        logging.warning(f"OpenAI error: {e}")
+        logging.warning(f"LLM translate error: {e}")
         return text
-
     result = _clean_line(result)
     return result if result else text
 
 
+def translate_openai(text: str, target_lang: str, model: str,
+                     api_key: Optional[str] = None) -> str:
+    """Backward-compatible single-line OpenAI translation (delegates to the registry)."""
+    return _llm_translate_single(text, target_lang, model, _openai_chat_text, api_key)
+
+
 # ─────────────────────────────────────────────
-#  OpenAI context-aware batch translation (Task C)
+#  Context-aware batch translation (Task C)
 # ─────────────────────────────────────────────
-DEFAULT_OPENAI_BATCH_SIZE = 25   # subtitle lines translated together per API call
-_OPENAI_CONTEXT_OVERLAP = 3      # previous lines passed as context across chunk boundaries
+DEFAULT_LLM_BATCH_SIZE = 25   # subtitle lines translated together per API call
+_LLM_CONTEXT_OVERLAP = 3      # previous lines passed as context across chunk boundaries
 
 
 def _parse_batch_translations(raw: str, expected: int) -> Optional[List[str]]:
@@ -744,10 +802,11 @@ def _parse_batch_translations(raw: str, expected: int) -> Optional[List[str]]:
     return [_clean_line(str(x)) for x in arr]
 
 
-def _translate_chunk_openai(client, chunk: List[str], full_lang: str, target_lang: str,
-                            model: str, context_pairs: List[Tuple[str, str]]) -> List[str]:
-    """Translate one contiguous chunk of subtitle lines in a single API call, with
-    mutual context. Falls back to per-line translation if the batch response is invalid."""
+def _llm_translate_chunk(chunk: List[str], full_lang: str, target_lang: str, model: str,
+                         chat_fn, api_key: Optional[str],
+                         context_pairs: List[Tuple[str, str]]) -> List[str]:
+    """Translate one contiguous chunk of subtitle lines in a single API call, with mutual
+    context. Falls back to per-line translation if the batch response is invalid."""
     system_prompt = (
         f"You are a professional subtitle translator and native-level localization expert "
         f"for {full_lang}. You receive a contiguous block of subtitle lines from a single video "
@@ -762,55 +821,74 @@ def _translate_chunk_openai(client, chunk: List[str], full_lang: str, target_lan
     user_obj: Dict = {"lines": chunk}
     if context_pairs:
         user_obj["context"] = [{"source": s, "translation": t} for s, t in context_pairs]
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": json.dumps(user_obj, ensure_ascii=False)},
-    ]
+    user = json.dumps(user_obj, ensure_ascii=False)
 
     try:
-        raw = _openai_chat(client, messages, model, want_json=True)
+        raw = chat_fn(system_prompt, user, model, True, api_key)
     except Exception as e:
-        logging.warning(f"OpenAI batch error: {e} — falling back to per-line for this chunk")
-        return [translate_openai(t, target_lang, model) for t in chunk]
+        logging.warning(f"LLM batch error: {e} — falling back to per-line for this chunk")
+        return [_llm_translate_single(t, target_lang, model, chat_fn, api_key) for t in chunk]
 
     parsed = _parse_batch_translations(raw, len(chunk))
     if parsed is not None:
         return parsed
-    logging.warning("OpenAI batch: response count/parse mismatch — falling back to per-line for this chunk")
-    return [translate_openai(t, target_lang, model) for t in chunk]
+    logging.warning("LLM batch: response count/parse mismatch — falling back to per-line for this chunk")
+    return [_llm_translate_single(t, target_lang, model, chat_fn, api_key) for t in chunk]
 
 
-def translate_openai_batch(texts: List[str], target_lang: str, model: str,
-                           api_key: Optional[str] = None,
-                           batch_size: int = DEFAULT_OPENAI_BATCH_SIZE) -> List[str]:
-    """Translate a full list of subtitle lines using context-aware chunked OpenAI calls.
-    Output length and order always match the input; falls back to the source line on failure."""
-    client = get_openai_client(api_key)
-    if client is None:
-        return list(texts)
+def _llm_translate_batch(texts: List[str], target_lang: str, model: str, chat_fn,
+                         api_key: Optional[str] = None,
+                         batch_size: int = DEFAULT_LLM_BATCH_SIZE) -> List[str]:
+    """Translate a full list of subtitle lines using context-aware chunked LLM calls.
+    Output length and order always match the input; falls back to the source on failure."""
     full_lang = LANG_MAP.get(target_lang.lower(), target_lang)
     if batch_size < 1:
-        batch_size = DEFAULT_OPENAI_BATCH_SIZE
+        batch_size = DEFAULT_LLM_BATCH_SIZE
 
     results: List[str] = []
     for start in tqdm(range(0, len(texts), batch_size),
-                      desc="OpenAI batch translate", unit="chunk"):
+                      desc="LLM batch translate", unit="chunk"):
         chunk = texts[start:start + batch_size]
 
         # Carry a short tail of the previous chunk as cross-boundary context.
         context_pairs: List[Tuple[str, str]] = []
-        if start > 0 and _OPENAI_CONTEXT_OVERLAP > 0:
-            ctx_src = texts[max(0, start - _OPENAI_CONTEXT_OVERLAP):start]
-            ctx_tr = results[max(0, start - _OPENAI_CONTEXT_OVERLAP):start]
+        if start > 0 and _LLM_CONTEXT_OVERLAP > 0:
+            ctx_src = texts[max(0, start - _LLM_CONTEXT_OVERLAP):start]
+            ctx_tr = results[max(0, start - _LLM_CONTEXT_OVERLAP):start]
             context_pairs = list(zip(ctx_src, ctx_tr))
 
-        translated = _translate_chunk_openai(client, chunk, full_lang, target_lang,
-                                             model, context_pairs)
+        translated = _llm_translate_chunk(chunk, full_lang, target_lang, model,
+                                          chat_fn, api_key, context_pairs)
         if len(translated) != len(chunk):   # final alignment safety net
-            translated = [translate_openai(t, target_lang, model) for t in chunk]
+            translated = [_llm_translate_single(t, target_lang, model, chat_fn, api_key)
+                          for t in chunk]
         results.extend(translated)
 
     return results
+
+
+def translate_llm(text: str, target_lang: str, provider: str, model: Optional[str] = None,
+                  api_key: Optional[str] = None) -> str:
+    """Single-line translation via the named LLM provider from LLM_PROVIDERS."""
+    p = LLM_PROVIDERS[provider]
+    return _llm_translate_single(text, target_lang, model or p["default_model"],
+                                 p["chat"], api_key)
+
+
+def translate_llm_batch(texts: List[str], target_lang: str, provider: str,
+                        model: Optional[str] = None, api_key: Optional[str] = None,
+                        batch_size: int = DEFAULT_LLM_BATCH_SIZE) -> List[str]:
+    """Context-aware batch translation via the named LLM provider from LLM_PROVIDERS."""
+    p = LLM_PROVIDERS[provider]
+    return _llm_translate_batch(texts, target_lang, model or p["default_model"],
+                                p["chat"], api_key, batch_size)
+
+
+def translate_openai_batch(texts: List[str], target_lang: str, model: str,
+                           api_key: Optional[str] = None,
+                           batch_size: int = DEFAULT_LLM_BATCH_SIZE) -> List[str]:
+    """Backward-compatible OpenAI batch translation (delegates to the registry)."""
+    return translate_llm_batch(texts, target_lang, "openai", model, api_key, batch_size)
 
 
 def merge_segments_into_sentences(segments: List[Dict], max_duration: float = 10.0) -> List[Dict]:
@@ -965,16 +1043,16 @@ async def generate_tts_edge(text: str, voice: str, output_file: str,
 
 def parallel_translate(segments: List[Dict], target_lang: str, translator_type: str,
                        ollama_model: str, max_workers: int = 4,
-                       openai_model: Optional[str] = None,
-                       openai_api_key: Optional[str] = None) -> List[Dict]:
+                       llm_model: Optional[str] = None,
+                       llm_api_key: Optional[str] = None) -> List[Dict]:
     def translate_segment(seg_data):
         idx, seg = seg_data
         text = seg['text'].strip()
         if not text:
             return idx, seg
         translated = translate_with_retry(text, target_lang, translator_type, ollama_model,
-                                          openai_model=openai_model,
-                                          openai_api_key=openai_api_key)
+                                          llm_model=llm_model,
+                                          llm_api_key=llm_api_key)
         return idx, {'text': translated, 'start': seg['start'], 'end': seg['end']}
 
     results = [None] * len(segments)
@@ -1183,26 +1261,27 @@ async def process_video(video_path: str, args, logger: Logger):
             translated_segments = json.load(f)
     else:
         logger.info(f"[5/7] Translating to {args.target_lang} with {args.translator}...")
-        if args.translator == "openai":
-            logger.info(f"🤖 Context-aware OpenAI batch translation "
-                        f"(model: {args.openai_model}, batch: {args.openai_batch_size})")
+        if args.translator in LLM_PROVIDERS:
+            llm_model = getattr(args, f"{args.translator}_model")
+            llm_api_key = getattr(args, f"{args.translator}_api_key")
+            logger.info(f"🤖 Context-aware {args.translator} batch translation "
+                        f"(model: {llm_model}, batch: {args.llm_batch_size})")
             indexed = [seg for seg in merged_segments if seg['text'].strip()]
             texts = [seg['text'].strip() for seg in indexed]
-            translated_texts = translate_openai_batch(
-                texts, args.target_lang, args.openai_model,
-                api_key=args.openai_api_key, batch_size=args.openai_batch_size
+            translated_texts = translate_llm_batch(
+                texts, args.target_lang, args.translator, model=llm_model,
+                api_key=llm_api_key, batch_size=args.llm_batch_size
             )
             translated_segments = [
                 {'text': tt or seg['text'].strip(), 'start': seg['start'], 'end': seg['end']}
                 for seg, tt in zip(indexed, translated_texts)
             ]
-            log_openai_usage_summary(args.openai_model)
+            log_llm_usage_summary(args.translator, llm_model)
         elif args.parallel and len(merged_segments) > 10:
             logger.info("🚀 Using parallel translation")
             translated_segments = parallel_translate(
                 merged_segments, args.target_lang, args.translator,
-                args.ollama_model, max_workers=args.workers,
-                openai_model=args.openai_model, openai_api_key=args.openai_api_key
+                args.ollama_model, max_workers=args.workers
             )
         else:
             translated_segments = []
@@ -1210,9 +1289,7 @@ async def process_video(video_path: str, args, logger: Logger):
                 text = seg['text'].strip()
                 if not text:
                     continue
-                translated = translate_with_retry(text, args.target_lang, args.translator, args.ollama_model,
-                                                  openai_model=args.openai_model,
-                                                  openai_api_key=args.openai_api_key)
+                translated = translate_with_retry(text, args.target_lang, args.translator, args.ollama_model)
                 translated_segments.append({'text': translated, 'start': seg['start'], 'end': seg['end']})
         with open(translated_json, 'w', encoding='utf-8') as f:
             json.dump(translated_segments, f, ensure_ascii=False, indent=2)
@@ -1411,18 +1488,19 @@ Examples:
                         choices=["tiny", "base", "small", "medium", "large", "turbo"],
                         help="Whisper model size (default: turbo)")
 
-    parser.add_argument("--translator", choices=["google", "ollama", "openai"], default="google",
-                        help="Translation service (default: google)")
+    parser.add_argument("--translator", choices=["google", "ollama"] + sorted(LLM_PROVIDERS),
+                        default="google", help="Translation service (default: google)")
     parser.add_argument("--ollama_model", default="llama3",
                         help="Ollama model for translation (default: llama3)")
-    parser.add_argument("--openai_model", default=DEFAULT_OPENAI_MODEL,
-                        help=f"OpenAI model for translation (default: {DEFAULT_OPENAI_MODEL}). "
-                             f"Examples: gpt-5, gpt-5-mini")
-    parser.add_argument("--openai_api_key", default=None,
-                        help="OpenAI API key (falls back to OPENAI_API_KEY environment variable)")
-    parser.add_argument("--openai_batch_size", type=int, default=DEFAULT_OPENAI_BATCH_SIZE,
-                        help=f"Subtitle lines translated together per OpenAI call for context "
-                             f"(default: {DEFAULT_OPENAI_BATCH_SIZE})")
+    # Per-provider LLM flags (--openai_model/--openai_api_key, --anthropic_model/...).
+    for _pname, _pinfo in LLM_PROVIDERS.items():
+        parser.add_argument(f"--{_pname}_model", default=_pinfo["default_model"],
+                            help=f"{_pname} model (default: {_pinfo['default_model']})")
+        parser.add_argument(f"--{_pname}_api_key", default=None,
+                            help=f"{_pname} API key (falls back to {_pinfo['env_key']} env var)")
+    parser.add_argument("--llm_batch_size", type=int, default=DEFAULT_LLM_BATCH_SIZE,
+                        help=f"Subtitle lines translated together per LLM call for context "
+                             f"(default: {DEFAULT_LLM_BATCH_SIZE})")
     parser.add_argument("--parallel", action="store_true",
                         help="Enable parallel translation (faster)")
     parser.add_argument("--workers", type=int, default=4,
@@ -1463,11 +1541,14 @@ Examples:
         return 1
     _apply_runtime_patches()
 
-    # Fail fast if OpenAI is selected but no API key is available.
-    if args.translator == "openai" and not (args.openai_api_key or os.environ.get("OPENAI_API_KEY")):
-        print("❌ OpenAI translator selected but no API key found.\n"
-              "   Set the OPENAI_API_KEY environment variable or pass --openai_api_key.")
-        return 1
+    # Fail fast if an LLM translator is selected but no API key is available.
+    if args.translator in LLM_PROVIDERS:
+        _pinfo = LLM_PROVIDERS[args.translator]
+        _key = getattr(args, f"{args.translator}_api_key") or os.environ.get(_pinfo["env_key"])
+        if not _key:
+            print(f"❌ {args.translator} translator selected but no API key found.\n"
+                  f"   Set {_pinfo['env_key']} or pass --{args.translator}_api_key.")
+            return 1
 
     first_video = Path(args.videos[0])
     work_dir = Path.cwd() / f"{first_video.stem}_work"
@@ -1483,8 +1564,8 @@ Examples:
     if args.tts == "xtts":
         logger.info(f"🎤 Voice Sample: {args.voice_sample or 'auto-extract from video'}")
     logger.info(f"🔤 Translator: {args.translator}")
-    if args.translator == "openai":
-        logger.info(f"🤖 OpenAI Model: {args.openai_model}")
+    if args.translator in LLM_PROVIDERS:
+        logger.info(f"🤖 {args.translator} Model: {getattr(args, f'{args.translator}_model')}")
     logger.info(f"🧠 Whisper Model: {args.whisper_model}")
     logger.info(f"⚡ Parallel Processing: {'Yes' if args.parallel else 'No'}")
     logger.info(f"🎭 Emotion Detection: {'Yes' if args.detect_emotion else 'No'}")

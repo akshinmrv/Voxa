@@ -108,43 +108,45 @@ python autodub.py video.mp4 --tts xtts --voice-sample my_voice.wav --target_lang
 ./run.sh video.mp4 --translator ollama --ollama_model mistral 
 ```
 
-### OpenAI translator (most natural)
+### LLM translators — OpenAI & Anthropic (most natural)
 
-Professional, native-sounding translations via the OpenAI API. The model is
-fully configurable and can be swapped for any current or future model.
+Professional, native-sounding translations via an LLM. Two providers are built in
+(`--translator openai` and `--translator anthropic`), and adding another is a small
+change in the `LLM_PROVIDERS` registry in `autodub.py`. The model is fully configurable.
 
 ```bash
-# Provide the API key via environment variable (recommended)
-export OPENAI_API_KEY="sk-..."          # Windows PowerShell: $env:OPENAI_API_KEY="sk-..."
+# OpenAI (key via env var — recommended)
+export OPENAI_API_KEY="sk-..."          # PowerShell: $env:OPENAI_API_KEY="sk-..."
 python autodub.py video.mp4 --translator openai --target_lang ru
-
-# Choose a specific model
 python autodub.py video.mp4 --translator openai --openai_model gpt-5-mini
 
-# Or pass the key directly instead of the env var
-python autodub.py video.mp4 --translator openai --openai_api_key sk-...
+# Anthropic (Claude)
+export ANTHROPIC_API_KEY="sk-ant-..."   # PowerShell: $env:ANTHROPIC_API_KEY="sk-ant-..."
+python autodub.py video.mp4 --translator anthropic --target_lang ru
+python autodub.py video.mp4 --translator anthropic --anthropic_model claude-sonnet-5
 ```
 
-OpenAI translation is **context-aware**: subtitle lines are translated in blocks
+LLM translation is **context-aware**: subtitle lines are translated in blocks
 (not one-by-one), so the model keeps pronouns, gender, names, terminology and tone
 consistent across the whole scene, and carries a short overlap of the previous block
 as context. This produces more natural, professional dubbing and lowers cost/latency.
 If a block response is invalid, it automatically falls back to per-line translation.
 
-Robustness: rate-limit / 5xx errors are retried with exponential backoff, and token
+Robustness: transient (rate-limit / 5xx) errors are retried with backoff, and token
 usage is logged after translation. To also print an estimated cost, add your model's
-prices to the `OPENAI_PRICING` table in `autodub.py`.
+prices to the `LLM_PRICING` table in `autodub.py`.
 
 ```bash
 # Larger blocks = more context (and fewer API calls); smaller = safer for long lines
-python autodub.py video.mp4 --translator openai --openai_batch_size 25
+python autodub.py video.mp4 --translator openai --llm_batch_size 25
 ```
 
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--openai_model` | OpenAI model id (e.g. `gpt-5`, `gpt-5-mini`) | `gpt-5` |
-| `--openai_api_key` | API key (falls back to `OPENAI_API_KEY`) | env var |
-| `--openai_batch_size` | Subtitle lines translated together per call | `25` |
+| `--anthropic_model` | Claude model id (e.g. `claude-opus-4-8`, `claude-sonnet-5`) | `claude-opus-4-8` |
+| `--openai_api_key` / `--anthropic_api_key` | API key (falls back to the provider's env var) | env var |
+| `--llm_batch_size` | Subtitle lines translated together per call | `25` |
 
 ## Command-Line Options
 ```
@@ -157,7 +159,7 @@ options:
                         TTS engine (default: edge)
   --target_lang LANG    Target language code (default: ru)
                         Supports: ru, en, de, fr, es, it, pt, ja, zh, etc.
-  --translator {google,ollama,openai}
+  --translator {google,ollama,openai,anthropic}
                         Translation backend (default: google)
   --voice-sample FILE   Reference WAV for XTTS voice cloning (optional)
   --output-dir DIR      Directory for the final video / subtitles

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "autodub"
 version = "4.1.0"
-description = "Professional video translation & dubbing (Whisper + OpenAI/Google/Ollama + Edge/Piper/XTTS)"
+description = "Professional video translation & dubbing (Whisper + OpenAI/Anthropic/Google/Ollama + Edge/Piper/XTTS)"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -18,6 +18,7 @@ dependencies = [
     "pysrt",
     "deep-translator",
     "openai",
+    "anthropic",
     "tqdm",
     "requests",
     "torch",

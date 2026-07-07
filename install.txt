@@ -4,6 +4,7 @@ edge-tts                # default TTS engine
 pysrt                   # subtitle handling
 deep-translator         # Google translation backend
 openai                  # OpenAI translation backend
+anthropic               # Anthropic (Claude) translation backend
 tqdm                    # progress bars
 requests                # Ollama HTTP calls
 torch
