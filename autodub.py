@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-AutoDub Pro v4.0 - Professional Video Translation and Dubbing Tool
-FIXED: Audio distortion and Piper silence issues (Linux/Fedora compatible)
-Added: XTTS v2 voice cloning support
+AutoDub Pro v4.1 - Professional Video Translation and Dubbing Tool
+
+Pipeline: extract audio -> Whisper transcription -> translate -> TTS -> mux.
+Translation: Google, Ollama, or an LLM provider (OpenAI / Anthropic) with
+context-aware batch translation. TTS: Edge (online), Piper (offline), or XTTS
+(voice cloning). Transcription backends: openai-whisper or faster-whisper.
 """
 import sys, os, asyncio, subprocess, argparse, json, re, time, logging, shutil, functools, random, contextlib
 from pathlib import Path

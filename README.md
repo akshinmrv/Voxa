@@ -5,8 +5,8 @@ Automatically transcribe, translate, and dub videos into different languages usi
 
 ## Features
 
-- 🎙️ **Speech Recognition**: Transcribe audio using OpenAI Whisper
-- 🌍 **Translation**: Google Translate, Ollama (local LLM), or OpenAI (context-aware)
+- 🎙️ **Speech Recognition**: Whisper transcription (openai-whisper or faster-whisper)
+- 🌍 **Translation**: Google, Ollama (local LLM), or context-aware LLM (OpenAI / Anthropic)
 - 🗣️ **Three TTS Engines**:
     - **Edge TTS**: High-quality Microsoft voices (recommended)
     - **Piper**: Fast offline TTS (no internet after model download)
@@ -44,33 +44,25 @@ AutoDub now supports fully offline translation using **Ollama**. This is ideal f
 ### 1. Install Ollama
 **For Linux (Fedora/Ubuntu/etc.):**
 ```bash
-curl -fsSL [https://ollama.com/install.sh](https://ollama.com/install.sh) | sh
+curl -fsSL https://ollama.com/install.sh | sh
 ollama pull llama3
-````
+```
 
 ## Quick Start
 
-Here is the concise guide on how to get started using your setup.sh script, formatted in Markdown:
-🚀 Quick Start Guide
+```bash
+# 1. Install dependencies (see Requirements above for the full setup)
+pip install -r install.txt
 
-Follow these three steps to set up and start dubbing your videos:
-1. Prepare Files
+# 2. (Optional) add API keys for LLM translation
+cp .env.example .env    # then edit
 
-Ensure you have the following files in your project directory:
+# 3. Dub a video
+python autodub.py video.mp4 --target_lang ru
+```
 
-    setup.sh (The installer)
-
-    autodub.py (The main engine)
-
-    install.txt (List of dependencies)
-
-2. Run Installation
-
-Open your terminal in the project folder and execute:
-```Bash
-
-chmod +x setup.sh && ./setup.sh
-````
+On Linux you can instead run `chmod +x setup.sh && ./setup.sh`, which creates a
+`venv` and a `run.sh` wrapper.
 
 ### Basic Usage (Edge TTS - Recommended)
 ```bash
