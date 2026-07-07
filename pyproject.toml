@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autodub"
+version = "4.1.0"
+description = "Professional video translation & dubbing (Whisper + OpenAI/Google/Ollama + Edge/Piper/XTTS)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "AutoDub" }]
+keywords = ["dubbing", "translation", "whisper", "tts", "openai", "subtitles"]
+
+dependencies = [
+    "openai-whisper",
+    "edge-tts",
+    "pysrt",
+    "deep-translator",
+    "openai",
+    "tqdm",
+    "requests",
+    "torch",
+    "torchaudio",
+    "omegaconf",
+    "transformers<4.40",
+    "soundfile",
+    "noisereduce",
+    "numpy",
+]
+
+[project.optional-dependencies]
+piper = ["piper-tts"]
+xtts = ["TTS"]
+dev = ["pytest"]
+
+[project.scripts]
+autodub = "autodub:cli"
+
+[tool.setuptools]
+py-modules = ["autodub"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"

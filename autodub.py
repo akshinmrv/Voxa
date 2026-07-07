@@ -1509,5 +1509,10 @@ Examples:
         return 1
 
 
-if __name__ == "__main__":
+def cli():
+    """Synchronous console-script entry point (see pyproject [project.scripts])."""
     sys.exit(asyncio.run(main()))
+
+
+if __name__ == "__main__":
+    cli()
