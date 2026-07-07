@@ -166,7 +166,34 @@ options:
   --subtitles-only      Generate only the translated .srt (no TTS/video)
   --no-resume           Ignore previous checkpoint and start fresh
   --keep-temp           Keep temporary files after processing
+  --config FILE         JSON file of default option values
+  --env-file FILE       Path to a .env file with API keys (default: .env)
+  --log-format {plain,json}
+                        Log output format (default: plain)
+  --verbose             DEBUG-level logging
 ```
+
+## Configuration
+
+**API keys via `.env`** — copy `.env.example` to `.env` (gitignored) and fill in your
+keys; AutoDub loads it automatically on startup. Real environment variables always win.
+
+```bash
+cp .env.example .env      # then edit; no need to `export` on every run
+```
+
+**Defaults via a JSON config** — put commonly-used options in a file and pass `--config`.
+Keys are the long option names with dashes as underscores. Explicit CLI flags override it.
+
+```json
+{ "translator": "openai", "target_lang": "ru", "tts": "edge", "llm_batch_size": 30 }
+```
+```bash
+python autodub.py video.mp4 --config my_defaults.json
+```
+
+**Structured logging** — `--log-format json` emits one JSON object per log line (for log
+pipelines); `--verbose` raises the level to DEBUG.
 
 ## Supported Languages
 

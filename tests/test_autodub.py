@@ -142,3 +142,52 @@ def test_anthropic_batch_returns_input_when_no_client(monkeypatch):
 def test_llm_single_returns_source_on_failure(monkeypatch):
     monkeypatch.setattr(autodub, "get_anthropic_client", lambda api_key=None: None)
     assert autodub.translate_llm("hello", "ru", "anthropic") == "hello"
+
+
+# ── .env loader ──────────────────────────────────────────
+def test_load_dotenv_sets_and_respects_existing(tmp_path, monkeypatch):
+    env = tmp_path / ".env"
+    env.write_text(
+        '# a comment\n'
+        'export AUTODUB_TEST_NEW="from_file"\n'
+        "AUTODUB_TEST_EXISTING='ignored'\n"
+        'blank line below\n\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("AUTODUB_TEST_EXISTING", "already_set")
+    monkeypatch.delenv("AUTODUB_TEST_NEW", raising=False)
+    import os
+    autodub.load_dotenv(str(env))
+    assert os.environ["AUTODUB_TEST_NEW"] == "from_file"
+    assert os.environ["AUTODUB_TEST_EXISTING"] == "already_set"  # not overwritten
+
+
+def test_load_dotenv_missing_file_is_noop(tmp_path):
+    assert autodub.load_dotenv(str(tmp_path / "nope.env")) == 0
+
+
+# ── JSON config defaults ─────────────────────────────────
+def test_load_config_defaults_valid(tmp_path):
+    cfg = tmp_path / "c.json"
+    cfg.write_text('{"translator": "openai", "target_lang": "ru"}', encoding="utf-8")
+    d = autodub.load_config_defaults(str(cfg))
+    assert d == {"translator": "openai", "target_lang": "ru"}
+
+
+def test_load_config_defaults_missing_and_invalid(tmp_path):
+    assert autodub.load_config_defaults(str(tmp_path / "missing.json")) == {}
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not valid json", encoding="utf-8")
+    assert autodub.load_config_defaults(str(bad)) == {}
+
+
+# ── Structured (JSON) logging ────────────────────────────
+def test_json_formatter_emits_valid_json():
+    import json as _json
+    import logging as _logging
+    rec = _logging.makeLogRecord({"levelname": "INFO", "msg": "hello %s", "args": ("world",)})
+    out = autodub._JsonFormatter().format(rec)
+    parsed = _json.loads(out)
+    assert parsed["level"] == "INFO"
+    assert parsed["message"] == "hello world"
+    assert "ts" in parsed

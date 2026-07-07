@@ -138,6 +138,46 @@ def _check_runtime_deps() -> bool:
     return True
 
 
+def load_dotenv(path: str = ".env") -> int:
+    """Minimal, zero-dependency .env loader. Sets os.environ for each `KEY=VALUE`
+    line whose key isn't already set (existing env vars win). Returns the count loaded."""
+    p = Path(path)
+    if not p.exists():
+        return 0
+    loaded = 0
+    try:
+        for raw in p.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            if key.startswith("export "):
+                key = key[len("export "):].strip()
+            val = val.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = val
+                loaded += 1
+    except Exception as e:
+        logging.warning(f"Failed to read {path}: {e}")
+    return loaded
+
+
+def load_config_defaults(path: str) -> Dict:
+    """Load a JSON config file of default option values (argparse dest names, e.g.
+    {"translator": "openai", "target_lang": "ru"}). Returns {} on missing/invalid."""
+    p = Path(path)
+    if not p.exists():
+        logging.warning(f"Config file not found: {path}")
+        return {}
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception as e:
+        logging.warning(f"Failed to parse config {path}: {e}")
+        return {}
+
+
 # ─────────────────────────────────────────────
 #  XTTS v2 — voice cloning
 # ─────────────────────────────────────────────
@@ -278,18 +318,29 @@ def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
 #  Existing code below — unchanged
 # ─────────────────────────────────────────────
 
+class _JsonFormatter(logging.Formatter):
+    """Emit each log record as a single JSON object (structured logging)."""
+    def format(self, record):
+        return json.dumps({
+            "ts": datetime.now().isoformat(timespec="seconds"),
+            "level": record.levelname,
+            "message": record.getMessage(),
+        }, ensure_ascii=False)
+
+
 class Logger:
-    """Enhanced logging with both file and console output"""
-    def __init__(self, work_dir: Path):
+    """Enhanced logging with both file and console output."""
+    def __init__(self, work_dir: Path, level: int = logging.INFO, json_format: bool = False):
         self.log_file = work_dir / "autodub.log"
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler(self.log_file, encoding='utf-8'),
-                logging.StreamHandler()
-            ]
-        )
+        formatter = _JsonFormatter() if json_format else \
+            logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        handlers = [
+            logging.FileHandler(self.log_file, encoding='utf-8'),
+            logging.StreamHandler(),
+        ]
+        for h in handlers:
+            h.setFormatter(formatter)
+        logging.basicConfig(level=level, handlers=handlers, force=True)
         self.logger = logging.getLogger(__name__)
 
     def info(self, msg): self.logger.info(msg)
@@ -1530,11 +1581,28 @@ Examples:
     parser.add_argument("--subtitles-only", action="store_true",
                         help="Generate only subtitles")
     parser.add_argument("--verbose", action="store_true",
-                        help="Enable verbose logging")
+                        help="Enable verbose (DEBUG-level) logging")
+    parser.add_argument("--log-format", choices=["plain", "json"], default="plain",
+                        help="Log output format (default: plain)")
+    parser.add_argument("--config", default=None,
+                        help="JSON config file providing default option values "
+                             "(argparse dest names, e.g. {\"translator\": \"openai\"})")
+    parser.add_argument("--env-file", default=".env",
+                        help="Path to a .env file with API keys (default: .env)")
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True,
                         help="Resume from checkpoint (use --no-resume to force a fresh run)")
 
+    # First pass: peek at --config so its values become argparse defaults
+    # (explicit CLI flags still override them on the final parse).
+    pre_args, _ = parser.parse_known_args()
+    if pre_args.config:
+        cfg = load_config_defaults(pre_args.config)
+        known = {a.dest for a in parser._actions}
+        parser.set_defaults(**{k: v for k, v in cfg.items() if k in known})
     args = parser.parse_args()
+
+    # Load API keys / settings from a .env file (existing env vars take precedence).
+    load_dotenv(args.env_file)
 
     # Ensure runtime dependencies are present, then apply library patches.
     if not _check_runtime_deps():
@@ -1553,7 +1621,9 @@ Examples:
     first_video = Path(args.videos[0])
     work_dir = Path.cwd() / f"{first_video.stem}_work"
     work_dir.mkdir(exist_ok=True)
-    logger = Logger(work_dir)
+    logger = Logger(work_dir,
+                    level=logging.DEBUG if args.verbose else logging.INFO,
+                    json_format=(args.log_format == "json"))
 
     logger.info("╔════════════════════════════════════════════════════════╗")
     logger.info("║           AutoDub Pro v4.0 - Configuration           ║")
