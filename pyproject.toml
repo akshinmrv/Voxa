@@ -33,6 +33,7 @@ dependencies = [
 [project.optional-dependencies]
 piper = ["piper-tts"]
 xtts = ["TTS"]
+faster = ["faster-whisper"]
 dev = ["pytest"]
 
 [project.scripts]

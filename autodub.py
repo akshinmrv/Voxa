@@ -1236,6 +1236,30 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
     return concat_list, temp_files
 
 
+def transcribe_audio(audio_path: str, model_name: str, backend: str, device: str) -> Tuple[List[Dict], str]:
+    """Transcribe audio and return (segments, detected_language). `segments` is a list
+    of dicts each having at least 'start', 'end', 'text' — normalized across backends.
+    backend: 'openai' (openai-whisper, default) or 'faster' (faster-whisper)."""
+    if backend == "faster":
+        try:
+            from faster_whisper import WhisperModel
+        except ImportError:
+            raise RuntimeError("faster-whisper not installed. Run: pip install faster-whisper")
+        compute_type = "float16" if device == "cuda" else "int8"
+        # faster-whisper names the turbo model 'large-v3-turbo'.
+        fw_model = "large-v3-turbo" if model_name == "turbo" else model_name
+        model = WhisperModel(fw_model, device=device, compute_type=compute_type)
+        seg_iter, info = model.transcribe(audio_path)
+        segments = [{"start": s.start, "end": s.end, "text": s.text} for s in seg_iter]
+        return segments, getattr(info, "language", "unknown")
+
+    # Default: openai-whisper. Loads a trusted local checkpoint (weights_only scoped).
+    with _allow_unsafe_torch_load():
+        model = whisper.load_model(model_name, device=device)
+    result = model.transcribe(audio_path, fp16=(device == "cuda"), verbose=False)
+    return result["segments"], result.get("language", "unknown")
+
+
 async def process_video(video_path: str, args, logger: Logger):
     """Main video processing pipeline"""
     video_path = Path(video_path)
@@ -1305,16 +1329,14 @@ async def process_video(video_path: str, args, logger: Logger):
         with open(transcript_json, 'r', encoding='utf-8') as f:
             segments = json.load(f)
     else:
-        logger.info(f"[3/7] Transcribing with Whisper ({args.whisper_model})...")
+        logger.info(f"[3/7] Transcribing with Whisper ({args.whisper_model}, "
+                    f"backend: {args.whisper_backend})...")
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"⚙️  Using device: {device.upper()}")
         try:
-            # Whisper loads a trusted local checkpoint; keep the safe default elsewhere.
-            with _allow_unsafe_torch_load():
-                model = whisper.load_model(args.whisper_model, device=device)
-            result = model.transcribe(str(audio_clean), fp16=(device == "cuda"), verbose=False)
-            segments = result['segments']
-            logger.info(f"🌍 Detected language: {result.get('language', 'unknown')}")
+            segments, detected_lang = transcribe_audio(
+                str(audio_clean), args.whisper_model, args.whisper_backend, device)
+            logger.info(f"🌍 Detected language: {detected_lang}")
             with open(transcript_json, 'w', encoding='utf-8') as f:
                 json.dump(segments, f, ensure_ascii=False, indent=2)
             state.mark_completed('transcription')
@@ -1570,6 +1592,9 @@ Examples:
     parser.add_argument("--whisper_model", default="turbo",
                         choices=["tiny", "base", "small", "medium", "large", "turbo"],
                         help="Whisper model size (default: turbo)")
+    parser.add_argument("--whisper-backend", choices=["openai", "faster"], default="openai",
+                        help="Transcription engine: openai (openai-whisper, default) or "
+                             "faster (faster-whisper — 2-4x faster; pip install faster-whisper)")
 
     parser.add_argument("--translator", choices=["google", "ollama"] + sorted(LLM_PROVIDERS),
                         default="google", help="Translation service (default: google)")

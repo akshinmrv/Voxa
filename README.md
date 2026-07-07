@@ -166,6 +166,10 @@ options:
   --subtitles-only      Generate only the translated .srt (no TTS/video)
   --no-resume           Ignore previous checkpoint and start fresh
   --keep-temp           Keep temporary files after processing
+  --whisper-backend {openai,faster}
+                        Transcription engine (default: openai). "faster" uses
+                        faster-whisper — 2-4x quicker on long videos / large models
+                        (pip install faster-whisper)
   --config FILE         JSON file of default option values
   --env-file FILE       Path to a .env file with API keys (default: .env)
   --log-format {plain,json}

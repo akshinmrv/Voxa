@@ -21,5 +21,8 @@ numpy
 piper-tts               # only needed for --tts piper (offline)
 # TTS                   # uncomment for --tts xtts (Coqui voice cloning)
 
+# ── Optional transcription backend ───────────────────────
+# faster-whisper        # uncomment for --whisper-backend faster (2-4x faster)
+
 # ── Dev / testing (optional) ─────────────────────────────
 # pytest                # run the unit test suite:  pytest -q

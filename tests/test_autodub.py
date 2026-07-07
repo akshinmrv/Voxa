@@ -183,6 +183,31 @@ def test_load_config_defaults_missing_and_invalid(tmp_path):
     assert autodub.load_config_defaults(str(bad)) == {}
 
 
+# ── Transcription backend normalization ──────────────────
+def test_transcribe_faster_normalizes(monkeypatch):
+    fw = pytest.importorskip("faster_whisper")
+
+    class _Seg:
+        def __init__(self, s, e, t):
+            self.start, self.end, self.text = s, e, t
+
+    class _Info:
+        language = "en"
+
+    class _Model:
+        def __init__(self, *a, **k):
+            pass
+
+        def transcribe(self, path, **k):
+            return iter([_Seg(0.0, 1.0, " hi"), _Seg(1.0, 2.0, " there")]), _Info()
+
+    monkeypatch.setattr(fw, "WhisperModel", _Model)
+    segs, lang = autodub.transcribe_audio("x.wav", "tiny", "faster", "cpu")
+    assert lang == "en"
+    assert segs == [{"start": 0.0, "end": 1.0, "text": " hi"},
+                    {"start": 1.0, "end": 2.0, "text": " there"}]
+
+
 # ── Zero-byte-aware file guard ───────────────────────────
 def test_has_content(tmp_path):
     empty = tmp_path / "empty.bin"
