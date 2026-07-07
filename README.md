@@ -231,6 +231,10 @@ The script generates:
 pip install soundfile
 ```
 
+### Edge TTS fails with `403 Invalid response status`
+Microsoft tightened its speech endpoint; older `edge-tts` versions are rejected.
+Upgrade: `pip install -U "edge-tts>=7.0"`.
+
 ### "TorchCodec is required"
 This is already patched in the code. If you still see it, update PyTorch:
 ```bash

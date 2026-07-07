@@ -193,6 +193,15 @@ def load_config_defaults(path: str) -> Dict:
         return {}
 
 
+def _has_content(path: Path, min_bytes: int = 1) -> bool:
+    """True if the file exists and is at least min_bytes. Treats a stale 0-byte
+    artifact (e.g. left by a failed run) as absent so it gets regenerated."""
+    try:
+        return path.exists() and path.stat().st_size >= min_bytes
+    except OSError:
+        return False
+
+
 # ─────────────────────────────────────────────
 #  XTTS v2 — voice cloning
 # ─────────────────────────────────────────────
@@ -1097,17 +1106,20 @@ async def generate_tts_edge(text: str, voice: str, output_file: str,
         else:
             communicate = edge_tts.Communicate(text, voice, rate=rate)
         await communicate.save(output_file)
-        return True
+        if _has_content(Path(output_file)):
+            return True
+        logging.warning("Edge TTS produced an empty file; retrying")
     except Exception as e:
         logging.error(f"Edge TTS failed: {e}")
-        if emotion:
-            try:
-                communicate = edge_tts.Communicate(text, voice, rate=rate)
-                await communicate.save(output_file)
-                return True
-            except Exception as e:
-                logging.debug(f"Edge TTS emotion-free retry failed: {e}")
-        return False
+    # Retry once without the emotion style (also covers the empty-output case).
+    try:
+        communicate = edge_tts.Communicate(text, voice, rate=rate)
+        await communicate.save(output_file)
+        if _has_content(Path(output_file)):
+            return True
+    except Exception as e:
+        logging.debug(f"Edge TTS retry failed: {e}")
+    return False
 
 
 def parallel_translate(segments: List[Dict], target_lang: str, translator_type: str,
@@ -1169,7 +1181,7 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
         processed_file = work_dir / f"speech_{i}_processed.wav"
         final_file = work_dir / f"speech_{i}_final.wav"
 
-        if not final_file.exists():
+        if not _has_content(final_file, 100):
             emotion = None
             if emotion_detection and has_emotion_support:
                 emotion = detect_emotion(txt)
@@ -1184,12 +1196,12 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
                     rate_factor = max(-0.5, min(0.5, (estimated_duration / target_duration) - 1))
                     rate = f"{rate_factor*100:+.0f}%"
 
-            if not raw_file.exists():
+            if not _has_content(raw_file):
                 success = await generate_tts_edge(txt, voice, str(raw_file), emotion, rate, has_emotion_support)
                 if not success:
                     continue
 
-            if not wav_file.exists():
+            if not _has_content(wav_file):
                 try:
                     subprocess.run([
                         "ffmpeg", "-y", "-i", str(raw_file),
@@ -1199,7 +1211,7 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
                     logging.error(f"Failed to convert MP3 to WAV for segment {i}: {e}")
                     continue
 
-            if not processed_file.exists():
+            if not _has_content(processed_file):
                 try:
                     reduce_noise(str(wav_file), str(processed_file))
                 except Exception as e:

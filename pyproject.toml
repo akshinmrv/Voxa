@@ -14,7 +14,7 @@ keywords = ["dubbing", "translation", "whisper", "tts", "openai", "subtitles"]
 
 dependencies = [
     "openai-whisper",
-    "edge-tts",
+    "edge-tts>=7.0",
     "pysrt",
     "deep-translator",
     "openai",

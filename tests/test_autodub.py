@@ -183,6 +183,19 @@ def test_load_config_defaults_missing_and_invalid(tmp_path):
     assert autodub.load_config_defaults(str(bad)) == {}
 
 
+# ── Zero-byte-aware file guard ───────────────────────────
+def test_has_content(tmp_path):
+    empty = tmp_path / "empty.bin"
+    empty.write_bytes(b"")
+    good = tmp_path / "good.bin"
+    good.write_bytes(b"x" * 200)
+    assert autodub._has_content(good) is True
+    assert autodub._has_content(empty) is False          # stale 0-byte treated as absent
+    assert autodub._has_content(good, min_bytes=100) is True
+    assert autodub._has_content(good, min_bytes=500) is False
+    assert autodub._has_content(tmp_path / "missing.bin") is False
+
+
 # ── Scoped unsafe torch.load (security hardening) ────────
 def test_allow_unsafe_torch_load_scopes_and_restores():
     if autodub.torch is None:
