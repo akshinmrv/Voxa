@@ -1016,23 +1016,72 @@ def get_audio_duration(audio_file: str) -> Optional[float]:
         return None
 
 
-def calculate_speed_factor(original_duration: float, target_duration: float) -> float:
-    if target_duration == 0:
+def _plan_block(actual_ms: float, start_ms: float, end_ms: float) -> Tuple[float, float]:
+    """Pure timeline math for placing one speech block on the concat timeline.
+    Returns (pad_ms, next_cursor_ms): `pad_ms` of trailing silence so a shorter-than-window
+    clip still reaches the window end; `next_cursor_ms` is where the timeline stands after
+    the block (past the window on an over-run, so the following gap shrinks to compensate)."""
+    window_ms = end_ms - start_ms
+    if actual_ms < window_ms - 20:
+        return (window_ms - actual_ms), float(end_ms)
+    return 0.0, float(start_ms) + max(actual_ms, float(window_ms))
+
+
+def _place_speech_block(final_file: Path, start_ms: float, end_ms: float, sr: int,
+                        work_dir: Path, tag, concat_list: list, temp_files: list) -> float:
+    """Append a (natural-speed or bounded speed-up) speech clip to the concat list and pad
+    trailing silence to fill its subtitle window when shorter — the S0 replacement for
+    slowing speech to fit. Returns the updated timeline cursor (ms)."""
+    concat_list.append(f"file '{final_file}'")
+    temp_files.append(str(final_file))
+    try:
+        actual_ms = sf.info(str(final_file)).duration * 1000.0
+    except Exception:
+        actual_ms = float(end_ms - start_ms)
+    pad_ms, cursor = _plan_block(actual_ms, float(start_ms), float(end_ms))
+    if pad_ms > 20:
+        sil = work_dir / f"fill_{tag}.wav"
+        if create_silence_wav(pad_ms / 1000.0, str(sil), sr) and sil.exists():
+            concat_list.append(f"file '{sil}'")
+            temp_files.append(str(sil))
+    return cursor
+
+
+# S0 scope: the safe, unambiguous win is "never slow down" — shorter-than-window speech
+# keeps its natural pace and the remainder is padded with silence instead of being dragged
+# out into long vowels. The speed-up ceiling stays at the previous 2.5x so long translations
+# still fit without truncation; tightening it toward ~1.25x is deferred to Phase S3, where
+# LLM length-aware translation shortens over-long lines so tempo isn't the only lever.
+STRETCH_MAX_SPEEDUP = 2.5
+
+
+def calculate_speed_factor(original_duration: float, target_duration: float,
+                           allow_slowdown: bool = True) -> float:
+    """Return the atempo factor to fit `original_duration` into `target_duration`.
+    ratio > 1 speeds up (speech longer than the window); ratio < 1 slows down.
+    With allow_slowdown=False, never slows below natural speed (pad silence instead)
+    and caps speed-up at STRETCH_MAX_SPEEDUP to avoid unnatural fast delivery."""
+    if target_duration <= 0:
         return 1.0
     ratio = original_duration / target_duration
     if 0.95 <= ratio <= 1.05:
         return 1.0
+    if not allow_slowdown:
+        if ratio < 1.0:
+            return 1.0                       # shorter than window → keep natural pace
+        return min(ratio, STRETCH_MAX_SPEEDUP)
     return max(0.5, min(2.5, ratio))
 
 
 def stretch_audio_smart(input_file: str, output_file: str, target_duration: float,
-                        work_dir: Path, target_sr: int = 22050) -> bool:
+                        work_dir: Path, target_sr: int = 22050,
+                        allow_slowdown: bool = True) -> bool:
     try:
         data, sr = sf.read(input_file, dtype='float32')
         current_duration = len(data) / sr
         if current_duration == 0:
             return False
-        ratio = calculate_speed_factor(current_duration, target_duration)
+        ratio = calculate_speed_factor(current_duration, target_duration, allow_slowdown)
         if ratio == 1.0:
             if sr != target_sr:
                 subprocess.run([
@@ -1222,17 +1271,22 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
                     sf.write(str(processed_file), *sf.read(str(wav_file)))
 
             if enable_stretch:
+                # S0: fit by speeding up only (bounded); never slow speech down.
                 success = stretch_audio_smart(str(processed_file), str(final_file),
-                                              target_duration, work_dir, target_sr)
+                                              target_duration, work_dir, target_sr,
+                                              allow_slowdown=False)
                 if not success:
                     sf.write(str(final_file), *sf.read(str(processed_file)))
             else:
                 sf.write(str(final_file), *sf.read(str(processed_file)))
 
-        if final_file.exists() and final_file.stat().st_size > 100:
-            concat_list.append(f"file '{final_file}'")
-            temp_files.append(str(final_file))
-        current_time_ms = end_ms
+        if _has_content(final_file, 100):
+            # S0: absolute-timeline placement — pad short clips with silence instead of
+            # dragging them out, and let over-runs shrink the next gap (no cumulative drift).
+            current_time_ms = _place_speech_block(final_file, start_ms, end_ms, target_sr,
+                                                  work_dir, i, concat_list, temp_files)
+        else:
+            current_time_ms = end_ms
 
     if emotion_stats:
         logging.info(f"🎭 Emotion usage: {emotion_stats}")

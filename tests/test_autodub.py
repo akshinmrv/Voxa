@@ -88,6 +88,35 @@ def test_speed_factor_zero_target_safe():
     assert autodub.calculate_speed_factor(5.0, 0.0) == 1.0
 
 
+# ── S0: stretch-policy inversion (no slowdown) ───────────
+def test_speed_factor_no_slowdown_policy():
+    # allow_slowdown=False: never below 1.0 (pad instead), speed-up capped
+    assert autodub.calculate_speed_factor(1.0, 10.0, allow_slowdown=False) == 1.0
+    assert autodub.calculate_speed_factor(10.0, 1.0, allow_slowdown=False) == autodub.STRETCH_MAX_SPEEDUP
+    assert autodub.calculate_speed_factor(1.2, 1.0, allow_slowdown=False) == pytest.approx(1.2)
+    # default (allow_slowdown=True) is unchanged / backward compatible
+    assert autodub.calculate_speed_factor(1.0, 10.0) == 0.5
+
+
+# ── S0: absolute-timeline placement math ─────────────────
+def test_plan_block_pads_short_clip_to_window():
+    pad, cursor = autodub._plan_block(actual_ms=800, start_ms=1000, end_ms=3000)   # window 2000
+    assert pad == pytest.approx(1200)
+    assert cursor == 3000
+
+
+def test_plan_block_overrun_pushes_cursor():
+    pad, cursor = autodub._plan_block(actual_ms=2500, start_ms=1000, end_ms=3000)  # window 2000
+    assert pad == 0.0
+    assert cursor == 3500                                                          # next gap shrinks
+
+
+def test_plan_block_within_tolerance_no_pad():
+    pad, cursor = autodub._plan_block(actual_ms=1990, start_ms=0, end_ms=2000)
+    assert pad == 0.0
+    assert cursor == 2000
+
+
 # ── Language map ─────────────────────────────────────────
 def test_lang_map_core_entries():
     assert autodub.LANG_MAP["az"] == "Azerbaijani"
