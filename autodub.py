@@ -392,6 +392,7 @@ def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
     generated_count = 0
     current_time_ms = 0
     scores: List[Dict] = []
+    max_drift = 0.0
 
     for i, sub in enumerate(tqdm(subs, desc="XTTS Synthesis", unit="phrase")):
         start_ms = (sub.start.hours * 3600 + sub.start.minutes * 60 +
@@ -414,6 +415,7 @@ def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
                 concat_list.append(f"file '{sil_file}'")
                 temp_files.append(str(sil_file))
                 current_time_ms += sil_dur_ms
+        max_drift = max(max_drift, current_time_ms - start_ms)
 
         # ── Speech generation ────────────────────────────────
         raw_file = work_dir / f"xtts_raw_{i}.wav"
@@ -449,6 +451,7 @@ def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
             current_time_ms = end_ms
 
     logging.info(f"✓ XTTS generated {generated_count}/{len(subs)} segments")
+    _log_sync_drift(max_drift, "xtts")
     if quality_gate:
         log_quality_report(scores, "xtts")
 
@@ -464,6 +467,7 @@ def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
     generated_count = 0
     current_time_ms = 0
     scores: List[Dict] = []
+    max_drift = 0.0
 
     for i, sub in enumerate(tqdm(subs, desc="OpenAI TTS", unit="phrase")):
         start_ms = (sub.start.hours * 3600 + sub.start.minutes * 60 +
@@ -485,6 +489,7 @@ def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
                 concat_list.append(f"file '{sil_file}'")
                 temp_files.append(str(sil_file))
                 current_time_ms += sil_dur_ms
+        max_drift = max(max_drift, current_time_ms - start_ms)
 
         raw_file = work_dir / f"otts_raw_{i}.wav"
         final_file = work_dir / f"otts_fin_{i}.wav"
@@ -528,6 +533,7 @@ def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
             current_time_ms = end_ms
 
     logging.info(f"✓ OpenAI TTS generated {generated_count}/{len(subs)} segments")
+    _log_sync_drift(max_drift, "openai")
     if quality_gate:
         log_quality_report(scores, "openai")
 
@@ -1433,6 +1439,7 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
     concat_list, temp_files = [], []
     scores: List[Dict] = []
     current_time_ms = 0
+    max_drift = 0.0
     target_sr = 44100
     emotion_stats = {}
 
@@ -1453,6 +1460,7 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
                 concat_list.append(f"file '{silence_file}'")
                 temp_files.append(str(silence_file))
                 current_time_ms += silence_dur_ms
+        max_drift = max(max_drift, current_time_ms - start_ms)
 
         raw_file = work_dir / f"speech_{i}_raw.mp3"
         wav_file = work_dir / f"speech_{i}_converted.wav"
@@ -1513,6 +1521,7 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
 
     if emotion_stats:
         logging.info(f"🎭 Emotion usage: {emotion_stats}")
+    _log_sync_drift(max_drift, "edge")
     if quality_gate:
         log_quality_report(scores, "edge")
     return concat_list, temp_files
@@ -1642,6 +1651,14 @@ def score_speech(audio_path: str, expected_text: str, *, asr_model=None, lang=No
             logging.debug(f"gate ASR failed: {e}")
     result["ok"] = not result["reasons"]
     return result
+
+
+def _log_sync_drift(max_drift_ms: float, engine: str):
+    """Pillar-0 diagnostic: report the worst point at which a segment was placed later
+    than its source onset (accumulated timeline drift). > ~400ms is audibly out of sync."""
+    if max_drift_ms > 1:
+        level = logging.warning if max_drift_ms > 400 else logging.info
+        level(f"⏱️  {engine}: max sync drift {max_drift_ms:.0f}ms")
 
 
 def log_quality_report(scores: List[Dict], engine: str):
@@ -2049,8 +2066,9 @@ Examples:
     parser.add_argument("--openai-tts-model", default="gpt-4o-mini-tts",
                         help="OpenAI TTS model (default: gpt-4o-mini-tts)")
     parser.add_argument("--openai-tts-instructions",
-                        default="Speak naturally and clearly at a calm, conversational pace "
-                                "with a consistent, warm tone.",
+                        default="Speak naturally and clearly at a steady, even pace that "
+                                "matches the natural rhythm of speech. Do not slow down or "
+                                "add pauses.",
                         help="Delivery instructions for gpt-4o-mini-tts")
     parser.add_argument("--voice-sample", type=str, default=None,
                         help="Path to reference WAV for XTTS voice cloning (optional, "
