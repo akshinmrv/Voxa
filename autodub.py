@@ -369,6 +369,47 @@ def _xtts_synthesize_segment(tts_model, text: str, speaker_wav: str, lang: str,
     return _has_content(out_file, 1000)
 
 
+XTTS_REGEN_ATTEMPTS = 2   # A3: max quality-gate re-synthesis attempts per flagged XTTS segment
+
+
+def _safe_unlink(*paths) -> None:
+    """Delete paths if present, ignoring missing-file / OS errors (temp cleanup)."""
+    for p in paths:
+        try:
+            Path(p).unlink()
+        except OSError:
+            pass
+
+
+def _score_better(cand: Dict, best: Dict) -> bool:
+    """True if speech score `cand` beats `best`: prefer passing the gate, then fewer failed
+    checks, then lower WER. Used by A3 to keep the best of several stochastic XTTS takes."""
+    if bool(cand.get("ok")) != bool(best.get("ok")):
+        return bool(cand.get("ok"))
+    cr, br = len(cand.get("reasons", [])), len(best.get("reasons", []))
+    if cr != br:
+        return cr < br
+    return cand.get("wer", 1.0) < best.get("wer", 1.0)
+
+
+def _xtts_fit_candidate(tts_model, text: str, speaker_wav: str, xtts_lang: str,
+                        raw_path: Path, fin_path: Path, work_dir: Path, tag,
+                        sample_rate: int, target_duration: float,
+                        enable_stretch: bool) -> bool:
+    """Synthesize + no-slowdown-fit one XTTS candidate into fin_path (A3 regeneration).
+    Mirrors the first-attempt path; returns True on non-empty output."""
+    if not _xtts_synthesize_segment(tts_model, text, speaker_wav, xtts_lang,
+                                    raw_path, work_dir, tag, sample_rate):
+        return False
+    if enable_stretch:
+        if not stretch_audio_smart(str(raw_path), str(fin_path), target_duration,
+                                   work_dir, sample_rate, allow_slowdown=False):
+            sf.write(str(fin_path), *sf.read(str(raw_path)), subtype="PCM_16")
+    else:
+        sf.write(str(fin_path), *sf.read(str(raw_path)), subtype="PCM_16")
+    return _has_content(fin_path, 1000)
+
+
 def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
                   concat_list: list, temp_files: list,
                   work_dir: Path, enable_stretch: bool,
@@ -440,14 +481,42 @@ def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
                 current_time_ms = end_ms
                 continue
 
+        # A3: quality-gate auto-regeneration. XTTS is stochastic, so a flagged take can be
+        # improved by re-rolling; synthesize up to XTTS_REGEN_ATTEMPTS more times and keep
+        # the best-scoring one. Scored BEFORE placement (placement may trim to fit, which
+        # would skew the ASR round-trip). Only runs with --quality-gate (needs the gate ASR).
+        gate_score = None
+        if quality_gate and asr_model is not None and _has_content(final_file, 1000):
+            gate_score = score_speech(str(final_file), text, asr_model=asr_model, lang=xtts_lang)
+            attempt = 0
+            while not gate_score["ok"] and attempt < XTTS_REGEN_ATTEMPTS:
+                attempt += 1
+                cand_raw = work_dir / f"xtts_rawcand_{i}_{attempt}.wav"
+                cand_fin = work_dir / f"xtts_fincand_{i}_{attempt}.wav"
+                if not _xtts_fit_candidate(tts_model, text, speaker_wav, xtts_lang,
+                                           cand_raw, cand_fin, work_dir, f"{i}c{attempt}",
+                                           sample_rate, target_duration, enable_stretch):
+                    _safe_unlink(cand_raw, cand_fin)
+                    continue
+                cand_score = score_speech(str(cand_fin), text, asr_model=asr_model, lang=xtts_lang)
+                if _score_better(cand_score, gate_score):
+                    shutil.copyfile(str(cand_fin), str(final_file))
+                    gate_score = cand_score
+                _safe_unlink(cand_raw, cand_fin)
+            if attempt:
+                logging.info(f"♻️  segment {i}: regenerated {attempt}x → "
+                             f"{'ok' if gate_score['ok'] else 'best-effort'} "
+                             f"(wer {gate_score.get('wer', 'n/a')})")
+
         if _has_content(final_file, 1000):
             next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
             current_time_ms = _place_speech_block(final_file, start_ms, end_ms, next_start_ms,
                                                   sample_rate, work_dir, i, concat_list, temp_files)
             generated_count += 1
             if quality_gate:
-                scores.append(score_speech(str(final_file), text, asr_model=asr_model,
-                                           lang=xtts_lang))
+                scores.append(gate_score if gate_score is not None
+                              else score_speech(str(final_file), text, asr_model=asr_model,
+                                                lang=xtts_lang))
         else:
             current_time_ms = end_ms
 

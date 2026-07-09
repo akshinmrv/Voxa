@@ -582,3 +582,83 @@ def test_infer_delivery_llm_client_error_is_neutral():
 
     client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=_boom)))
     assert autodub.infer_delivery_llm(["a", "b", "c"], client) == ["", "", ""]
+
+
+# ── A3: quality-gate auto-regeneration (XTTS) selection logic ──
+def test_score_better_prefers_passing_gate():
+    ok = {"ok": True, "reasons": [], "wer": 0.9}
+    bad = {"ok": False, "reasons": ["asr"], "wer": 0.1}
+    assert autodub._score_better(ok, bad)
+    assert not autodub._score_better(bad, ok)
+
+
+def test_score_better_fewer_failed_checks():
+    assert autodub._score_better({"ok": False, "reasons": ["asr"], "wer": 0.7},
+                                 {"ok": False, "reasons": ["asr", "clipping"], "wer": 0.7})
+
+
+def test_score_better_lower_wer_on_tie():
+    assert autodub._score_better({"ok": False, "reasons": ["asr"], "wer": 0.65},
+                                 {"ok": False, "reasons": ["asr"], "wer": 0.80})
+    same = {"ok": False, "reasons": ["asr"], "wer": 0.7}
+    assert not autodub._score_better(same, dict(same))   # not strictly better than itself
+
+
+def test_safe_unlink_removes_and_ignores_missing(tmp_path):
+    p = tmp_path / "x.wav"
+    p.write_bytes(b"data")
+    autodub._safe_unlink(p, tmp_path / "missing.wav")   # must not raise on the missing one
+    assert not p.exists()
+
+
+def _fake_sub(text, start_ms, end_ms):
+    from types import SimpleNamespace
+
+    def _t(ms):
+        return SimpleNamespace(hours=0, minutes=0, seconds=ms // 1000, milliseconds=ms % 1000)
+    return SimpleNamespace(text=text, start=_t(start_ms), end=_t(end_ms))
+
+
+def test_a3_regen_keeps_best_take(tmp_path, monkeypatch):
+    """A3 orchestration (dev-side, XTTS mocked): a flagged first take is re-rolled and the
+    best-scoring candidate is promoted to the placed file. Validates the regen loop without
+    a real XTTS install (the actual synthesis is validated by the user on Ubuntu)."""
+    spk = tmp_path / "spk.wav"
+    spk.write_bytes(b"\0" * 2000)
+
+    # First-attempt synth + fit -> writes raw then final (>=1000 bytes each).
+    monkeypatch.setattr(autodub, "_xtts_synthesize_segment",
+                        lambda *a, **k: (a[4].write_bytes(b"FIRST".ljust(1500, b"0")) or True))
+    monkeypatch.setattr(autodub, "stretch_audio_smart",
+                        lambda src, dst, *a, **k: (__import__("pathlib").Path(dst)
+                                                   .write_bytes(b"FIRST".ljust(1500, b"0")) or True))
+
+    # Each regeneration writes distinctive content so we can see which one was promoted.
+    calls = {"fit": 0}
+
+    def _cand(model, text, spk_, lang, raw_path, fin_path, work_dir, tag, sr, dur, stretch):
+        calls["fit"] += 1
+        fin_path.write_bytes(f"CAND{calls['fit']}".encode().ljust(1500, b"0"))
+        return True
+    monkeypatch.setattr(autodub, "_xtts_fit_candidate", _cand)
+
+    # Scripted scores: first take flagged, cand1 better-but-flagged, cand2 passes.
+    seq = iter([
+        {"ok": False, "reasons": ["asr"], "wer": 0.8},   # first take
+        {"ok": False, "reasons": ["asr"], "wer": 0.4},   # candidate 1
+        {"ok": True,  "reasons": [],      "wer": 0.1},   # candidate 2
+    ])
+    monkeypatch.setattr(autodub, "score_speech", lambda *a, **k: next(seq))
+
+    placed = {}
+    monkeypatch.setattr(autodub, "_place_speech_block",
+                        lambda final_file, *a, **k: (placed.update(
+                            bytes=final_file.read_bytes()) or 1000.0))
+
+    concat, temps = [], []
+    autodub.generate_xtts([_fake_sub("Merhaba dünya", 0, 1000)], object(), str(spk), "tr",
+                          concat, temps, tmp_path, enable_stretch=True,
+                          quality_gate=True, asr_model=object())
+
+    assert calls["fit"] == 2                       # re-rolled until it passed (2 attempts)
+    assert placed["bytes"].startswith(b"CAND2")    # the passing take was promoted + placed

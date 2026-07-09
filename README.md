@@ -114,6 +114,15 @@ Note: OpenAI voices are strongest for major languages; for languages with a dedi
 Microsoft neural voice (e.g. `az-AZ`), Edge/Azure often sounds more native — compare with
 `--quality-gate --gate-model base`.
 
+Add `--detect-emotion` to have an LLM tag each line with a short delivery direction
+(emotion / energy / pace) that is passed to OpenAI TTS as a per-line instruction, for more
+expressive, content-aware prosody (one cheap API call per job, cached; falls back to a
+punctuation heuristic if unavailable):
+
+```bash
+python autodub.py video.mp4 --tts openai --target_lang az --detect-emotion
+```
+
 ### LLM translators — OpenAI & Anthropic (most natural)
 
 Professional, native-sounding translations via an LLM. Two providers are built in
@@ -181,7 +190,9 @@ options:
                         Drop transcription segments with no_speech_prob > F (music /
                         intro that Whisper hallucinated as text). Default 0.6; 1.0 off
   --quality-gate        Score each synthesized segment (ASR round-trip + artifact /
-                        pacing checks) and log a per-job quality report
+                        pacing checks) and log a per-job quality report. For XTTS
+                        (stochastic), a flagged segment is automatically re-synthesized
+                        up to twice and the best-scoring take is kept.
   --gate-model MODEL    faster-whisper model for the gate (default: tiny; use
                         base/small for low-resource languages like az to avoid
                         false-positive WER)
