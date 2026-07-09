@@ -121,6 +121,47 @@ def test_split_for_tts_hard_wraps_unpunctuated():
     assert len(chunks) >= 3
 
 
+# ── S2: OpenAI TTS engine (fake client, no network) ──────
+def test_generate_openai_tts_places_segments(tmp_path):
+    import io
+    import numpy as np
+    import soundfile as sf
+
+    def _wav_bytes(dur=1.0, sr=24000):
+        buf = io.BytesIO()
+        sig = (0.3 * np.sin(2 * np.pi * 220 * np.arange(int(sr * dur)) / sr)).astype("float32")
+        sf.write(buf, sig, sr, format="WAV", subtype="PCM_16")
+        return buf.getvalue()
+
+    class _Resp:
+        content = _wav_bytes()
+
+    class _Speech:
+        def create(self, **kw):
+            assert kw["model"] and kw["voice"] and kw["input"]  # request well-formed
+            return _Resp()
+
+    class _Client:
+        class audio:
+            speech = _Speech()
+
+    class _T:
+        def __init__(self, ms):
+            self.hours, self.minutes = 0, 0
+            self.seconds, self.milliseconds = ms // 1000, ms % 1000
+
+    class _Sub:
+        def __init__(self, s, e, text):
+            self.start, self.end, self.text = _T(s), _T(e), text
+
+    subs = [_Sub(0, 1000, "Salam."), _Sub(1000, 2000, "Necəsən?")]
+    concat, temp = [], []
+    autodub.generate_openai_tts(subs, _Client(), "alloy", "gpt-4o-mini-tts", "", "az",
+                                concat, temp, tmp_path, enable_stretch=True)
+    finals = [c for c in concat if "otts_fin_" in c]
+    assert len(finals) == 2
+
+
 # ── S1: quality scoring primitives ───────────────────────
 def test_normalize_for_compare():
     assert autodub._normalize_for_compare("Hello, World!") == "hello world"

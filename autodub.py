@@ -453,6 +453,85 @@ def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
         log_quality_report(scores, "xtts")
 
 
+def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
+                        lang_code: str, concat_list: list, temp_files: list,
+                        work_dir: Path, enable_stretch: bool,
+                        quality_gate: bool = False, asr_model=None):
+    """Generate speech with OpenAI TTS (gpt-4o-mini-tts). Multilingual, instructable
+    delivery, no cloning — the recommended engine for languages XTTS can't clone (e.g.
+    Azerbaijani). Applies the S0 standard: normalize, no-slowdown fit, timeline placement."""
+    sample_rate = 24000  # OpenAI TTS output rate
+    generated_count = 0
+    current_time_ms = 0
+    scores: List[Dict] = []
+
+    for i, sub in enumerate(tqdm(subs, desc="OpenAI TTS", unit="phrase")):
+        start_ms = (sub.start.hours * 3600 + sub.start.minutes * 60 +
+                    sub.start.seconds) * 1000 + sub.start.milliseconds
+        end_ms = (sub.end.hours * 3600 + sub.end.minutes * 60 +
+                  sub.end.seconds) * 1000 + sub.end.milliseconds
+
+        text = normalize_tts_text(sub.text)
+        if not text:
+            continue
+
+        target_duration = (end_ms - start_ms) / 1000.0
+
+        sil_dur_ms = start_ms - current_time_ms
+        if sil_dur_ms > 100:
+            sil_file = work_dir / f"otts_sil_{i}.wav"
+            if create_silence_wav(sil_dur_ms / 1000.0, str(sil_file), sample_rate) \
+                    and sil_file.exists():
+                concat_list.append(f"file '{sil_file}'")
+                temp_files.append(str(sil_file))
+                current_time_ms += sil_dur_ms
+
+        raw_file = work_dir / f"otts_raw_{i}.wav"
+        final_file = work_dir / f"otts_fin_{i}.wav"
+
+        if not _has_content(final_file, 1000):
+            try:
+                kwargs = {"model": model, "voice": voice, "input": text,
+                          "response_format": "wav"}
+                if instructions:
+                    kwargs["instructions"] = instructions
+                try:
+                    resp = client.audio.speech.create(**kwargs)
+                except TypeError:
+                    # Older openai SDK without the `instructions` parameter.
+                    kwargs.pop("instructions", None)
+                    resp = client.audio.speech.create(**kwargs)
+                Path(raw_file).write_bytes(resp.content)
+            except Exception as e:
+                logging.error(f"OpenAI TTS segment {i} error: {e}")
+                current_time_ms = end_ms
+                continue
+            if not _has_content(raw_file, 1000):
+                logging.warning(f"OpenAI TTS empty output for segment {i}: {text[:40]}")
+                current_time_ms = end_ms
+                continue
+            if enable_stretch:
+                if not stretch_audio_smart(str(raw_file), str(final_file), target_duration,
+                                           work_dir, sample_rate, allow_slowdown=False):
+                    sf.write(str(final_file), *sf.read(str(raw_file)), subtype="PCM_16")
+            else:
+                sf.write(str(final_file), *sf.read(str(raw_file)), subtype="PCM_16")
+
+        if _has_content(final_file, 1000):
+            current_time_ms = _place_speech_block(final_file, start_ms, end_ms, sample_rate,
+                                                  work_dir, i, concat_list, temp_files)
+            generated_count += 1
+            if quality_gate:
+                scores.append(score_speech(str(final_file), text, asr_model=asr_model,
+                                           lang=lang_code))
+        else:
+            current_time_ms = end_ms
+
+    logging.info(f"✓ OpenAI TTS generated {generated_count}/{len(subs)} segments")
+    if quality_gate:
+        log_quality_report(scores, "openai")
+
+
 # ─────────────────────────────────────────────
 #  Existing code below — unchanged
 # ─────────────────────────────────────────────
@@ -1809,6 +1888,20 @@ async def process_video(video_path: str, args, logger: Logger):
                 quality_gate=args.quality_gate, asr_model=gate_asr
             )
 
+        elif args.tts == "openai":
+            client = get_openai_client(args.openai_api_key)
+            if client is None:
+                logger.error("OpenAI TTS requires an API key (OPENAI_API_KEY or --openai_api_key)")
+                return 1
+            logger.info(f"🎙️  OpenAI TTS: {args.openai_tts_model} / voice '{args.openai_voice}'")
+            generate_openai_tts(
+                subs, client, args.openai_voice, args.openai_tts_model,
+                args.openai_tts_instructions, args.target_lang[:2].lower(),
+                concat_list, temp_files, work_dir,
+                enable_stretch=not args.no_stretch,
+                quality_gate=args.quality_gate, asr_model=gate_asr
+            )
+
         if not concat_list:
             logger.error("No audio generated!")
             return 1
@@ -1946,8 +2039,19 @@ Examples:
     parser.add_argument("--workers", type=int, default=4,
                         help="Number of parallel workers (default: 4)")
 
-    parser.add_argument("--tts", choices=["edge", "piper", "xtts"], default="edge",
-                        help="TTS engine: edge (online), piper (offline), xtts (voice cloning)")
+    parser.add_argument("--tts", choices=["edge", "piper", "xtts", "openai"], default="edge",
+                        help="TTS engine: edge (online), piper (offline), xtts (cloning), "
+                             "openai (multilingual, instructable — best for languages XTTS "
+                             "can't do, e.g. az)")
+    parser.add_argument("--openai-voice", default="alloy",
+                        help="OpenAI TTS voice (alloy, echo, fable, onyx, nova, shimmer, "
+                             "ash, ballad, coral, sage, verse)")
+    parser.add_argument("--openai-tts-model", default="gpt-4o-mini-tts",
+                        help="OpenAI TTS model (default: gpt-4o-mini-tts)")
+    parser.add_argument("--openai-tts-instructions",
+                        default="Speak naturally and clearly at a calm, conversational pace "
+                                "with a consistent, warm tone.",
+                        help="Delivery instructions for gpt-4o-mini-tts")
     parser.add_argument("--voice-sample", type=str, default=None,
                         help="Path to reference WAV for XTTS voice cloning (optional, "
                              "auto-extracted from source video if not provided)")
@@ -2006,6 +2110,12 @@ Examples:
             print(f"❌ {args.translator} translator selected but no API key found.\n"
                   f"   Set {_pinfo['env_key']} or pass --{args.translator}_api_key.")
             return 1
+
+    # Fail fast if OpenAI TTS is selected but no OpenAI key is available.
+    if args.tts == "openai" and not (args.openai_api_key or os.environ.get("OPENAI_API_KEY")):
+        print("❌ OpenAI TTS selected but no API key found.\n"
+              "   Set OPENAI_API_KEY or pass --openai_api_key.")
+        return 1
 
     first_video = Path(args.videos[0])
     work_dir = Path.cwd() / f"{first_video.stem}_work"

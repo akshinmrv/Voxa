@@ -100,6 +100,20 @@ python autodub.py video.mp4 --tts xtts --voice-sample my_voice.wav --target_lang
 ./run.sh video.mp4 --translator ollama --ollama_model mistral 
 ```
 
+### OpenAI TTS (multilingual, instructable)
+
+A cloud speech engine for languages XTTS can't clone. Needs `OPENAI_API_KEY`.
+
+```bash
+python autodub.py video.mp4 --tts openai --target_lang en --openai-voice nova
+python autodub.py video.mp4 --tts openai --openai-tts-instructions "Warm, upbeat narrator."
+```
+
+Voices: alloy, echo, fable, onyx, nova, shimmer, ash, ballad, coral, sage, verse.
+Note: OpenAI voices are strongest for major languages; for languages with a dedicated
+Microsoft neural voice (e.g. `az-AZ`), Edge/Azure often sounds more native — compare with
+`--quality-gate --gate-model base`.
+
 ### LLM translators — OpenAI & Anthropic (most natural)
 
 Professional, native-sounding translations via an LLM. Two providers are built in
