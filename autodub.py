@@ -441,8 +441,9 @@ def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
                 continue
 
         if _has_content(final_file, 1000):
-            current_time_ms = _place_speech_block(final_file, start_ms, end_ms, sample_rate,
-                                                  work_dir, i, concat_list, temp_files)
+            next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
+            current_time_ms = _place_speech_block(final_file, start_ms, end_ms, next_start_ms,
+                                                  sample_rate, work_dir, i, concat_list, temp_files)
             generated_count += 1
             if quality_gate:
                 scores.append(score_speech(str(final_file), text, asr_model=asr_model,
@@ -523,8 +524,9 @@ def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
                 sf.write(str(final_file), *sf.read(str(raw_file)), subtype="PCM_16")
 
         if _has_content(final_file, 1000):
-            current_time_ms = _place_speech_block(final_file, start_ms, end_ms, sample_rate,
-                                                  work_dir, i, concat_list, temp_files)
+            next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
+            current_time_ms = _place_speech_block(final_file, start_ms, end_ms, next_start_ms,
+                                                  sample_rate, work_dir, i, concat_list, temp_files)
             generated_count += 1
             if quality_gate:
                 scores.append(score_speech(str(final_file), text, asr_model=asr_model,
@@ -1221,37 +1223,93 @@ def _plan_block(actual_ms: float, start_ms: float, end_ms: float) -> Tuple[float
     return 0.0, float(start_ms) + max(actual_ms, float(window_ms))
 
 
+def _plan_anchored_block(actual_ms: float, start_ms: float, next_start_ms: float) -> Tuple[float, float]:
+    """Pure math for the anchored slot [start_ms, next_start_ms] (Pillar 1). Returns
+    (trim_ms, pad_ms): trim if the clip over-runs the slot, else pad the remainder."""
+    room = float(next_start_ms) - float(start_ms)
+    if room > 0 and actual_ms > room:
+        return (actual_ms - room), 0.0
+    return 0.0, max(0.0, room - actual_ms)
+
+
+def _sub_start_ms(sub) -> int:
+    t = sub.start
+    return (t.hours * 3600 + t.minutes * 60 + t.seconds) * 1000 + t.milliseconds
+
+
+def _fade_ends(data, sr, fade_ms: float = 8.0):
+    """Fade the first/last few ms of an audio array in place (declick); returns it."""
+    n = int(sr * fade_ms / 1000.0)
+    if n > 0 and len(data) > 2 * n:
+        ramp = np.linspace(0.0, 1.0, n, dtype=np.float32)
+        if data.ndim == 1:
+            data[:n] *= ramp
+            data[-n:] *= ramp[::-1]
+        else:
+            data[:n] *= ramp[:, None]
+            data[-n:] *= ramp[::-1][:, None]
+    return data
+
+
 def _apply_micro_fades(path: Path, fade_ms: float = 8.0):
     """Apply a few-ms fade-in/out in place to remove click/pop discontinuities where
     segments butt against silence or each other in the concatenated track."""
     try:
         data, sr = sf.read(str(path), dtype="float32")
-        n = int(sr * fade_ms / 1000.0)
-        if n > 0 and len(data) > 2 * n:
-            ramp = np.linspace(0.0, 1.0, n, dtype=np.float32)
-            if data.ndim == 1:
-                data[:n] *= ramp
-                data[-n:] *= ramp[::-1]
-            else:
-                data[:n] *= ramp[:, None]
-                data[-n:] *= ramp[::-1][:, None]
-            sf.write(str(path), data, sr, subtype="PCM_16")
+        sf.write(str(path), _fade_ends(data, sr, fade_ms), sr, subtype="PCM_16")
     except Exception as e:
         logging.debug(f"micro-fade skipped for {path}: {e}")
 
 
-def _place_speech_block(final_file: Path, start_ms: float, end_ms: float, sr: int,
-                        work_dir: Path, tag, concat_list: list, temp_files: list) -> float:
-    """Append a (natural-speed or bounded speed-up) speech clip to the concat list and pad
-    trailing silence to fill its subtitle window when shorter — the S0 replacement for
-    slowing speech to fit. Returns the updated timeline cursor (ms)."""
-    _apply_micro_fades(final_file)
-    concat_list.append(f"file '{final_file}'")
-    temp_files.append(str(final_file))
+def _trim_wav(path: Path, max_ms: float):
+    """Trim a clip to at most max_ms (with a fade at the new end) so an over-run stays
+    inside its slot and cannot push the next segment past its source onset."""
+    try:
+        data, csr = sf.read(str(path), dtype="float32")
+        max_samples = int(max_ms / 1000.0 * csr)
+        cut = len(data) - max_samples
+        if cut > 0 and max_samples > 0:
+            sf.write(str(path), _fade_ends(data[:max_samples], csr), csr, subtype="PCM_16")
+            logging.info(f"✂️  trimmed {cut / csr * 1000:.0f}ms over-run to keep sync "
+                         f"(translation longer than its window)")
+    except Exception as e:
+        logging.debug(f"trim failed for {path}: {e}")
+
+
+def _place_speech_block(final_file: Path, start_ms: float, end_ms: float, next_start_ms,
+                        sr: int, work_dir: Path, tag, concat_list: list,
+                        temp_files: list) -> float:
+    """Place one speech clip ANCHORED to the source timeline (Pillar 1). When the next
+    segment's source onset is known, the slot is [start_ms, next_start_ms]: an over-running
+    clip is trimmed to fit (so it can never delay the next segment) and a short clip is
+    padded with trailing silence. Returns the cursor = next_start_ms, so drift cannot
+    accumulate. The last segment (no next onset) simply pads to its window."""
     try:
         actual_ms = sf.info(str(final_file)).duration * 1000.0
     except Exception:
         actual_ms = float(end_ms - start_ms)
+
+    if next_start_ms is not None:
+        room = float(next_start_ms) - float(start_ms)
+        if room > 0 and actual_ms > room:
+            _trim_wav(final_file, room)          # trims + fades
+            actual_ms = room
+        else:
+            _apply_micro_fades(final_file)
+        concat_list.append(f"file '{final_file}'")
+        temp_files.append(str(final_file))
+        pad_ms = max(0.0, room - actual_ms)
+        if pad_ms > 20:
+            sil = work_dir / f"fill_{tag}.wav"
+            if create_silence_wav(pad_ms / 1000.0, str(sil), sr) and sil.exists():
+                concat_list.append(f"file '{sil}'")
+                temp_files.append(str(sil))
+        return float(next_start_ms)
+
+    # Last segment: no next onset to protect — pad to window, no trim.
+    _apply_micro_fades(final_file)
+    concat_list.append(f"file '{final_file}'")
+    temp_files.append(str(final_file))
     pad_ms, cursor = _plan_block(actual_ms, float(start_ms), float(end_ms))
     if pad_ms > 20:
         sil = work_dir / f"fill_{tag}.wav"
@@ -1509,10 +1567,10 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
                 sf.write(str(final_file), *sf.read(str(wav_file)))
 
         if _has_content(final_file, 100):
-            # S0: absolute-timeline placement — pad short clips with silence instead of
-            # dragging them out, and let over-runs shrink the next gap (no cumulative drift).
-            current_time_ms = _place_speech_block(final_file, start_ms, end_ms, target_sr,
-                                                  work_dir, i, concat_list, temp_files)
+            # Pillar 1: anchor to the next segment's source onset so drift can't accumulate.
+            next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
+            current_time_ms = _place_speech_block(final_file, start_ms, end_ms, next_start_ms,
+                                                  target_sr, work_dir, i, concat_list, temp_files)
             if quality_gate:
                 scores.append(score_speech(str(final_file), txt, asr_model=asr_model,
                                            lang=gate_lang))

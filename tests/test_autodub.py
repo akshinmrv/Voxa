@@ -247,6 +247,54 @@ def test_plan_block_within_tolerance_no_pad():
     assert cursor == 2000
 
 
+# ── SY2: absolute-anchor slot math ───────────────────────
+def test_plan_anchored_block():
+    # over-run: 4000ms clip into slot [1000, 4000] (room 3000) → trim 1000, pad 0
+    trim, pad = autodub._plan_anchored_block(4000, 1000, 4000)
+    assert trim == pytest.approx(1000) and pad == 0.0
+    # short: 2000ms into room 3000 → trim 0, pad 1000
+    trim, pad = autodub._plan_anchored_block(2000, 1000, 4000)
+    assert trim == 0.0 and pad == pytest.approx(1000)
+    # exact fit → neither
+    trim, pad = autodub._plan_anchored_block(3000, 1000, 4000)
+    assert trim == 0.0 and pad == 0.0
+
+
+def test_sub_start_ms():
+    class _T:
+        hours, minutes, seconds, milliseconds = 0, 1, 2, 300
+
+    class _S:
+        start = _T()
+
+    assert autodub._sub_start_ms(_S()) == 62300
+
+
+def test_place_speech_block_anchors_and_trims_overrun(tmp_path):
+    import numpy as np
+    import soundfile as sf
+    sr = 24000
+    clip = tmp_path / "clip.wav"
+    sf.write(str(clip), np.full(2 * sr, 0.3, dtype="float32"), sr, subtype="PCM_16")  # 2s
+    concat, temp = [], []
+    # slot [1000, 2000] → room 1000ms; the 2s clip must be trimmed and the cursor anchored
+    cursor = autodub._place_speech_block(clip, 1000, 2000, 2000, sr, tmp_path, "t", concat, temp)
+    assert cursor == 2000.0                              # anchored to next onset (no drift)
+    assert sf.info(str(clip)).duration <= 1.05           # trimmed into the slot
+
+
+def test_place_speech_block_pads_short_and_anchors(tmp_path):
+    import numpy as np
+    import soundfile as sf
+    sr = 24000
+    clip = tmp_path / "clip.wav"
+    sf.write(str(clip), np.full(sr // 2, 0.3, dtype="float32"), sr, subtype="PCM_16")  # 0.5s
+    concat, temp = [], []
+    cursor = autodub._place_speech_block(clip, 1000, 2000, 2000, sr, tmp_path, "t", concat, temp)
+    assert cursor == 2000.0
+    assert any("fill_t" in c for c in concat)            # padded the 0.5s remainder
+
+
 # ── Language map ─────────────────────────────────────────
 def test_lang_map_core_entries():
     assert autodub.LANG_MAP["az"] == "Azerbaijani"
