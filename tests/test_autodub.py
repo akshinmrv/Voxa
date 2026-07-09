@@ -491,3 +491,42 @@ def test_json_formatter_emits_valid_json():
     assert parsed["level"] == "INFO"
     assert parsed["message"] == "hello world"
     assert "ts" in parsed
+
+
+# ── TTS provider registry ────────────────────────────────
+def _fake_logger():
+    import logging as _logging
+    return _logging.getLogger("test_autodub_tts")
+
+
+def test_tts_providers_registry_shape():
+    # Registry is the single source of truth for --tts; every engine has an adapter.
+    assert set(autodub.TTS_PROVIDERS) == {"edge", "piper", "xtts", "openai"}
+    for name, spec in autodub.TTS_PROVIDERS.items():
+        assert callable(spec["synthesize"]), name
+
+
+def test_tts_error_is_exception():
+    assert issubclass(autodub.TTSError, Exception)
+
+
+def test_tts_xtts_rejects_unsupported_language():
+    # 'az' is not an XTTS language -> adapter aborts before any model load.
+    import asyncio
+    from types import SimpleNamespace
+    args = SimpleNamespace(target_lang="az", voice_sample=None, no_stretch=True,
+                           quality_gate=False)
+    with pytest.raises(autodub.TTSError):
+        asyncio.run(autodub._tts_xtts(None, args, None, None, None, _fake_logger()))
+
+
+def test_tts_openai_requires_key(monkeypatch):
+    # No usable client -> adapter raises TTSError (dispatch turns this into exit 1).
+    import asyncio
+    from types import SimpleNamespace
+    monkeypatch.setattr(autodub, "get_openai_client", lambda *a, **k: None)
+    args = SimpleNamespace(openai_api_key=None, target_lang="en", no_stretch=True,
+                           quality_gate=False, openai_voice="nova",
+                           openai_tts_model="gpt-4o-mini-tts", openai_tts_instructions="")
+    with pytest.raises(autodub.TTSError):
+        asyncio.run(autodub._tts_openai(None, args, None, None, None, _fake_logger()))

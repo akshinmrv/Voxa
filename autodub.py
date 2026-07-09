@@ -1820,6 +1820,106 @@ def log_quality_report(scores: List[Dict], engine: str):
         logging.warning(f"⚠️  {len(flagged)}/{n} segments flagged — check reference/voice/language")
 
 
+# ── TTS provider registry ────────────────────────────────────────────────────
+# Mirrors LLM_PROVIDERS: each engine is a small adapter that performs its own
+# setup (voice lookup / model load / client / language check) and returns
+# (concat_list, temp_files). Adding a new engine = one adapter + one registry
+# line. Adapters raise TTSError on an unrecoverable setup failure; the dispatch
+# in process_video logs it and aborts. All adapters share one signature and are
+# async so the dispatch is uniform (edge is natively async; the others simply
+# don't await — identical to the previous inline calls).
+class TTSError(Exception):
+    """Raised by a TTS adapter when speech synthesis cannot proceed."""
+
+
+async def _tts_edge(subs, args, work_dir, video_path, gate_asr, logger):
+    logger.info(f"🔎 Finding voice for: {args.target_lang}")
+    voice, has_emotions = await get_edge_voice(args.target_lang)
+    logger.info(f"🎙️  Selected: {voice} (Emotions: {'Yes' if has_emotions else 'No'})")
+    return await synthesize_speech_batch(
+        subs, voice, work_dir,
+        enable_stretch=not args.no_stretch,
+        emotion_detection=args.detect_emotion,
+        rate_adjust=args.auto_rate,
+        has_emotion_support=has_emotions,
+        quality_gate=args.quality_gate, asr_model=gate_asr,
+        gate_lang=args.target_lang[:2].lower()
+    )
+
+
+async def _tts_piper(subs, args, work_dir, video_path, gate_asr, logger):
+    logger.info(f"🔎 Loading Piper model for: {args.target_lang}")
+    model_path = download_piper_model(args.target_lang, Path.home() / ".piper_models")
+    if not model_path:
+        raise TTSError("Failed to download Piper model")
+    logger.info("🎙️  Using Piper (offline mode)")
+    concat_list, temp_files = [], []
+    generate_piper(subs, model_path, concat_list, temp_files, work_dir,
+                   enable_stretch=not args.no_stretch)
+    return concat_list, temp_files
+
+
+async def _tts_xtts(subs, args, work_dir, video_path, gate_asr, logger):
+    # ── XTTS voice cloning ───────────────────────────
+    lang_code = args.target_lang[:2].lower()
+    if lang_code not in XTTS_SUPPORTED_LANGS:
+        raise TTSError(f"❌ XTTS does not support language '{lang_code}'. "
+                       f"Supported: {sorted(XTTS_SUPPORTED_LANGS)}")
+
+    # Determine speaker reference wav
+    speaker_wav = args.voice_sample
+    if not speaker_wav:
+        # Auto-extract from source video
+        auto_sample = work_dir / "auto_voice_sample.wav"
+        if not auto_sample.exists():
+            logger.info("🎤 No --voice-sample provided, extracting from source video...")
+            if not extract_voice_sample(str(video_path), str(auto_sample)):
+                raise TTSError("Failed to extract voice sample")
+        speaker_wav = str(auto_sample)
+    else:
+        if not Path(speaker_wav).exists():
+            raise TTSError(f"❌ Voice sample not found: {speaker_wav}")
+        logger.info(f"🎤 Using provided voice sample: {speaker_wav}")
+
+    # Load model
+    tts_model = load_xtts_model()
+    if tts_model is None:
+        raise TTSError("Failed to load XTTS model")
+
+    concat_list, temp_files = [], []
+    generate_xtts(
+        subs, tts_model, speaker_wav, lang_code,
+        concat_list, temp_files, work_dir,
+        enable_stretch=not args.no_stretch,
+        quality_gate=args.quality_gate, asr_model=gate_asr
+    )
+    return concat_list, temp_files
+
+
+async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
+    client = get_openai_client(args.openai_api_key)
+    if client is None:
+        raise TTSError("OpenAI TTS requires an API key (OPENAI_API_KEY or --openai_api_key)")
+    logger.info(f"🎙️  OpenAI TTS: {args.openai_tts_model} / voice '{args.openai_voice}'")
+    concat_list, temp_files = [], []
+    generate_openai_tts(
+        subs, client, args.openai_voice, args.openai_tts_model,
+        args.openai_tts_instructions, args.target_lang[:2].lower(),
+        concat_list, temp_files, work_dir,
+        enable_stretch=not args.no_stretch,
+        quality_gate=args.quality_gate, asr_model=gate_asr
+    )
+    return concat_list, temp_files
+
+
+TTS_PROVIDERS: Dict[str, Dict] = {
+    "edge":   {"synthesize": _tts_edge},
+    "piper":  {"synthesize": _tts_piper},
+    "xtts":   {"synthesize": _tts_xtts},
+    "openai": {"synthesize": _tts_openai},
+}
+
+
 async def process_video(video_path: str, args, logger: Logger):
     """Main video processing pipeline"""
     video_path = Path(video_path)
@@ -1991,83 +2091,18 @@ async def process_video(video_path: str, args, logger: Logger):
     else:
         logger.info("[6/7] Synthesizing speech...")
         subs = pysrt.open(str(srt_file))
-        concat_list, temp_files = [], []
         gate_asr = _get_gate_asr(args.gate_model) if args.quality_gate else None
 
-        if args.tts == "edge":
-            logger.info(f"🔎 Finding voice for: {args.target_lang}")
-            voice, has_emotions = await get_edge_voice(args.target_lang)
-            logger.info(f"🎙️  Selected: {voice} (Emotions: {'Yes' if has_emotions else 'No'})")
-            concat_list, temp_files = await synthesize_speech_batch(
-                subs, voice, work_dir,
-                enable_stretch=not args.no_stretch,
-                emotion_detection=args.detect_emotion,
-                rate_adjust=args.auto_rate,
-                has_emotion_support=has_emotions,
-                quality_gate=args.quality_gate, asr_model=gate_asr,
-                gate_lang=args.target_lang[:2].lower()
-            )
-
-        elif args.tts == "piper":
-            logger.info(f"🔎 Loading Piper model for: {args.target_lang}")
-            model_path = download_piper_model(args.target_lang, Path.home() / ".piper_models")
-            if not model_path:
-                logger.error("Failed to download Piper model")
-                return 1
-            logger.info("🎙️  Using Piper (offline mode)")
-            generate_piper(subs, model_path, concat_list, temp_files, work_dir,
-                           enable_stretch=not args.no_stretch)
-
-        elif args.tts == "xtts":
-            # ── XTTS voice cloning ───────────────────────────
-            lang_code = args.target_lang[:2].lower()
-            if lang_code not in XTTS_SUPPORTED_LANGS:
-                logger.error(f"❌ XTTS does not support language '{lang_code}'. "
-                             f"Supported: {sorted(XTTS_SUPPORTED_LANGS)}")
-                return 1
-
-            # Determine speaker reference wav
-            speaker_wav = args.voice_sample
-            if not speaker_wav:
-                # Auto-extract from source video
-                auto_sample = work_dir / "auto_voice_sample.wav"
-                if not auto_sample.exists():
-                    logger.info("🎤 No --voice-sample provided, extracting from source video...")
-                    if not extract_voice_sample(str(video_path), str(auto_sample)):
-                        logger.error("Failed to extract voice sample")
-                        return 1
-                speaker_wav = str(auto_sample)
-            else:
-                if not Path(speaker_wav).exists():
-                    logger.error(f"❌ Voice sample not found: {speaker_wav}")
-                    return 1
-                logger.info(f"🎤 Using provided voice sample: {speaker_wav}")
-
-            # Load model
-            tts_model = load_xtts_model()
-            if tts_model is None:
-                return 1
-
-            generate_xtts(
-                subs, tts_model, speaker_wav, lang_code,
-                concat_list, temp_files, work_dir,
-                enable_stretch=not args.no_stretch,
-                quality_gate=args.quality_gate, asr_model=gate_asr
-            )
-
-        elif args.tts == "openai":
-            client = get_openai_client(args.openai_api_key)
-            if client is None:
-                logger.error("OpenAI TTS requires an API key (OPENAI_API_KEY or --openai_api_key)")
-                return 1
-            logger.info(f"🎙️  OpenAI TTS: {args.openai_tts_model} / voice '{args.openai_voice}'")
-            generate_openai_tts(
-                subs, client, args.openai_voice, args.openai_tts_model,
-                args.openai_tts_instructions, args.target_lang[:2].lower(),
-                concat_list, temp_files, work_dir,
-                enable_stretch=not args.no_stretch,
-                quality_gate=args.quality_gate, asr_model=gate_asr
-            )
+        spec = TTS_PROVIDERS.get(args.tts)
+        if spec is None:
+            logger.error(f"Unknown TTS engine: {args.tts}")
+            return 1
+        try:
+            concat_list, temp_files = await spec["synthesize"](
+                subs, args, work_dir, video_path, gate_asr, logger)
+        except TTSError as exc:
+            logger.error(str(exc))
+            return 1
 
         if not concat_list:
             logger.error("No audio generated!")
@@ -2214,7 +2249,7 @@ Examples:
     parser.add_argument("--workers", type=int, default=4,
                         help="Number of parallel workers (default: 4)")
 
-    parser.add_argument("--tts", choices=["edge", "piper", "xtts", "openai"], default="edge",
+    parser.add_argument("--tts", choices=sorted(TTS_PROVIDERS), default="edge",
                         help="TTS engine: edge (online), piper (offline), xtts (cloning), "
                              "openai (multilingual, instructable — best for languages XTTS "
                              "can't do, e.g. az)")
