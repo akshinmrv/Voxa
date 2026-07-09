@@ -371,7 +371,8 @@ def _xtts_synthesize_segment(tts_model, text: str, speaker_wav: str, lang: str,
 
 def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
                   concat_list: list, temp_files: list,
-                  work_dir: Path, enable_stretch: bool):
+                  work_dir: Path, enable_stretch: bool,
+                  quality_gate: bool = False, asr_model=None):
     """Generate cloned speech with XTTS v2, applying the S0 pipeline standard: text
     normalization + chunk caps, natural-pace (no-slowdown) fitting, and absolute-timeline
     placement so short clips are padded rather than dragged out and over-runs don't drift."""
@@ -390,6 +391,7 @@ def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
 
     generated_count = 0
     current_time_ms = 0
+    scores: List[Dict] = []
 
     for i, sub in enumerate(tqdm(subs, desc="XTTS Synthesis", unit="phrase")):
         start_ms = (sub.start.hours * 3600 + sub.start.minutes * 60 +
@@ -440,10 +442,15 @@ def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
             current_time_ms = _place_speech_block(final_file, start_ms, end_ms, sample_rate,
                                                   work_dir, i, concat_list, temp_files)
             generated_count += 1
+            if quality_gate:
+                scores.append(score_speech(str(final_file), text, asr_model=asr_model,
+                                           lang=xtts_lang))
         else:
             current_time_ms = end_ms
 
     logging.info(f"✓ XTTS generated {generated_count}/{len(subs)} segments")
+    if quality_gate:
+        log_quality_report(scores, "xtts")
 
 
 # ─────────────────────────────────────────────
@@ -1341,8 +1348,11 @@ def parallel_translate(segments: List[Dict], target_lang: str, translator_type: 
 
 async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
                                   enable_stretch: bool, emotion_detection: bool,
-                                  rate_adjust: bool, has_emotion_support: bool = False) -> Tuple[List[str], List[str]]:
+                                  rate_adjust: bool, has_emotion_support: bool = False,
+                                  quality_gate: bool = False, asr_model=None,
+                                  gate_lang=None) -> Tuple[List[str], List[str]]:
     concat_list, temp_files = [], []
+    scores: List[Dict] = []
     current_time_ms = 0
     target_sr = 44100
     emotion_stats = {}
@@ -1416,11 +1426,16 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
             # dragging them out, and let over-runs shrink the next gap (no cumulative drift).
             current_time_ms = _place_speech_block(final_file, start_ms, end_ms, target_sr,
                                                   work_dir, i, concat_list, temp_files)
+            if quality_gate:
+                scores.append(score_speech(str(final_file), txt, asr_model=asr_model,
+                                           lang=gate_lang))
         else:
             current_time_ms = end_ms
 
     if emotion_stats:
         logging.info(f"🎭 Emotion usage: {emotion_stats}")
+    if quality_gate:
+        log_quality_report(scores, "edge")
     return concat_list, temp_files
 
 
@@ -1446,6 +1461,125 @@ def transcribe_audio(audio_path: str, model_name: str, backend: str, device: str
         model = whisper.load_model(model_name, device=device)
     result = model.transcribe(audio_path, fp16=(device == "cuda"), verbose=False)
     return result["segments"], result.get("language", "unknown")
+
+
+# ─────────────────────────────────────────────
+#  Speech quality gate (S1) — measure synthesized segments
+# ─────────────────────────────────────────────
+
+_COMPARE_RE = re.compile(r"[^\w\s]", re.UNICODE)
+_gate_asr_model = None
+_gate_asr_name = None
+
+
+def _normalize_for_compare(text: str) -> str:
+    """Lowercase, strip punctuation, collapse whitespace — for ASR round-trip comparison."""
+    return _TTS_WS_RE.sub(" ", _COMPARE_RE.sub(" ", (text or "").lower())).strip()
+
+
+def _edit_distance(a: List[str], b: List[str]) -> int:
+    """Levenshtein distance between two token sequences."""
+    m, n = len(a), len(b)
+    if m == 0:
+        return n
+    dp = list(range(n + 1))
+    for i in range(1, m + 1):
+        prev, dp[0] = dp[0], i
+        for j in range(1, n + 1):
+            prev, dp[j] = dp[j], min(dp[j] + 1, dp[j - 1] + 1, prev + (a[i - 1] != b[j - 1]))
+    return dp[n]
+
+
+def word_error_rate(reference: str, hypothesis: str) -> float:
+    """Token-level WER of an ASR transcript vs the text we asked the TTS to speak.
+    A high value flags hallucination / wrong pronunciation / truncation."""
+    ref = _normalize_for_compare(reference).split()
+    hyp = _normalize_for_compare(hypothesis).split()
+    if not ref:
+        return 0.0 if not hyp else 1.0
+    return _edit_distance(ref, hyp) / len(ref)
+
+
+def _clipping_ratio(data) -> float:
+    return float(np.mean(np.abs(data) >= 0.999)) if len(data) else 0.0
+
+
+def _silence_ratio(data, thresh: float = 1e-3) -> float:
+    return float(np.mean(np.abs(data) < thresh)) if len(data) else 1.0
+
+
+def _get_gate_asr(model_name: str = "tiny"):
+    """Load a faster-whisper model once for the round-trip check (None if absent).
+    A bigger model gives reliable WER for low-resource languages (tiny mis-transcribes
+    e.g. Azerbaijani even when the speech is correct → false positives)."""
+    global _gate_asr_model, _gate_asr_name
+    if _gate_asr_model is not None and _gate_asr_name == model_name:
+        return _gate_asr_model
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError:
+        logging.warning("Quality gate needs faster-whisper (pip install faster-whisper); "
+                        "scoring without ASR round-trip")
+        return None
+    device = "cuda" if (torch is not None and torch.cuda.is_available()) else "cpu"
+    _gate_asr_model = WhisperModel(model_name, device=device,
+                                   compute_type="float16" if device == "cuda" else "int8")
+    _gate_asr_name = model_name
+    return _gate_asr_model
+
+
+def score_speech(audio_path: str, expected_text: str, *, asr_model=None, lang=None,
+                 wer_thresh: float = 0.6, clip_thresh: float = 0.02,
+                 silence_thresh: float = 0.6) -> Dict:
+    """Score one synthesized clip. Returns {ok, reasons, dur, clip, silence, cps[, wer]}.
+    Reasons are the failed checks (empty = passed). ASR round-trip is skipped if no model."""
+    result: Dict = {"ok": True, "reasons": []}
+    try:
+        data, sr = sf.read(audio_path, dtype="float32")
+    except Exception:
+        return {"ok": False, "reasons": ["unreadable"], "wer": 1.0}
+    if data.ndim > 1:
+        data = data[:, 0]
+    dur = len(data) / sr if sr else 0.0
+    result["dur"] = round(dur, 2)
+    result["clip"] = round(_clipping_ratio(data), 4)
+    result["silence"] = round(_silence_ratio(data), 3)
+    exp = _normalize_for_compare(expected_text)
+    result["cps"] = round(len(exp) / dur, 1) if dur > 0 else 0.0
+    if result["clip"] > clip_thresh:
+        result["reasons"].append("clipping")
+    if result["silence"] > silence_thresh:
+        result["reasons"].append("mostly_silence")
+    if dur < 0.1:
+        result["reasons"].append("too_short")
+    if asr_model is not None and exp:
+        try:
+            segs, _ = asr_model.transcribe(audio_path, language=lang)
+            wer = word_error_rate(expected_text, " ".join(s.text for s in segs))
+            result["wer"] = round(wer, 2)
+            if wer > wer_thresh:
+                result["reasons"].append("asr")
+        except Exception as e:
+            logging.debug(f"gate ASR failed: {e}")
+    result["ok"] = not result["reasons"]
+    return result
+
+
+def log_quality_report(scores: List[Dict], engine: str):
+    """Log a per-job speech-quality summary from collected per-segment scores."""
+    if not scores:
+        return
+    n = len(scores)
+    flagged = [s for s in scores if not s["ok"]]
+    wers = [s["wer"] for s in scores if "wer" in s]
+    avg_wer = f", avg WER {sum(wers) / len(wers):.2f}" if wers else ""
+    logging.info(f"🔎 Quality report ({engine}): {n} segments, {len(flagged)} flagged{avg_wer}")
+    for idx, s in enumerate(scores):
+        if not s["ok"]:
+            logging.info(f"   ⚠️  segment {idx}: {', '.join(s['reasons'])} "
+                         f"(dur {s.get('dur')}s, wer {s.get('wer', 'n/a')})")
+    if n and len(flagged) / n > 0.10:
+        logging.warning(f"⚠️  {len(flagged)}/{n} segments flagged — check reference/voice/language")
 
 
 async def process_video(video_path: str, args, logger: Logger):
@@ -1612,6 +1746,7 @@ async def process_video(video_path: str, args, logger: Logger):
         logger.info("[6/7] Synthesizing speech...")
         subs = pysrt.open(str(srt_file))
         concat_list, temp_files = [], []
+        gate_asr = _get_gate_asr(args.gate_model) if args.quality_gate else None
 
         if args.tts == "edge":
             logger.info(f"🔎 Finding voice for: {args.target_lang}")
@@ -1622,7 +1757,9 @@ async def process_video(video_path: str, args, logger: Logger):
                 enable_stretch=not args.no_stretch,
                 emotion_detection=args.detect_emotion,
                 rate_adjust=args.auto_rate,
-                has_emotion_support=has_emotions
+                has_emotion_support=has_emotions,
+                quality_gate=args.quality_gate, asr_model=gate_asr,
+                gate_lang=args.target_lang[:2].lower()
             )
 
         elif args.tts == "piper":
@@ -1668,7 +1805,8 @@ async def process_video(video_path: str, args, logger: Logger):
             generate_xtts(
                 subs, tts_model, speaker_wav, lang_code,
                 concat_list, temp_files, work_dir,
-                enable_stretch=not args.no_stretch
+                enable_stretch=not args.no_stretch,
+                quality_gate=args.quality_gate, asr_model=gate_asr
             )
 
         if not concat_list:
@@ -1783,6 +1921,12 @@ Examples:
     parser.add_argument("--whisper-backend", choices=["openai", "faster"], default="openai",
                         help="Transcription engine: openai (openai-whisper, default) or "
                              "faster (faster-whisper — 2-4x faster; pip install faster-whisper)")
+    parser.add_argument("--quality-gate", action="store_true",
+                        help="Score each synthesized segment (ASR round-trip via faster-whisper "
+                             "+ artifact/pacing checks) and log a per-job quality report")
+    parser.add_argument("--gate-model", default="tiny",
+                        help="faster-whisper model for the quality gate's ASR round-trip "
+                             "(default: tiny; use base/small/medium for low-resource languages)")
 
     parser.add_argument("--translator", choices=["google", "ollama"] + sorted(LLM_PROVIDERS),
                         default="google", help="Translation service (default: google)")

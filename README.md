@@ -162,6 +162,11 @@ options:
                         Transcription engine (default: openai). "faster" uses
                         faster-whisper — 2-4x quicker on long videos / large models
                         (pip install faster-whisper)
+  --quality-gate        Score each synthesized segment (ASR round-trip + artifact /
+                        pacing checks) and log a per-job quality report
+  --gate-model MODEL    faster-whisper model for the gate (default: tiny; use
+                        base/small for low-resource languages like az to avoid
+                        false-positive WER)
   --config FILE         JSON file of default option values
   --env-file FILE       Path to a .env file with API keys (default: .env)
   --log-format {plain,json}

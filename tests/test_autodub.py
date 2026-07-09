@@ -121,6 +121,48 @@ def test_split_for_tts_hard_wraps_unpunctuated():
     assert len(chunks) >= 3
 
 
+# ── S1: quality scoring primitives ───────────────────────
+def test_normalize_for_compare():
+    assert autodub._normalize_for_compare("Hello, World!") == "hello world"
+    assert autodub._normalize_for_compare("  A  b  ") == "a b"
+
+
+def test_edit_distance():
+    assert autodub._edit_distance(["a", "b", "c"], ["a", "b", "c"]) == 0
+    assert autodub._edit_distance(["a", "b"], ["a"]) == 1
+    assert autodub._edit_distance([], ["a", "b"]) == 2
+
+
+def test_word_error_rate():
+    assert autodub.word_error_rate("hello world", "hello world") == 0.0
+    assert autodub.word_error_rate("hello world", "hello") == pytest.approx(0.5)
+    assert autodub.word_error_rate("a b c", "x y z") == pytest.approx(1.0)
+    assert autodub.word_error_rate("", "") == 0.0
+    assert autodub.word_error_rate("", "junk") == 1.0
+
+
+def test_artifact_ratios():
+    import numpy as np
+    assert autodub._clipping_ratio(np.array([1.0, 0.0, -1.0, 0.5], dtype="float32")) == pytest.approx(0.5)
+    assert autodub._silence_ratio(np.array([0.0, 0.0, 0.5, 0.5], dtype="float32")) == pytest.approx(0.5)
+
+
+def test_score_speech_flags_silence_passes_clean(tmp_path):
+    import numpy as np
+    import soundfile as sf
+    sr = 22050
+    silent = tmp_path / "silent.wav"
+    sf.write(str(silent), np.zeros(sr, dtype="float32"), sr, subtype="PCM_16")
+    s = autodub.score_speech(str(silent), "some words here")
+    assert s["ok"] is False and "mostly_silence" in s["reasons"]
+
+    tone = tmp_path / "tone.wav"
+    sig = (0.3 * np.sin(2 * np.pi * 220 * np.arange(sr) / sr)).astype("float32")
+    sf.write(str(tone), sig, sr, subtype="PCM_16")
+    s2 = autodub.score_speech(str(tone), "some words here")
+    assert s2["ok"] is True
+
+
 # ── S0: micro-fades (declick) ────────────────────────────
 def test_apply_micro_fades_ramps_edges(tmp_path):
     import numpy as np
