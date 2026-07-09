@@ -1129,11 +1129,31 @@ def _plan_block(actual_ms: float, start_ms: float, end_ms: float) -> Tuple[float
     return 0.0, float(start_ms) + max(actual_ms, float(window_ms))
 
 
+def _apply_micro_fades(path: Path, fade_ms: float = 8.0):
+    """Apply a few-ms fade-in/out in place to remove click/pop discontinuities where
+    segments butt against silence or each other in the concatenated track."""
+    try:
+        data, sr = sf.read(str(path), dtype="float32")
+        n = int(sr * fade_ms / 1000.0)
+        if n > 0 and len(data) > 2 * n:
+            ramp = np.linspace(0.0, 1.0, n, dtype=np.float32)
+            if data.ndim == 1:
+                data[:n] *= ramp
+                data[-n:] *= ramp[::-1]
+            else:
+                data[:n] *= ramp[:, None]
+                data[-n:] *= ramp[::-1][:, None]
+            sf.write(str(path), data, sr, subtype="PCM_16")
+    except Exception as e:
+        logging.debug(f"micro-fade skipped for {path}: {e}")
+
+
 def _place_speech_block(final_file: Path, start_ms: float, end_ms: float, sr: int,
                         work_dir: Path, tag, concat_list: list, temp_files: list) -> float:
     """Append a (natural-speed or bounded speed-up) speech clip to the concat list and pad
     trailing silence to fill its subtitle window when shorter — the S0 replacement for
     slowing speech to fit. Returns the updated timeline cursor (ms)."""
+    _apply_micro_fades(final_file)
     concat_list.append(f"file '{final_file}'")
     temp_files.append(str(final_file))
     try:
@@ -1237,10 +1257,25 @@ def reduce_noise(input_file: str, output_file: str) -> bool:
 
 
 def normalize_audio(input_file: str, output_file: str, target_level: float = -20.0) -> bool:
+    """Two-pass EBU R128 loudness normalization (measure, then apply with measured stats
+    for accurate linear correction). Falls back to single-pass, then to a plain copy."""
+    base = f"loudnorm=I={target_level}:TP=-1.5:LRA=11"
+    second = base
+    try:
+        p1 = subprocess.run(
+            ["ffmpeg", "-y", "-i", input_file, "-af", base + ":print_format=json", "-f", "null", "-"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        m = re.search(r"\{[\s\S]*\}", p1.stderr or "")
+        if m:
+            s = json.loads(m.group(0))
+            second = (f"{base}:measured_I={s['input_i']}:measured_TP={s['input_tp']}:"
+                      f"measured_LRA={s['input_lra']}:measured_thresh={s['input_thresh']}:"
+                      f"offset={s['target_offset']}:linear=true")
+    except Exception as e:
+        logging.debug(f"loudnorm measure pass failed, using single-pass: {e}")
     try:
         subprocess.run([
-            "ffmpeg", "-y", "-i", input_file,
-            "-filter:a", f"loudnorm=I={target_level}:TP=-1.5:LRA=11",
+            "ffmpeg", "-y", "-i", input_file, "-af", second,
             "-ar", "44100", "-ac", "1", output_file
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         return True
@@ -1332,7 +1367,6 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
 
         raw_file = work_dir / f"speech_{i}_raw.mp3"
         wav_file = work_dir / f"speech_{i}_converted.wav"
-        processed_file = work_dir / f"speech_{i}_processed.wav"
         final_file = work_dir / f"speech_{i}_final.wav"
 
         if not _has_content(final_file, 100):
@@ -1365,22 +1399,17 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
                     logging.error(f"Failed to convert MP3 to WAV for segment {i}: {e}")
                     continue
 
-            if not _has_content(processed_file):
-                try:
-                    reduce_noise(str(wav_file), str(processed_file))
-                except Exception as e:
-                    logging.debug(f"Noise reduction failed for segment {i}, using raw audio: {e}")
-                    sf.write(str(processed_file), *sf.read(str(wav_file)))
-
+            # S0: no noise reduction on clean synthetic speech — stationary NR on a clean
+            # TTS signal only risks musical-noise artifacts. Stretch straight from the WAV.
             if enable_stretch:
                 # S0: fit by speeding up only (bounded); never slow speech down.
-                success = stretch_audio_smart(str(processed_file), str(final_file),
+                success = stretch_audio_smart(str(wav_file), str(final_file),
                                               target_duration, work_dir, target_sr,
                                               allow_slowdown=False)
                 if not success:
-                    sf.write(str(final_file), *sf.read(str(processed_file)))
+                    sf.write(str(final_file), *sf.read(str(wav_file)))
             else:
-                sf.write(str(final_file), *sf.read(str(processed_file)))
+                sf.write(str(final_file), *sf.read(str(wav_file)))
 
         if _has_content(final_file, 100):
             # S0: absolute-timeline placement — pad short clips with silence instead of

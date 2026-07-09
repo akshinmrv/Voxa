@@ -121,6 +121,20 @@ def test_split_for_tts_hard_wraps_unpunctuated():
     assert len(chunks) >= 3
 
 
+# ── S0: micro-fades (declick) ────────────────────────────
+def test_apply_micro_fades_ramps_edges(tmp_path):
+    import numpy as np
+    import soundfile as sf
+    sr = 24000
+    p = tmp_path / "tone.wav"
+    sf.write(str(p), np.ones(sr, dtype="float32"), sr, subtype="PCM_16")  # 1s full-scale
+    autodub._apply_micro_fades(p, fade_ms=8.0)
+    data, _ = sf.read(str(p), dtype="float32")
+    assert abs(data[0]) < 0.05      # faded in from ~0
+    assert abs(data[-1]) < 0.05     # faded out to ~0
+    assert data[sr // 2] > 0.9      # middle untouched
+
+
 # ── S0: stretch-policy inversion (no slowdown) ───────────
 def test_speed_factor_no_slowdown_policy():
     # allow_slowdown=False: never below 1.0 (pad instead), speed-up capped
