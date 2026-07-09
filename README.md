@@ -176,6 +176,9 @@ options:
                         Transcription engine (default: openai). "faster" uses
                         faster-whisper — 2-4x quicker on long videos / large models
                         (pip install faster-whisper)
+  --no-speech-threshold F
+                        Drop transcription segments with no_speech_prob > F (music /
+                        intro that Whisper hallucinated as text). Default 0.6; 1.0 off
   --quality-gate        Score each synthesized segment (ASR round-trip + artifact /
                         pacing checks) and log a per-job quality report
   --gate-model MODEL    faster-whisper model for the gate (default: tiny; use
@@ -245,6 +248,12 @@ The script generates:
 ```bash
 pip install soundfile
 ```
+
+### Dub speaks during a music/intro (no original speech there)
+Whisper transcribes non-speech audio (intros, music) as phantom text, which then
+gets dubbed. AutoDub drops segments with `no_speech_prob > 0.6` by default; lower
+`--no-speech-threshold` (e.g. 0.4) to be more aggressive, or use
+`--whisper-backend faster` (built-in VAD removes non-speech at the source).
 
 ### Edge TTS fails with `403 Invalid response status`
 Microsoft tightened its speech endpoint; older `edge-tts` versions are rejected.

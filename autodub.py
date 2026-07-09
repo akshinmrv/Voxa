@@ -1598,15 +1598,32 @@ def transcribe_audio(audio_path: str, model_name: str, backend: str, device: str
         # faster-whisper names the turbo model 'large-v3-turbo'.
         fw_model = "large-v3-turbo" if model_name == "turbo" else model_name
         model = WhisperModel(fw_model, device=device, compute_type=compute_type)
-        seg_iter, info = model.transcribe(audio_path)
-        segments = [{"start": s.start, "end": s.end, "text": s.text} for s in seg_iter]
+        # vad_filter drops non-speech regions (music/silence intros) at the source, so
+        # Whisper can't hallucinate phantom text over them (transcription hygiene).
+        seg_iter, info = model.transcribe(audio_path, vad_filter=True)
+        segments = [{"start": s.start, "end": s.end, "text": s.text,
+                     "no_speech_prob": getattr(s, "no_speech_prob", 0.0)} for s in seg_iter]
         return segments, getattr(info, "language", "unknown")
 
     # Default: openai-whisper. Loads a trusted local checkpoint (weights_only scoped).
     with _allow_unsafe_torch_load():
         model = whisper.load_model(model_name, device=device)
     result = model.transcribe(audio_path, fp16=(device == "cuda"), verbose=False)
+    # openai-whisper segments already carry no_speech_prob for downstream filtering.
     return result["segments"], result.get("language", "unknown")
+
+
+def filter_nonspeech_segments(segments: List[Dict], threshold: float = 0.6) -> List[Dict]:
+    """Drop segments Whisper itself flags as likely non-speech (no_speech_prob > threshold)
+    — the music/silence intro it transcribed as phantom text. threshold >= 1.0 disables."""
+    if threshold >= 1.0:
+        return segments
+    kept = [s for s in segments if s.get("no_speech_prob", 0.0) <= threshold]
+    dropped = len(segments) - len(kept)
+    if dropped:
+        logging.info(f"🔇 Dropped {dropped} non-speech segment(s) "
+                     f"(no_speech_prob > {threshold}) — likely music/intro phantom text")
+    return kept
 
 
 # ─────────────────────────────────────────────
@@ -1819,6 +1836,10 @@ async def process_video(video_path: str, args, logger: Logger):
         except Exception as e:
             logger.error(f"Transcription failed: {e}")
             return 1
+
+    # Transcription hygiene: drop non-speech (music/intro) segments Whisper hallucinated,
+    # so the dub doesn't speak over the source's silent/intro sections.
+    segments = filter_nonspeech_segments(segments, args.no_speech_threshold)
 
     # Step 4: Merge into sentences
     merged_segments = []
@@ -2089,6 +2110,10 @@ Examples:
     parser.add_argument("--whisper-backend", choices=["openai", "faster"], default="openai",
                         help="Transcription engine: openai (openai-whisper, default) or "
                              "faster (faster-whisper — 2-4x faster; pip install faster-whisper)")
+    parser.add_argument("--no-speech-threshold", type=float, default=0.6,
+                        help="Drop transcription segments whose no_speech_prob exceeds this "
+                             "(0-1) — removes music/intro that Whisper transcribed as phantom "
+                             "text. Set 1.0 to disable.")
     parser.add_argument("--quality-gate", action="store_true",
                         help="Score each synthesized segment (ASR round-trip via faster-whisper "
                              "+ artifact/pacing checks) and log a per-job quality report")

@@ -411,8 +411,20 @@ def test_transcribe_faster_normalizes(monkeypatch):
     monkeypatch.setattr(fw, "WhisperModel", _Model)
     segs, lang = autodub.transcribe_audio("x.wav", "tiny", "faster", "cpu")
     assert lang == "en"
-    assert segs == [{"start": 0.0, "end": 1.0, "text": " hi"},
-                    {"start": 1.0, "end": 2.0, "text": " there"}]
+    assert segs == [{"start": 0.0, "end": 1.0, "text": " hi", "no_speech_prob": 0.0},
+                    {"start": 1.0, "end": 2.0, "text": " there", "no_speech_prob": 0.0}]
+
+
+# ── Transcription hygiene: non-speech filter ─────────────
+def test_filter_nonspeech_segments():
+    segs = [
+        {"start": 0, "end": 3, "text": "music", "no_speech_prob": 0.9},    # intro → drop
+        {"start": 17, "end": 20, "text": "hello", "no_speech_prob": 0.05},  # speech → keep
+        {"start": 20, "end": 23, "text": "world"},                          # no field → keep
+    ]
+    kept = autodub.filter_nonspeech_segments(segs, 0.6)
+    assert [s["text"] for s in kept] == ["hello", "world"]
+    assert autodub.filter_nonspeech_segments(segs, 1.0) == segs            # disabled
 
 
 # ── Zero-byte-aware file guard ───────────────────────────
