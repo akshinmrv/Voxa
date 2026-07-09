@@ -473,18 +473,98 @@ def infer_delivery(text: str) -> str:
     return ""
 
 
+# A2 T1: cheap text model used only to infer per-line delivery directions.
+DEFAULT_DELIVERY_MODEL = "gpt-4o-mini"
+
+
+def _parse_delivery_json(raw: str, expected: int) -> List[str]:
+    """Parse a {"deliveries": [...]} response into exactly `expected` strings. Returns a
+    list of '' (neutral) on any parse/shape/count failure — never raises."""
+    if not raw:
+        return [""] * expected
+    s = raw.strip()
+    if s.startswith("```"):
+        s = re.sub(r"^```[a-zA-Z]*\s*", "", s).rstrip("`").strip()
+    try:
+        data = json.loads(s)
+    except Exception:
+        return [""] * expected
+    if isinstance(data, dict):
+        arr = data.get("deliveries")
+    elif isinstance(data, list):
+        arr = data
+    else:
+        arr = None
+    if not isinstance(arr, list) or len(arr) != expected:
+        return [""] * expected
+    return [str(x).strip().strip('"').strip() for x in arr]
+
+
+def infer_delivery_llm(texts: List[str], client, *,
+                       model: str = DEFAULT_DELIVERY_MODEL) -> List[str]:
+    """A2 T1: one batched LLM pass that tags each line with a SHORT delivery direction
+    (emotion / energy / pace / tone) for expressive TTS — richer than the structural
+    infer_delivery() heuristic. Returns a list aligned to `texts`; entries are '' where
+    neutral or on any failure, so the caller cleanly falls back to the heuristic.
+    Best-effort and self-contained: never raises, one API call for the whole job."""
+    n = len(texts)
+    if n == 0 or client is None:
+        return [""] * n
+    numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(texts))
+    system = (
+        "You are a voice-acting director for a text-to-speech engine. For each numbered "
+        "line, write a SHORT delivery direction (at most 10 words) describing the emotion, "
+        "energy, pace and tone for reading THAT line aloud — e.g. 'warm and reassuring, "
+        "unhurried' or 'urgent, tense, clipped'. Do NOT repeat, quote or translate the "
+        "line. If a line is plain and neutral, return an empty string for it. Return ONLY "
+        'JSON: {"deliveries": [...]} with exactly ' + str(n) + " items, in the given order."
+    )
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": system},
+                      {"role": "user", "content": numbered}],
+            response_format={"type": "json_object"},
+        )
+        raw = resp.choices[0].message.content
+    except Exception as e:
+        logging.debug(f"delivery LLM failed ({e}); falling back to structural hints")
+        return [""] * n
+    return _parse_delivery_json(raw, n)
+
+
 def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
                         lang_code: str, concat_list: list, temp_files: list,
                         work_dir: Path, enable_stretch: bool,
-                        quality_gate: bool = False, asr_model=None):
+                        quality_gate: bool = False, asr_model=None,
+                        emotion_detection: bool = False):
     """Generate speech with OpenAI TTS (gpt-4o-mini-tts). Multilingual, instructable
     delivery, no cloning — the recommended engine for languages XTTS can't clone (e.g.
-    Azerbaijani). Applies the S0 standard: normalize, no-slowdown fit, timeline placement."""
+    Azerbaijani). Applies the S0 standard: normalize, no-slowdown fit, timeline placement.
+    With emotion_detection, an LLM tags each line with a delivery direction (A2 T1)."""
     sample_rate = 24000  # OpenAI TTS output rate
     generated_count = 0
     current_time_ms = 0
     scores: List[Dict] = []
     max_drift = 0.0
+
+    # A2 T1: optionally pre-compute an LLM delivery direction per line (cached, one API
+    # call for the whole job). Falls back per-line to the structural infer_delivery() hint.
+    deliveries: List[str] = []
+    if emotion_detection:
+        cache = work_dir / "deliveries.json"
+        if cache.exists():
+            try:
+                deliveries = json.loads(cache.read_text(encoding="utf-8"))
+            except Exception:
+                deliveries = []
+        if not isinstance(deliveries, list) or len(deliveries) != len(subs):
+            logging.info("🎭 Inferring per-line delivery directions (LLM)...")
+            deliveries = infer_delivery_llm([s.text for s in subs], client)
+            try:
+                cache.write_text(json.dumps(deliveries, ensure_ascii=False), encoding="utf-8")
+            except Exception:
+                pass
 
     for i, sub in enumerate(tqdm(subs, desc="OpenAI TTS", unit="phrase")):
         start_ms = (sub.start.hours * 3600 + sub.start.minutes * 60 +
@@ -513,8 +593,10 @@ def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
 
         if not _has_content(final_file, 1000):
             try:
-                # A2: per-line delivery hint (question/exclamation/…) added to the base instruction.
-                seg_instr = " ".join(x for x in (instructions, infer_delivery(text)) if x).strip()
+                # A2: delivery hint added to the base instruction — LLM-inferred per line
+                # (T1) when available, else the structural question/exclamation heuristic (T0).
+                hint = deliveries[i] if (i < len(deliveries) and deliveries[i]) else infer_delivery(text)
+                seg_instr = " ".join(x for x in (instructions, hint) if x).strip()
                 kwargs = {"model": model, "voice": voice, "input": text,
                           "response_format": "wav"}
                 if seg_instr:
@@ -1907,7 +1989,8 @@ async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
         args.openai_tts_instructions, args.target_lang[:2].lower(),
         concat_list, temp_files, work_dir,
         enable_stretch=not args.no_stretch,
-        quality_gate=args.quality_gate, asr_model=gate_asr
+        quality_gate=args.quality_gate, asr_model=gate_asr,
+        emotion_detection=args.detect_emotion
     )
     return concat_list, temp_files
 

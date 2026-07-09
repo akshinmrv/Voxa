@@ -530,3 +530,55 @@ def test_tts_openai_requires_key(monkeypatch):
                            openai_tts_model="gpt-4o-mini-tts", openai_tts_instructions="")
     with pytest.raises(autodub.TTSError):
         asyncio.run(autodub._tts_openai(None, args, None, None, None, _fake_logger()))
+
+
+# ── A2 T1: LLM-inferred per-line delivery ────────────────
+def test_parse_delivery_json_valid():
+    assert autodub._parse_delivery_json('{"deliveries": ["warm", "", "urgent"]}', 3) == \
+        ["warm", "", "urgent"]
+
+
+def test_parse_delivery_json_bare_list_and_fence():
+    assert autodub._parse_delivery_json('```json\n["a", "b"]\n```', 2) == ["a", "b"]
+
+
+def test_parse_delivery_json_count_mismatch_is_neutral():
+    # Wrong count -> all neutral so the caller falls back to the heuristic.
+    assert autodub._parse_delivery_json('{"deliveries": ["only one"]}', 3) == ["", "", ""]
+
+
+def test_parse_delivery_json_unparseable_is_neutral():
+    assert autodub._parse_delivery_json("not json at all", 2) == ["", ""]
+    assert autodub._parse_delivery_json("", 2) == ["", ""]
+
+
+def test_infer_delivery_llm_no_client_is_neutral():
+    assert autodub.infer_delivery_llm(["a", "b"], None) == ["", ""]
+    assert autodub.infer_delivery_llm([], object()) == []
+
+
+def test_infer_delivery_llm_uses_client():
+    from types import SimpleNamespace
+    captured = {}
+
+    def _create(**kwargs):
+        captured.update(kwargs)
+        msg = SimpleNamespace(content='{"deliveries": ["calm, warm", "tense, fast"]}')
+        return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=_create)))
+    out = autodub.infer_delivery_llm(["Hello.", "Run!"], client)
+    assert out == ["calm, warm", "tense, fast"]
+    # both source lines are handed to the model in order
+    assert "Hello." in captured["messages"][1]["content"]
+    assert "Run!" in captured["messages"][1]["content"]
+
+
+def test_infer_delivery_llm_client_error_is_neutral():
+    from types import SimpleNamespace
+
+    def _boom(**kwargs):
+        raise RuntimeError("api down")
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=_boom)))
+    assert autodub.infer_delivery_llm(["a", "b", "c"], client) == ["", "", ""]
