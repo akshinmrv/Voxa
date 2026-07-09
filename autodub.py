@@ -457,6 +457,22 @@ def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
         log_quality_report(scores, "xtts")
 
 
+def infer_delivery(text: str) -> str:
+    """Language-agnostic delivery hint from a line's punctuation/structure (questions,
+    exclamations, trailing-off), appended to the TTS instruction. A cheap structural tier;
+    LLM-tagged per-line emotion is the planned upgrade (A2 T1)."""
+    t = (text or "").strip()
+    if not t:
+        return ""
+    if t.endswith("?") or t.endswith(("?\"", "?»", "?'")):
+        return "Deliver this line as a genuine question, with natural rising intonation."
+    if t.endswith("!") or (len(t) > 8 and t.isupper()):
+        return "Deliver this line with lively, energetic emphasis."
+    if t.endswith(("...", "…")):
+        return "Let this line trail off softly and thoughtfully."
+    return ""
+
+
 def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
                         lang_code: str, concat_list: list, temp_files: list,
                         work_dir: Path, enable_stretch: bool,
@@ -497,10 +513,12 @@ def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
 
         if not _has_content(final_file, 1000):
             try:
+                # A2: per-line delivery hint (question/exclamation/…) added to the base instruction.
+                seg_instr = " ".join(x for x in (instructions, infer_delivery(text)) if x).strip()
                 kwargs = {"model": model, "voice": voice, "input": text,
                           "response_format": "wav"}
-                if instructions:
-                    kwargs["instructions"] = instructions
+                if seg_instr:
+                    kwargs["instructions"] = seg_instr
                 try:
                     resp = client.audio.speech.create(**kwargs)
                 except TypeError:

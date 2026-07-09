@@ -102,6 +102,14 @@ def test_normalize_tts_text_folds_typography():
     assert autodub.normalize_tts_text("“hi” — there…") == '"hi" , there.'
 
 
+def test_infer_delivery():
+    assert "question" in autodub.infer_delivery("Necəsən?")
+    assert "energetic" in autodub.infer_delivery("Bu mükəmməldir!")
+    assert "trail off" in autodub.infer_delivery("Bilmirəm...")
+    assert autodub.infer_delivery("Salam dostlar.") == ""
+    assert autodub.infer_delivery("") == ""
+
+
 def test_split_for_tts_short_passthrough():
     assert autodub.split_for_tts("short text") == ["short text"]
     assert autodub.split_for_tts("") == []
