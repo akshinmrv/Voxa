@@ -88,6 +88,39 @@ def test_speed_factor_zero_target_safe():
     assert autodub.calculate_speed_factor(5.0, 0.0) == 1.0
 
 
+# ── S0: TTS text normalization + chunking ────────────────
+def test_normalize_tts_text_guarantees_terminal_punctuation():
+    assert autodub.normalize_tts_text("hello world") == "hello world."
+    assert autodub.normalize_tts_text("what?") == "what?"
+    assert autodub.normalize_tts_text("  a   b  ") == "a b."
+    assert autodub.normalize_tts_text("line1\nline2") == "line1 line2."
+    assert autodub.normalize_tts_text("") == ""
+    assert autodub.normalize_tts_text("   ") == ""
+
+
+def test_normalize_tts_text_folds_typography():
+    assert autodub.normalize_tts_text("“hi” — there…") == '"hi" , there.'
+
+
+def test_split_for_tts_short_passthrough():
+    assert autodub.split_for_tts("short text") == ["short text"]
+    assert autodub.split_for_tts("") == []
+
+
+def test_split_for_tts_respects_max_and_boundaries():
+    text = "First sentence here. Second sentence here. Third sentence here."
+    chunks = autodub.split_for_tts(text, max_chars=25)
+    assert len(chunks) >= 2
+    assert all(0 < len(c) <= 25 for c in chunks)
+
+
+def test_split_for_tts_hard_wraps_unpunctuated():
+    text = ("wordword " * 40).strip()   # ~350 chars, no sentence punctuation
+    chunks = autodub.split_for_tts(text, max_chars=100)
+    assert all(len(c) <= 100 for c in chunks)
+    assert len(chunks) >= 3
+
+
 # ── S0: stretch-policy inversion (no slowdown) ───────────
 def test_speed_factor_no_slowdown_policy():
     # allow_slowdown=False: never below 1.0 (pad instead), speed-up capped

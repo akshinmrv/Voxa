@@ -205,6 +205,63 @@ def _has_content(path: Path, min_bytes: int = 1) -> bool:
         return False
 
 
+_TTS_WS_RE = re.compile(r"\s+")
+
+
+def normalize_tts_text(text: str) -> str:
+    """Light, engine-agnostic cleanup before synthesis: flatten newlines, collapse
+    whitespace, fold typographic quotes/dashes/ellipsis to speakable equivalents, and
+    guarantee terminal punctuation. XTTS in particular drags or hallucinates on text
+    with no sentence end, so this measurably stabilizes delivery."""
+    if not text:
+        return ""
+    t = text.replace("\n", " ").replace("\r", " ")
+    for a, b in (("“", '"'), ("”", '"'), ("‘", "'"), ("’", "'"),
+                 ("—", ", "), ("–", ", "), ("…", ".")):
+        t = t.replace(a, b)
+    t = _TTS_WS_RE.sub(" ", t).strip()
+    if not t:
+        return ""
+    if t[-1] not in ".!?,:;":
+        t += "."
+    return t
+
+
+def split_for_tts(text: str, max_chars: int = 220) -> List[str]:
+    """Split text into synthesis chunks no longer than ~max_chars, preferring sentence
+    then clause boundaries. Keeps XTTS-class models out of their long-input failure mode
+    (slowdown / vowel drag / truncation on long, unpunctuated inputs)."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    if len(text) <= max_chars:
+        return [text]
+    chunks, cur = [], ""
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        parts = re.split(r"(?<=[,;:])\s+", sentence) if len(sentence) > max_chars else [sentence]
+        for p in parts:
+            if not p:
+                continue
+            if cur and len(cur) + 1 + len(p) > max_chars:
+                chunks.append(cur.strip())
+                cur = p
+            else:
+                cur = (cur + " " + p).strip() if cur else p
+    if cur.strip():
+        chunks.append(cur.strip())
+    # Hard-wrap any chunk with no punctuation to break on.
+    out: List[str] = []
+    for c in chunks:
+        while len(c) > max_chars:
+            cut = c.rfind(" ", 0, max_chars)
+            cut = cut if cut > 0 else max_chars
+            out.append(c[:cut].strip())
+            c = c[cut:].strip()
+        if c:
+            out.append(c)
+    return out
+
+
 # ─────────────────────────────────────────────
 #  XTTS v2 — voice cloning
 # ─────────────────────────────────────────────
@@ -229,44 +286,98 @@ def load_xtts_model():
         return None
 
 
-def extract_voice_sample(video_path: str, output_wav: str, duration: float = 30.0) -> bool:
-    """Extract a clean voice sample from the source video for cloning"""
+def _voice_sample_filter() -> str:
+    """ffmpeg filter chain for cloning-reference hygiene: high-pass out rumble/hum,
+    trim silences to maximize speech content, and loudness-normalize for a consistent
+    conditioning signal."""
+    return ("highpass=f=80,"
+            "silenceremove=start_periods=1:start_silence=0.1:start_threshold=-38dB:"
+            "stop_periods=-1:stop_silence=0.35:stop_threshold=-38dB,"
+            "loudnorm=I=-20:TP=-2:LRA=11")
+
+
+def extract_voice_sample(video_path: str, output_wav: str,
+                         duration: float = 18.0, skip_start: float = 1.0) -> bool:
+    """Extract a *cleaned* reference clip for voice cloning. A clean, consistent
+    reference is the single biggest lever on cloned-voice quality — a raw blind grab
+    of the first N seconds (music, room tone, second speakers, wildly varying level)
+    is the main cause of 'heavy / deep / unstable' cloned timbre. Skips a short intro,
+    high-passes, trims silence, and loudness-normalizes; falls back to a plain grab if
+    cleaning leaves too little audio."""
     try:
         subprocess.run([
-            "ffmpeg", "-y", "-i", video_path,
-            "-vn", "-acodec", "pcm_s16le",
-            "-ar", "22050", "-ac", "1",
-            "-t", str(duration),
-            output_wav
+            "ffmpeg", "-y", "-ss", str(skip_start), "-i", video_path,
+            "-vn", "-af", _voice_sample_filter(),
+            "-ar", "22050", "-ac", "1", "-t", str(duration), output_wav
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        logging.info(f"✓ Extracted voice sample: {output_wav} ({duration}s)")
+        try:
+            cleaned_dur = sf.info(output_wav).duration
+        except Exception:
+            cleaned_dur = None
+        if cleaned_dur is not None and cleaned_dur < 3.0:
+            logging.warning("Cleaned reference < 3s; falling back to a plain 30s extraction")
+            subprocess.run([
+                "ffmpeg", "-y", "-i", video_path, "-vn", "-acodec", "pcm_s16le",
+                "-ar", "22050", "-ac", "1", "-t", "30", output_wav
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        logging.info(f"✓ Extracted cleaned voice sample: {output_wav}")
         return True
     except Exception as e:
         logging.error(f"❌ Failed to extract voice sample: {e}")
         return False
 
 
+def _xtts_call(tts_model, text: str, speaker_wav: str, lang: str, out_path: str):
+    """One XTTS synthesis call with stability-tuned parameters, falling back to plain
+    defaults if the installed Coqui version doesn't accept the kwargs. Lower temperature
+    + repetition penalty reduce the run-to-run variance and vowel drag; we disable the
+    model's internal splitting because we chunk the text ourselves (split_for_tts)."""
+    try:
+        tts_model.tts_to_file(text=text, speaker_wav=speaker_wav, language=lang,
+                              file_path=out_path, split_sentences=False,
+                              temperature=0.5, repetition_penalty=2.0, length_penalty=1.0)
+    except TypeError:
+        tts_model.tts_to_file(text=text, speaker_wav=speaker_wav, language=lang,
+                              file_path=out_path)
+
+
+def _xtts_synthesize_segment(tts_model, text: str, speaker_wav: str, lang: str,
+                             out_file: Path, work_dir: Path, tag, sample_rate: int) -> bool:
+    """Synthesize one subtitle line: normalize, split into safe-length chunks, synthesize
+    each, and concatenate into `out_file`. Returns True on non-empty output."""
+    chunks = split_for_tts(normalize_tts_text(text))
+    if not chunks:
+        return False
+    pieces = []
+    for ci, chunk in enumerate(chunks):
+        cf = work_dir / f"xtts_raw_{tag}_{ci}.wav"
+        try:
+            _xtts_call(tts_model, chunk, speaker_wav, lang, str(cf))
+        except Exception as e:
+            logging.error(f"XTTS chunk {tag}.{ci} error: {e}")
+            continue
+        if _has_content(cf, 1000):
+            try:
+                data, _ = sf.read(str(cf), dtype="float32")
+                pieces.append(data)
+            except Exception as e:
+                logging.warning(f"XTTS chunk {tag}.{ci} read failed: {e}")
+    if not pieces:
+        return False
+    joined = pieces[0] if len(pieces) == 1 else np.concatenate(pieces)
+    sf.write(str(out_file), joined, sample_rate, subtype="PCM_16")
+    return _has_content(out_file, 1000)
+
+
 def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
                   concat_list: list, temp_files: list,
                   work_dir: Path, enable_stretch: bool):
-    """
-    Generate speech using XTTS v2 with voice cloning.
+    """Generate cloned speech with XTTS v2, applying the S0 pipeline standard: text
+    normalization + chunk caps, natural-pace (no-slowdown) fitting, and absolute-timeline
+    placement so short clips are padded rather than dragged out and over-runs don't drift."""
+    sample_rate = 24000  # XTTS output rate
 
-    Args:
-        subs: pysrt subtitles list
-        tts_model: loaded TTS model instance
-        speaker_wav: path to reference audio for voice cloning
-        lang_code: target language code (must be in XTTS_SUPPORTED_LANGS)
-        concat_list: ffmpeg concat file list (modified in-place)
-        temp_files: list of temp files to clean up (modified in-place)
-        work_dir: working directory for temp files
-        enable_stretch: whether to time-stretch to match subtitle timing
-    """
-    # XTTS outputs 24000 Hz
-    sample_rate = 24000
-
-    # Normalize lang code — XTTS uses 2-letter codes
-    xtts_lang = lang_code[:2].lower()
+    xtts_lang = lang_code[:2].lower()   # XTTS uses 2-letter codes
     if xtts_lang not in XTTS_SUPPORTED_LANGS:
         logging.warning(f"⚠️  XTTS may not support '{xtts_lang}', attempting anyway")
 
@@ -286,7 +397,7 @@ def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
         end_ms = (sub.end.hours * 3600 + sub.end.minutes * 60 +
                   sub.end.seconds) * 1000 + sub.end.milliseconds
 
-        text = sub.text.replace("\n", " ").strip()
+        text = sub.text.strip()
         if not text:
             continue
 
@@ -296,50 +407,41 @@ def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
         sil_dur_ms = start_ms - current_time_ms
         if sil_dur_ms > 100:
             sil_file = work_dir / f"xtts_sil_{i}.wav"
-            try:
-                num_samples = int((sil_dur_ms / 1000.0) * sample_rate)
-                sf.write(str(sil_file), np.zeros(num_samples, dtype=np.float32),
-                         sample_rate, subtype='PCM_16')
+            if create_silence_wav(sil_dur_ms / 1000.0, str(sil_file), sample_rate) \
+                    and sil_file.exists():
                 concat_list.append(f"file '{sil_file}'")
                 temp_files.append(str(sil_file))
                 current_time_ms += sil_dur_ms
-            except Exception as e:
-                logging.warning(f"Silence generation failed for segment {i}: {e}")
 
         # ── Speech generation ────────────────────────────────
         raw_file = work_dir / f"xtts_raw_{i}.wav"
         final_file = work_dir / f"xtts_fin_{i}.wav"
 
-        if not final_file.exists():
+        if not _has_content(final_file, 1000):
             try:
-                tts_model.tts_to_file(
-                    text=text,
-                    speaker_wav=speaker_wav,
-                    language=xtts_lang,
-                    file_path=str(raw_file)
-                )
-
-                if raw_file.exists() and raw_file.stat().st_size > 1000:
-                    if enable_stretch:
-                        if not stretch_audio_smart(str(raw_file), str(final_file),
-                                                   target_duration, work_dir, sample_rate):
-                            data, sr = sf.read(str(raw_file))
-                            sf.write(str(final_file), data, sr, subtype='PCM_16')
-                    else:
-                        data, sr = sf.read(str(raw_file))
-                        sf.write(str(final_file), data, sr, subtype='PCM_16')
-
-                    concat_list.append(f"file '{final_file}'")
-                    temp_files.append(str(final_file))
-                    generated_count += 1
-                else:
+                if not _xtts_synthesize_segment(tts_model, text, speaker_wav, xtts_lang,
+                                                raw_file, work_dir, i, sample_rate):
                     logging.warning(f"XTTS produced empty output for segment {i}: {text[:40]}")
-
+                    current_time_ms = end_ms
+                    continue
+                # S0: fit by speeding up only (bounded); pad short clips (see edge path).
+                if enable_stretch:
+                    if not stretch_audio_smart(str(raw_file), str(final_file), target_duration,
+                                               work_dir, sample_rate, allow_slowdown=False):
+                        sf.write(str(final_file), *sf.read(str(raw_file)), subtype="PCM_16")
+                else:
+                    sf.write(str(final_file), *sf.read(str(raw_file)), subtype="PCM_16")
             except Exception as e:
                 logging.error(f"XTTS segment {i} error: {e}")
+                current_time_ms = end_ms
                 continue
 
-        current_time_ms = end_ms
+        if _has_content(final_file, 1000):
+            current_time_ms = _place_speech_block(final_file, start_ms, end_ms, sample_rate,
+                                                  work_dir, i, concat_list, temp_files)
+            generated_count += 1
+        else:
+            current_time_ms = end_ms
 
     logging.info(f"✓ XTTS generated {generated_count}/{len(subs)} segments")
 
@@ -453,7 +555,7 @@ def generate_piper(subs, model_path: Path, concat_list: list, temp_files: list,
         start_ms = (sub.start.hours * 3600 + sub.start.minutes * 60 + sub.start.seconds) * 1000 + sub.start.milliseconds
         end_ms = (sub.end.hours * 3600 + sub.end.minutes * 60 + sub.end.seconds) * 1000 + sub.end.milliseconds
 
-        text = sub.text.replace("\n", " ").replace('"', '').replace("'", "").strip()
+        text = normalize_tts_text(sub.text).replace('"', '').replace("'", "")
         if not text:
             continue
 
@@ -1213,7 +1315,7 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
     for i, s in enumerate(tqdm(subs, desc="Edge TTS", unit="sentence")):
         start_ms = (s.start.hours*3600 + s.start.minutes*60 + s.start.seconds)*1000 + s.start.milliseconds
         end_ms = (s.end.hours*3600 + s.end.minutes*60 + s.end.seconds)*1000 + s.end.milliseconds
-        txt = s.text.strip()
+        txt = normalize_tts_text(s.text)
         if not txt:
             continue
         target_duration = (end_ms - start_ms) / 1000.0
