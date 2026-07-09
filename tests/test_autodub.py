@@ -415,6 +415,12 @@ def test_transcribe_faster_normalizes(monkeypatch):
                     {"start": 1.0, "end": 2.0, "text": " there", "no_speech_prob": 0.0}]
 
 
+def test_refine_bounds_uses_word_onsets():
+    # segment start placed too early (5s) → corrected to the first word (17s)
+    assert autodub._refine_bounds(5.0, 20.0, [(17.0, 17.5), (19.0, 20.0)]) == (17.0, 20.0)
+    assert autodub._refine_bounds(5.0, 20.0, []) == (5.0, 20.0)   # no words → unchanged
+
+
 # ── Transcription hygiene: non-speech filter ─────────────
 def test_filter_nonspeech_segments():
     segs = [

@@ -1598,19 +1598,37 @@ def transcribe_audio(audio_path: str, model_name: str, backend: str, device: str
         # faster-whisper names the turbo model 'large-v3-turbo'.
         fw_model = "large-v3-turbo" if model_name == "turbo" else model_name
         model = WhisperModel(fw_model, device=device, compute_type=compute_type)
-        # vad_filter drops non-speech regions (music/silence intros) at the source, so
-        # Whisper can't hallucinate phantom text over them (transcription hygiene).
-        seg_iter, info = model.transcribe(audio_path, vad_filter=True)
-        segments = [{"start": s.start, "end": s.end, "text": s.text,
-                     "no_speech_prob": getattr(s, "no_speech_prob", 0.0)} for s in seg_iter]
+        # vad_filter drops non-speech regions (music/silence intros) at the source;
+        # word_timestamps give an accurate speech onset per segment (see _refine_bounds).
+        seg_iter, info = model.transcribe(audio_path, vad_filter=True, word_timestamps=True)
+        segments = []
+        for s in seg_iter:
+            words = [(w.start, w.end) for w in (getattr(s, "words", None) or [])]
+            start, end = _refine_bounds(s.start, s.end, words)
+            segments.append({"start": start, "end": end, "text": s.text,
+                             "no_speech_prob": getattr(s, "no_speech_prob", 0.0)})
         return segments, getattr(info, "language", "unknown")
 
     # Default: openai-whisper. Loads a trusted local checkpoint (weights_only scoped).
     with _allow_unsafe_torch_load():
         model = whisper.load_model(model_name, device=device)
-    result = model.transcribe(audio_path, fp16=(device == "cuda"), verbose=False)
+    result = model.transcribe(audio_path, fp16=(device == "cuda"), verbose=False,
+                              word_timestamps=True)
+    for seg in result["segments"]:
+        words = [(w["start"], w["end"]) for w in (seg.get("words") or [])]
+        seg["start"], seg["end"] = _refine_bounds(seg["start"], seg["end"], words)
     # openai-whisper segments already carry no_speech_prob for downstream filtering.
     return result["segments"], result.get("language", "unknown")
+
+
+def _refine_bounds(seg_start: float, seg_end: float, words) -> Tuple[float, float]:
+    """Tighten a segment to its first/last word onset. Word timestamps are far more
+    accurate than Whisper's coarse segment bounds — especially the first segment after a
+    non-speech intro, where the segment start is often placed too early (causing the dub
+    to begin before the original speech). `words` is a list of (start, end) tuples."""
+    if words:
+        return words[0][0], words[-1][1]
+    return seg_start, seg_end
 
 
 def filter_nonspeech_segments(segments: List[Dict], threshold: float = 0.6) -> List[Dict]:
