@@ -153,6 +153,7 @@ python autodub.py video.mp4 --translator openai --llm_batch_size 25
 | `--anthropic_model` | Claude model id (e.g. `claude-opus-4-8`, `claude-sonnet-5`) | `claude-opus-4-8` |
 | `--openai_api_key` / `--anthropic_api_key` | API key (falls back to the provider's env var) | env var |
 | `--llm_batch_size` | Subtitle lines translated together per call | `25` |
+| `--speech-rate` | Chars/sec used to length-budget translations for dub timing (lower = shorter/slower) | `15` |
 
 ## Command-Line Options
 ```

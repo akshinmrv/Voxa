@@ -336,6 +336,13 @@ def test_provider_registry_has_openai_and_anthropic():
 
 
 # ── Batch passthrough when no client (both providers) ─────
+def test_duration_to_max_chars():
+    assert autodub._duration_to_max_chars(3.0, 15.0) == 45
+    assert autodub._duration_to_max_chars(0.5, 15.0) == 20    # floored
+    assert autodub._duration_to_max_chars(2.0) == 30          # default cps 15
+    assert autodub._duration_to_max_chars(10.0, 12.0) == 120
+
+
 def test_openai_batch_returns_input_when_no_client(monkeypatch):
     monkeypatch.setattr(autodub, "get_openai_client", lambda api_key=None: None)
     out = autodub.translate_openai_batch(["a", "b", "c"], "ru", "gpt-5")

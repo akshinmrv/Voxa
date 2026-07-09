@@ -1081,21 +1081,38 @@ def _parse_batch_translations(raw: str, expected: int) -> Optional[List[str]]:
 
 def _llm_translate_chunk(chunk: List[str], full_lang: str, target_lang: str, model: str,
                          chat_fn, api_key: Optional[str],
-                         context_pairs: List[Tuple[str, str]]) -> List[str]:
+                         context_pairs: List[Tuple[str, str]],
+                         chunk_max_chars: Optional[List[int]] = None) -> List[str]:
     """Translate one contiguous chunk of subtitle lines in a single API call, with mutual
-    context. Falls back to per-line translation if the batch response is invalid."""
+    context. When chunk_max_chars is given, each translation is length-budgeted so it stays
+    speakable within the source segment's time (isochrony). Falls back to per-line."""
+    budget_note = ""
+    if chunk_max_chars:
+        budget_note = (
+            " Each input line is an object with 'text' and a 'max_chars' budget: keep that "
+            "line's translation at most about 'max_chars' characters so it is naturally "
+            "speakable within the original segment's duration (this is a dub — matched timing "
+            "matters). If a literal translation would exceed the budget, condense it with "
+            "shorter, more natural phrasing — but NEVER drop information or meaning. Still "
+            "produce exactly one translation per input line, in order."
+        )
     system_prompt = (
         f"You are a professional subtitle translator and native-level localization expert "
         f"for {full_lang}. You receive a contiguous block of subtitle lines from a single video "
         f"and translate ALL of them into {full_lang}. Use the surrounding lines (and any provided "
         f"'context' lines) to keep pronouns, gender, names, terminology, tone and style perfectly "
         f"consistent and natural across the whole block. Each translation must sound like a native "
-        f"speaker wrote it and fit roughly the same speaking duration as the source (for dubbing). "
+        f"speaker wrote it and fit roughly the same speaking duration as the source (for dubbing)."
+        f"{budget_note} "
         f"Never merge, split, reorder, add or drop lines, and never translate the 'context' lines. "
         f"Respond ONLY with a JSON object of the form {{\"translations\": [\"...\", \"...\"]}} "
         f"containing EXACTLY {len(chunk)} items, in the same order as the input 'lines'."
     )
-    user_obj: Dict = {"lines": chunk}
+    if chunk_max_chars:
+        lines = [{"text": t, "max_chars": c} for t, c in zip(chunk, chunk_max_chars)]
+    else:
+        lines = chunk
+    user_obj: Dict = {"lines": lines}
     if context_pairs:
         user_obj["context"] = [{"source": s, "translation": t} for s, t in context_pairs]
     user = json.dumps(user_obj, ensure_ascii=False)
@@ -1115,9 +1132,11 @@ def _llm_translate_chunk(chunk: List[str], full_lang: str, target_lang: str, mod
 
 def _llm_translate_batch(texts: List[str], target_lang: str, model: str, chat_fn,
                          api_key: Optional[str] = None,
-                         batch_size: int = DEFAULT_LLM_BATCH_SIZE) -> List[str]:
+                         batch_size: int = DEFAULT_LLM_BATCH_SIZE,
+                         max_chars: Optional[List[int]] = None) -> List[str]:
     """Translate a full list of subtitle lines using context-aware chunked LLM calls.
-    Output length and order always match the input; falls back to the source on failure."""
+    Output length and order always match the input; falls back to the source on failure.
+    `max_chars` (parallel to texts) length-budgets each line for dub isochrony."""
     full_lang = LANG_MAP.get(target_lang.lower(), target_lang)
     if batch_size < 1:
         batch_size = DEFAULT_LLM_BATCH_SIZE
@@ -1126,6 +1145,7 @@ def _llm_translate_batch(texts: List[str], target_lang: str, model: str, chat_fn
     for start in tqdm(range(0, len(texts), batch_size),
                       desc="LLM batch translate", unit="chunk"):
         chunk = texts[start:start + batch_size]
+        chunk_max_chars = max_chars[start:start + batch_size] if max_chars else None
 
         # Carry a short tail of the previous chunk as cross-boundary context.
         context_pairs: List[Tuple[str, str]] = []
@@ -1135,13 +1155,22 @@ def _llm_translate_batch(texts: List[str], target_lang: str, model: str, chat_fn
             context_pairs = list(zip(ctx_src, ctx_tr))
 
         translated = _llm_translate_chunk(chunk, full_lang, target_lang, model,
-                                          chat_fn, api_key, context_pairs)
+                                          chat_fn, api_key, context_pairs, chunk_max_chars)
         if len(translated) != len(chunk):   # final alignment safety net
             translated = [_llm_translate_single(t, target_lang, model, chat_fn, api_key)
                           for t in chunk]
         results.extend(translated)
 
     return results
+
+
+DEFAULT_SPEECH_RATE_CPS = 15.0   # rough natural speaking rate (chars/sec) for length budgets
+
+
+def _duration_to_max_chars(seconds: float, cps: float = DEFAULT_SPEECH_RATE_CPS) -> int:
+    """Character budget for a translation to stay speakable within `seconds` at ~cps
+    chars/second. Floored so very short segments still get a usable budget."""
+    return max(20, int(seconds * cps))
 
 
 def translate_llm(text: str, target_lang: str, provider: str, model: Optional[str] = None,
@@ -1154,11 +1183,13 @@ def translate_llm(text: str, target_lang: str, provider: str, model: Optional[st
 
 def translate_llm_batch(texts: List[str], target_lang: str, provider: str,
                         model: Optional[str] = None, api_key: Optional[str] = None,
-                        batch_size: int = DEFAULT_LLM_BATCH_SIZE) -> List[str]:
-    """Context-aware batch translation via the named LLM provider from LLM_PROVIDERS."""
+                        batch_size: int = DEFAULT_LLM_BATCH_SIZE,
+                        max_chars: Optional[List[int]] = None) -> List[str]:
+    """Context-aware batch translation via the named LLM provider from LLM_PROVIDERS.
+    `max_chars` length-budgets each line for dub timing (SY3)."""
     p = LLM_PROVIDERS[provider]
     return _llm_translate_batch(texts, target_lang, model or p["default_model"],
-                                p["chat"], api_key, batch_size)
+                                p["chat"], api_key, batch_size, max_chars)
 
 
 def translate_openai_batch(texts: List[str], target_lang: str, model: str,
@@ -1888,9 +1919,13 @@ async def process_video(video_path: str, args, logger: Logger):
                         f"(model: {llm_model}, batch: {args.llm_batch_size})")
             indexed = [seg for seg in merged_segments if seg['text'].strip()]
             texts = [seg['text'].strip() for seg in indexed]
+            # SY3: length-budget each line to its source duration so the dub fits at a
+            # natural pace (isochrony) — minimizes downstream time-stretch and trimming.
+            max_chars = [_duration_to_max_chars(max(0.0, seg['end'] - seg['start']),
+                                                args.speech_rate) for seg in indexed]
             translated_texts = translate_llm_batch(
                 texts, args.target_lang, args.translator, model=llm_model,
-                api_key=llm_api_key, batch_size=args.llm_batch_size
+                api_key=llm_api_key, batch_size=args.llm_batch_size, max_chars=max_chars
             )
             translated_segments = [
                 {'text': tt or seg['text'].strip(), 'start': seg['start'], 'end': seg['end']}
@@ -2152,6 +2187,10 @@ Examples:
     parser.add_argument("--llm_batch_size", type=int, default=DEFAULT_LLM_BATCH_SIZE,
                         help=f"Subtitle lines translated together per LLM call for context "
                              f"(default: {DEFAULT_LLM_BATCH_SIZE})")
+    parser.add_argument("--speech-rate", type=float, default=DEFAULT_SPEECH_RATE_CPS,
+                        help=f"Assumed speaking rate in characters/second used to length-budget "
+                             f"LLM translations for dub timing (default: {DEFAULT_SPEECH_RATE_CPS}). "
+                             f"Higher = allow longer translations (faster delivery).")
     parser.add_argument("--parallel", action="store_true",
                         help="Enable parallel translation (faster)")
     parser.add_argument("--workers", type=int, default=4,
