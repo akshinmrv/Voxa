@@ -11,7 +11,7 @@ Automatically transcribe, translate, and dub videos into different languages usi
     - **Edge TTS**: High-quality Microsoft voices (recommended)
     - **Piper**: Fast offline TTS (no internet after model download)
     - **XTTS**: Voice cloning from a short reference sample
-- 🎬 **Video Preservation**: Keeps original video, mixes original audio (20%) with dubbed audio (150%)
+- 🎬 **Video Preservation**: Keeps original video, mixes the original audio in as a quiet ambience bed (8%) under the dubbed voice (150%)
 - 📝 **Subtitle Generation**: Creates SRT files for translated text
 
 ## Requirements
@@ -312,9 +312,11 @@ Use Edge TTS or XTTS instead. Piper is designed for speed, not quality.
 5. **Merge**: FFmpeg mixes original + dubbed audio with the original video
 
 ### Audio Mixing
-- Original audio: 20% volume (background)
-- Dubbed audio: 150% volume (foreground)
-- Output: AAC 128kbps, video copied without re-encoding
+- Original audio: 8% volume — a quiet ambience bed, ~31 dB under the dub, so the
+  original speech doesn't compete with it (`--background-volume`, 0.0 mutes it)
+- Dubbed audio: 150% volume (foreground) (`--voice-volume`)
+- The two are combined with `amix`, which halves each input, so the mix does not clip
+- Output: AAC 192kbps, video copied without re-encoding
 
 ## License
 

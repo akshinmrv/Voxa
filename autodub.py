@@ -2425,8 +2425,10 @@ Examples:
                         help="Enable emotion detection (edge TTS only)")
     parser.add_argument("--auto-rate", action="store_true",
                         help="Auto adjust TTS rate")
-    parser.add_argument("--background-volume", type=float, default=0.15,
-                        help="Original audio volume (0.0-1.0, default: 0.15)")
+    parser.add_argument("--background-volume", type=float, default=0.08,
+                        help="Original audio volume (0.0-1.0, default: 0.08 — keeps the "
+                             "source as a quiet ambience bed ~31 dB under the dub; raise "
+                             "toward 0.15 to hear more of the original, 0.0 to mute it)")
     parser.add_argument("--voice-volume", type=float, default=1.5,
                         help="Dubbed voice volume (0.0-2.0, default: 1.5)")
 
