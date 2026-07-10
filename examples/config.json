@@ -1,0 +1,13 @@
+{
+  "target_lang": "ru",
+  "translator": "openai",
+  "openai_model": "gpt-5-mini",
+  "llm_batch_size": 30,
+  "tts": "edge",
+  "whisper_model": "turbo",
+  "whisper_backend": "faster",
+  "speech_rate": 15,
+  "background_volume": 0.05,
+  "quality_gate": true,
+  "gate_model": "base"
+}

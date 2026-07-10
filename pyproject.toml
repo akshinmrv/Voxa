@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voxa"
+version = "1.0.0"
+description = "Voxa — automatic video translation and dubbing (Whisper + LLM translation + multi-engine TTS)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Akshin Miranov", email = "akshinmiranov@gmail.com" }]
+keywords = ["dubbing", "video", "translation", "whisper", "tts", "openai", "subtitles", "voice-cloning"]
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# Only what the default command needs: `voxa video.mp4` = whisper + google + edge TTS.
+# torch is listed explicitly because voxa imports it, but openai-whisper requires it too.
+dependencies = [
+    "openai-whisper",
+    "edge-tts>=7.0",
+    "deep-translator",
+    "openai",
+    "tqdm",
+    "requests",
+    "torch",
+    "soundfile",
+    "noisereduce",
+    "numpy",
+]
+
+[project.optional-dependencies]
+# Coqui Inc. shut down in Jan 2024; `coqui-tts` is the maintained community fork, and it
+# declares its own transformers/omegaconf constraints — voxa no longer pins them globally.
+# NOTE: the XTTS-v2 model weights are non-commercial (CPML). See NOTICE.md.
+xtts = ["coqui-tts", "torchaudio"]
+piper = ["piper-tts"]
+faster = ["faster-whisper"]
+anthropic = ["anthropic"]
+dev = ["pytest", "ruff"]
+
+[project.urls]
+Homepage = "https://github.com/akshinmrv/Voxa"
+Repository = "https://github.com/akshinmrv/Voxa"
+Issues = "https://github.com/akshinmrv/Voxa/issues"
+Changelog = "https://github.com/akshinmrv/Voxa/blob/main/CHANGELOG.md"
+
+[project.scripts]
+voxa = "voxa:cli"
+
+[tool.setuptools]
+py-modules = ["voxa"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+# pycodestyle errors/warnings, pyflakes, and import sorting. Enforced in CI.
+select = ["E", "F", "W", "I"]

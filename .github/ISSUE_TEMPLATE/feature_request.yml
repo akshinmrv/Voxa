@@ -1,0 +1,45 @@
+name: Feature request
+description: Suggest an improvement to Voxa
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Voxa tries to stay small. A feature earns its place by solving a real problem for
+        more than one person, and by not adding a dependency the project has to carry.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation you hit, not the solution you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: What should Voxa do? A concrete command line helps.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deps
+    attributes:
+      label: Does this need a new dependency?
+      options:
+        - "No"
+        - "Yes, but only as an optional extra"
+        - "Yes, a required one"
+        - "It can talk over HTTP instead (e.g. an OpenAI-compatible endpoint)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: >
+        Including "an existing flag almost does this". If a self-hosted OpenAI-compatible
+        server would cover it, `--openai-tts-base-url` may already be the answer.

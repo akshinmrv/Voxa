@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install ruff
+      - run: ruff check .
+
+  test:
+    name: pytest (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # The heavy runtime deps (torch, whisper, ffmpeg, the TTS engines) are deliberately
+      # NOT installed: voxa guards those imports, so the pure-logic suite runs in seconds.
+      # numpy/soundfile/openai are what the tests themselves import; the few tests that
+      # need torch skip when it is absent.
+      - name: Install test dependencies
+        run: pip install pytest numpy soundfile openai
+
+      - name: Syntax check
+        run: python -m py_compile voxa.py
+
+      - name: Run tests
+        run: pytest

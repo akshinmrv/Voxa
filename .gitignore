@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+venv/
+.venv/
+
+# Voxa working / output artifacts
+*_work/
+*.srt
+voxa.log
+state.json
+
+# Media (input videos / generated audio are user data, not source)
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.wav
+*.mp3
+
+# ...but committed examples and demo assets are source
+!examples/**
+!docs/assets/**
+
+# Secrets / environment
+.env
+*.key
+*.pem
+
+# Editor / OS / tooling
+.claude/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Private working documents — kept on the maintainer's machine, never published.
+# (Internal audits, phase planning, session continuity notes, commercial strategy.)
+context.md
+ROADMAP.md
+PROJECT_AUDIT.md
+OPEN_SOURCE_AUDIT_AND_ROADMAP_AZ.md
+SAAS_MASTER_STRATEGY.md
+SPEECH_SYNC_STRATEGY.md
+NEXT_GENERATION_SPEECH_PIPELINE_STRATEGY.md

@@ -1,0 +1,72 @@
+{
+  "kept": 4,
+  "dropped": 1,
+  "refined_starts": [
+    0.0,
+    17.02,
+    17.95,
+    19.95,
+    24.1
+  ],
+  "merged": [
+    {
+      "text": "Hello everyone, how are you?",
+      "start": 17.02,
+      "end": 19.62
+    },
+    {
+      "text": "I am here with my partner",
+      "start": 19.95,
+      "end": 23.05
+    },
+    {
+      "text": "Look at these amazing streets!",
+      "start": 24.1,
+      "end": 27.42
+    }
+  ],
+  "max_chars": [
+    39,
+    46,
+    49
+  ],
+  "srt": [
+    "00:00:17,020 --> 00:00:19,620",
+    "00:00:19,950 --> 00:00:23,050",
+    "00:00:24,100 --> 00:00:27,420"
+  ],
+  "plans_natural": [
+    {
+      "trim_ms": 0.0,
+      "pad_ms": 1063.3,
+      "cursor_ms": 19950.0
+    },
+    {
+      "trim_ms": 0.0,
+      "pad_ms": 2483.3,
+      "cursor_ms": 24100.0
+    },
+    {
+      "trim_ms": 0.0,
+      "pad_ms": 1320.0,
+      "cursor_ms": 27420.0
+    }
+  ],
+  "plans_verbose": [
+    {
+      "trim_ms": 570.0,
+      "pad_ms": 0.0,
+      "cursor_ms": 19950.0
+    },
+    {
+      "trim_ms": 0.0,
+      "pad_ms": 1025.0,
+      "cursor_ms": 24100.0
+    },
+    {
+      "trim_ms": 0.0,
+      "pad_ms": 0.0,
+      "cursor_ms": 27850.0
+    }
+  ]
+}

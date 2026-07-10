@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in Voxa behaves incorrectly
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The two things that make a dubbing bug diagnosable are the
+        **exact command** and the **tail of `<video>_work/voxa.log`**.
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command you ran.
+      render: shell
+      placeholder: voxa clip.mp4 --target_lang ru --tts edge
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log output
+      description: >
+        The last ~30 lines of `<video>_work/voxa.log`, or the console output.
+        Re-run with `--verbose` if it isn't obvious. Please remove any API keys.
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: engine
+    attributes:
+      label: TTS engine
+      options: [edge (default), openai, piper, xtts, "self-hosted via --openai-tts-base-url"]
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `voxa --help | head -1`, `python --version`, `ffmpeg -version | head -1`, and your OS.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: sync
+    attributes:
+      label: If the dub is out of sync
+      options:
+        - label: I have included the `⏱️  max sync drift` line from the log
+        - label: I have checked the first timestamp in the generated `.srt`
