@@ -22,6 +22,10 @@ state.json
 *.wav
 *.mp3
 
+# ...but committed examples and demo assets are source
+!examples/**
+!docs/assets/**
+
 # Secrets / environment
 .env
 *.key
