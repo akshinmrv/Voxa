@@ -809,3 +809,92 @@ def test_read_srt_keeps_multiline_text_and_skips_malformed(tmp_path):
 
 def test_read_srt_empty_file(tmp_path):
     assert voxa.read_srt(_write(tmp_path, "d.srt", "")) == []
+
+
+# ── Preflight validation and ffmpeg diagnostics ──────────
+def test_check_input_videos(tmp_path, capsys):
+    good = tmp_path / "ok.mp4"
+    good.write_bytes(b"x" * 10)
+    empty = tmp_path / "empty.mp4"
+    empty.write_bytes(b"")
+
+    assert voxa._check_input_videos([str(good)]) is True
+    assert voxa._check_input_videos([str(tmp_path / "nope.mp4")]) is False
+    assert voxa._check_input_videos([str(empty)]) is False
+    assert voxa._check_input_videos([str(tmp_path)]) is False        # a directory
+    out = capsys.readouterr().out
+    assert "not found" in out and "empty" in out and "not a file" in out
+
+
+def test_check_external_tools_reports_missing_ffmpeg(monkeypatch, capsys):
+    monkeypatch.setattr(voxa.shutil, "which", lambda name: None)
+    assert voxa._check_external_tools() is False
+    assert "FFmpeg not found" in capsys.readouterr().out
+
+    monkeypatch.setattr(voxa.shutil, "which", lambda name: "/usr/bin/ffmpeg")
+    assert voxa._check_external_tools() is True
+
+
+def test_run_ffmpeg_surfaces_stderr_tail(monkeypatch):
+    from types import SimpleNamespace
+    captured = {}
+
+    def _run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return SimpleNamespace(returncode=1, stderr="noise\nmoov atom not found\nInvalid data")
+    monkeypatch.setattr(voxa.subprocess, "run", _run)
+
+    with pytest.raises(voxa.FFmpegError) as e:
+        voxa.run_ffmpeg(["ffmpeg", "-i", "x.mp4"], "Audio extraction")
+
+    msg = str(e.value)
+    assert "Audio extraction failed" in msg
+    assert "moov atom not found" in msg      # ffmpeg's own words reach the user
+    assert captured["cmd"][:3] == ["ffmpeg", "-hide_banner", "-nostdin"]
+
+
+def test_run_ffmpeg_success_is_quiet(monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(voxa.subprocess, "run",
+                        lambda cmd, **k: SimpleNamespace(returncode=0, stderr=""))
+    voxa.run_ffmpeg(["ffmpeg", "-i", "x.mp4"], "whatever")   # must not raise
+
+
+# ── The anchored slot maths the tests check must be the maths production runs ──
+def test_place_speech_block_delegates_to_plan_anchored_block(tmp_path, monkeypatch):
+    calls = {}
+
+    def _plan(actual_ms, start_ms, next_start_ms):
+        calls["args"] = (actual_ms, start_ms, next_start_ms)
+        return 0.0, 0.0
+
+    def _boom(*a, **k):
+        raise RuntimeError("unreadable")
+
+    monkeypatch.setattr(voxa, "_plan_anchored_block", _plan)
+    monkeypatch.setattr(voxa, "_apply_micro_fades", lambda p: None)
+    monkeypatch.setattr(voxa.sf, "info", _boom)     # duration falls back to the window
+
+    f = tmp_path / "x.wav"
+    f.write_bytes(b"0" * 1200)
+    cursor = voxa._place_speech_block(f, 1000, 2000, 3000, 24000, tmp_path, 0, [], [])
+
+    assert calls["args"] == (1000.0, 1000.0, 3000.0)
+    assert cursor == 3000.0
+
+
+def test_place_speech_block_trims_to_the_planned_slot(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    trimmed = {}
+    monkeypatch.setattr(voxa.sf, "info", lambda p: SimpleNamespace(duration=3.0))   # 3000 ms
+    monkeypatch.setattr(voxa, "_trim_wav", lambda p, ms: trimmed.setdefault("ms", ms))
+    monkeypatch.setattr(voxa, "_apply_micro_fades", lambda p: None)
+    monkeypatch.setattr(voxa, "create_silence_wav", lambda *a, **k: False)
+
+    f = tmp_path / "x.wav"
+    f.write_bytes(b"0" * 1200)
+    # slot is [0, 2000]; a 3000 ms clip must be trimmed down to exactly 2000 ms
+    cursor = voxa._place_speech_block(f, 0, 1000, 2000, 24000, tmp_path, 0, [], [])
+
+    assert trimmed["ms"] == 2000.0
+    assert cursor == 2000.0                 # cursor is anchored: no drift can accumulate

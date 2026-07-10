@@ -156,6 +156,61 @@ def _check_runtime_deps() -> bool:
     return True
 
 
+FFMPEG_INSTALL_HINT = (
+    "   Install FFmpeg and make sure it is on your PATH:\n"
+    "     Ubuntu/Debian : sudo apt install ffmpeg\n"
+    "     Fedora/RHEL   : sudo dnf install ffmpeg\n"
+    "     macOS         : brew install ffmpeg\n"
+    "     Windows       : winget install Gyan.FFmpeg"
+)
+
+
+def _check_external_tools() -> bool:
+    """Verify the external binaries the pipeline shells out to. Checked before any work
+    so a missing FFmpeg fails with an actionable message instead of an exit-code dump."""
+    if shutil.which("ffmpeg") is None:
+        print("❌ FFmpeg not found.\n" + FFMPEG_INSTALL_HINT)
+        return False
+    return True
+
+
+def _check_input_videos(videos: List[str]) -> bool:
+    """Verify every input path exists, is a file and is non-empty, before creating a
+    workspace or loading any model."""
+    ok = True
+    for v in videos:
+        p = Path(v)
+        if not p.exists():
+            print(f"❌ Input video not found: {v}")
+            ok = False
+        elif not p.is_file():
+            print(f"❌ Input path is not a file: {v}")
+            ok = False
+        elif p.stat().st_size == 0:
+            print(f"❌ Input video is empty: {v}")
+            ok = False
+    return ok
+
+
+class FFmpegError(RuntimeError):
+    """An ffmpeg invocation failed. Carries the tail of ffmpeg's own stderr, which is
+    almost always the only useful part of the diagnosis."""
+
+
+def run_ffmpeg(cmd: List[str], what: str, *, stderr_lines: int = 5) -> None:
+    """Run ffmpeg, and on failure raise FFmpegError quoting what ffmpeg actually said.
+    The bare `check=True` this replaces discarded stderr, leaving users with nothing but
+    a numeric exit status. `-hide_banner` keeps the build blurb out of the diagnosis and
+    `-nostdin` stops ffmpeg from swallowing the terminal's input."""
+    if cmd and cmd[0] == "ffmpeg":
+        cmd = [cmd[0], "-hide_banner", "-nostdin", *cmd[1:]]
+    proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if proc.returncode != 0:
+        tail = [ln for ln in (proc.stderr or "").strip().splitlines() if ln.strip()]
+        detail = "\n".join(f"   {ln}" for ln in tail[-stderr_lines:]) or "   (no stderr output)"
+        raise FFmpegError(f"{what} failed (ffmpeg exit {proc.returncode}):\n{detail}")
+
+
 def load_dotenv(path: str = ".env") -> int:
     """Minimal, zero-dependency .env loader. Sets os.environ for each `KEY=VALUE`
     line whose key isn't already set (existing env vars win). Returns the count loaded."""
@@ -1577,15 +1632,15 @@ def _place_speech_block(final_file: Path, start_ms: float, end_ms: float, next_s
         actual_ms = float(end_ms - start_ms)
 
     if next_start_ms is not None:
-        room = float(next_start_ms) - float(start_ms)
-        if room > 0 and actual_ms > room:
-            _trim_wav(final_file, room)          # trims + fades
-            actual_ms = room
+        # The slot maths lives in _plan_anchored_block so that the unit tests and the
+        # golden harness exercise the very code this path runs, not a copy of it.
+        trim_ms, pad_ms = _plan_anchored_block(actual_ms, float(start_ms), float(next_start_ms))
+        if trim_ms > 0:
+            _trim_wav(final_file, actual_ms - trim_ms)   # trim to exactly fit the slot (+ fades)
         else:
             _apply_micro_fades(final_file)
         concat_list.append(f"file '{final_file}'")
         temp_files.append(str(final_file))
-        pad_ms = max(0.0, room - actual_ms)
         if pad_ms > 20:
             sil = work_dir / f"fill_{tag}.wav"
             if create_silence_wav(pad_ms / 1000.0, str(sil), sr) and sil.exists():
@@ -2209,10 +2264,10 @@ async def process_video(video_path: str, args, logger: Logger):
         logger.info("[1/7] ✓ Audio extraction already completed")
     else:
         logger.info("[1/7] Extracting audio...")
-        subprocess.run([
+        run_ffmpeg([
             "ffmpeg", "-y", "-i", str(video_path),
             "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", str(audio_wav)
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        ], "Audio extraction")
         state.mark_completed('extract_audio')
 
     # Step 2: Audio enhancement
@@ -2376,7 +2431,7 @@ async def process_video(video_path: str, args, logger: Logger):
 
     # Step 7: Final video assembly
     logger.info("[7/7] Assembling final video...")
-    subprocess.run([
+    run_ffmpeg([
         "ffmpeg", "-y",
         "-i", str(video_path),
         "-i", str(voiceover_norm),
@@ -2385,7 +2440,7 @@ async def process_video(video_path: str, args, logger: Logger):
         f"[bg][fg]amix=inputs=2:duration=first:dropout_transition=2",
         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-map", "0:v:0",
         str(output_file)
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    ], "Final video assembly")
 
     if not args.keep_temp:
         logger.info("🧹 Cleaning up temporary files...")
@@ -2580,6 +2635,13 @@ Examples:
               "   Set OPENAI_API_KEY or pass --openai_api_key.")
         return 1
 
+    # Preflight: fail before creating a workspace or loading a model, so a typo in a
+    # filename or a missing FFmpeg produces a readable error and leaves no stray folder.
+    if not _check_external_tools():
+        return 1
+    if not _check_input_videos(args.videos):
+        return 1
+
     first_video = Path(args.videos[0])
     work_dir = Path.cwd() / f"{first_video.stem}_work"
     work_dir.mkdir(exist_ok=True)
@@ -2619,6 +2681,10 @@ Examples:
     except KeyboardInterrupt:
         logger.info("\n⚠️  Process interrupted by user")
         return 130
+    except FFmpegError as e:
+        # ffmpeg already explained itself; don't bury that behind a stack trace.
+        logger.error(f"❌ {e}")
+        return 1
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         if args.verbose:
