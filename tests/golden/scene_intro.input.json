@@ -1,0 +1,41 @@
+[
+  {
+    "_comment": "17s music intro Whisper hallucinated as text -> must be dropped (SY4)",
+    "start": 0.0,
+    "end": 16.8,
+    "text": "Müzik",
+    "no_speech_prob": 0.92,
+    "words": []
+  },
+  {
+    "_comment": "segment start (16.4) is earlier than the real onset (17.02) -> refined (SY5)",
+    "start": 16.4,
+    "end": 17.9,
+    "text": "Hello everyone,",
+    "no_speech_prob": 0.05,
+    "words": [[17.02, 17.35], [17.35, 17.9]]
+  },
+  {
+    "_comment": "no terminal punctuation on the previous line -> these two merge into one sentence",
+    "start": 17.9,
+    "end": 19.7,
+    "text": "how are you?",
+    "no_speech_prob": 0.04,
+    "words": [[17.95, 18.2], [18.2, 18.5], [18.5, 19.62]]
+  },
+  {
+    "_comment": "no terminal punctuation, but a >0.5s pause follows -> merge closes on the pause",
+    "start": 19.7,
+    "end": 23.1,
+    "text": "I am here with my partner",
+    "no_speech_prob": 0.04,
+    "words": [[19.95, 20.3], [20.3, 20.6], [20.6, 21.0], [21.0, 21.4], [21.4, 23.05]]
+  },
+  {
+    "start": 24.0,
+    "end": 27.5,
+    "text": "Look at these amazing streets!",
+    "no_speech_prob": 0.03,
+    "words": [[24.1, 24.5], [24.5, 24.8], [24.8, 25.3], [25.3, 26.0], [26.0, 27.42]]
+  }
+]

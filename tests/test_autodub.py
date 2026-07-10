@@ -574,6 +574,25 @@ def test_infer_delivery_llm_uses_client():
     assert "Run!" in captured["messages"][1]["content"]
 
 
+def test_delivery_hint_prefers_llm_tag():
+    assert autodub._delivery_hint(1, ["", "warm, unhurried"], "Salam.") == "warm, unhurried"
+
+
+def test_delivery_hint_falls_back_to_structural():
+    assert "question" in autodub._delivery_hint(0, [], "Necəsən?")
+    assert "question" in autodub._delivery_hint(0, [""], "Necəsən?")     # empty LLM tag
+    assert "question" in autodub._delivery_hint(5, ["a"], "Necəsən?")    # index out of range
+
+
+def test_delivery_hint_uses_raw_line_not_normalized():
+    # normalize_tts_text folds '…' to '.', which would hide the trailing-off hint —
+    # the hint must therefore be inferred from the raw subtitle line.
+    raw = "Bilmirəm…"
+    assert autodub.normalize_tts_text(raw) == "Bilmirəm."
+    assert autodub.infer_delivery(autodub.normalize_tts_text(raw)) == ""
+    assert "trail off" in autodub._delivery_hint(0, [], raw)
+
+
 def test_infer_delivery_llm_client_error_is_neutral():
     from types import SimpleNamespace
 

@@ -569,6 +569,15 @@ def _parse_delivery_json(raw: str, expected: int) -> List[str]:
     return [str(x).strip().strip('"').strip() for x in arr]
 
 
+def _delivery_hint(index: int, deliveries: List[str], raw_text: str) -> str:
+    """Delivery direction for one line: the LLM tag (A2 T1) when present, else the
+    structural hint (T0). Inferred from the RAW subtitle line, never the TTS-normalized
+    one — normalization folds '…' to '.', which would silently hide the trailing-off hint."""
+    if 0 <= index < len(deliveries) and deliveries[index]:
+        return deliveries[index]
+    return infer_delivery(raw_text)
+
+
 def infer_delivery_llm(texts: List[str], client, *,
                        model: str = DEFAULT_DELIVERY_MODEL) -> List[str]:
     """A2 T1: one batched LLM pass that tags each line with a SHORT delivery direction
@@ -664,7 +673,7 @@ def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
             try:
                 # A2: delivery hint added to the base instruction — LLM-inferred per line
                 # (T1) when available, else the structural question/exclamation heuristic (T0).
-                hint = deliveries[i] if (i < len(deliveries) and deliveries[i]) else infer_delivery(text)
+                hint = _delivery_hint(i, deliveries, sub.text)
                 seg_instr = " ".join(x for x in (instructions, hint) if x).strip()
                 kwargs = {"model": model, "voice": voice, "input": text,
                           "response_format": "wav"}
