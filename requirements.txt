@@ -9,7 +9,7 @@
 
 # ── Core ─────────────────────────────────────────────────
 openai-whisper          # transcription (installs torch as a dependency)
-edge-tts>=7.0           # default TTS engine (older versions hit a Microsoft 403)
+edge-tts>=7.2.8           # default TTS engine (older versions hit a Microsoft 403)
 deep-translator         # Google translation backend
 openai                  # OpenAI translation + OpenAI TTS
 tqdm                    # progress bars
