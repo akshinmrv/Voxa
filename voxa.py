@@ -55,12 +55,17 @@ whisper = _try_import("whisper")
 edge_tts = _try_import("edge_tts")
 torch = _try_import("torch")                        # pulled in by openai-whisper
 torchaudio = _try_import("torchaudio", optional=True)   # only the XTTS path patches it
+# Imported separately on purpose: sharing one try block meant a missing noisereduce also
+# nulled soundfile, disabling every audio path in the process.
 try:
-    import noisereduce as nr
     import soundfile as sf
 except ImportError:
-    sf = nr = None
-    _MISSING_DEPS.append("soundfile/noisereduce")
+    sf = None
+    _MISSING_DEPS.append("soundfile")
+try:
+    import noisereduce as nr
+except ImportError:
+    nr = None   # source denoising is skipped; the rest of the pipeline still runs
 try:
     from deep_translator import GoogleTranslator
 except ImportError:
@@ -1737,6 +1742,10 @@ def stretch_audio_smart(input_file: str, output_file: str, target_duration: floa
 
 
 def reduce_noise(input_file: str, output_file: str) -> bool:
+    if nr is None:
+        _LOG.info("noisereduce not installed — skipping source denoising")
+        shutil.copy(input_file, output_file)
+        return False
     try:
         data, rate = sf.read(input_file, dtype='float32')
         reduced_noise = nr.reduce_noise(y=data, sr=rate, stationary=True, prop_decrease=0.8)

@@ -1,6 +1,10 @@
 
 # Voxa — Automatic Video Translation & Dubbing
 
+[![CI](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml/badge.svg)](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
+
 Automatically transcribe, translate, and dub videos into different languages using AI-powered text-to-speech.
 
 ## Features
@@ -394,4 +398,9 @@ read [NOTICE.md](NOTICE.md). The short version:
 
 ## Contributing
 
-Issues and pull requests welcome! Run the test suite with `pytest` before opening a PR.
+Issues and pull requests welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) — it covers
+the test suite, the golden files, how to add a TTS engine in two steps, and the dependency
+rules (no GPL, engine-specific packages go in extras).
+
+- Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Found a security problem? Please report it privately — see [SECURITY.md](SECURITY.md)

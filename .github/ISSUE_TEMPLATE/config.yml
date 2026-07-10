@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/akshinmrv/Voxa/security/advisories/new
+    about: Please report security issues privately, not as a public issue.
+  - name: Engine or model problem
+    url: https://github.com/akshinmrv/Voxa/blob/main/NOTICE.md
+    about: Bugs in Whisper, edge-tts, Coqui/XTTS or Piper belong upstream — see NOTICE.md.
