@@ -806,7 +806,11 @@ def download_piper_model(lang_code: str, models_dir: Path) -> Optional[Path]:
 
 
 def generate_piper(subs, model_path: Path, concat_list: list, temp_files: list,
-                   work_dir: Path, enable_stretch: bool):
+                   work_dir: Path, enable_stretch: bool, lang_code: str = "",
+                   quality_gate: bool = False, asr_model=None):
+    """Generate offline speech with Piper, applying the same pipeline standard as the other
+    engines (T1): text normalization, natural-pace (no-slowdown) fitting, absolute-timeline
+    placement so over-runs are trimmed instead of accumulating drift, and optional scoring."""
     piper_cmd = shutil.which("piper")
     if not piper_cmd:
         possible_path = Path(sys.executable).parent / "piper"
@@ -822,10 +826,14 @@ def generate_piper(subs, model_path: Path, concat_list: list, temp_files: list,
     sample_rate = 22050
     generated_count = 0
     current_time_ms = 0
+    scores: List[Dict] = []
+    max_drift = 0.0
 
     for i, sub in enumerate(tqdm(subs, desc="Piper Synthesis", unit="phrase")):
-        start_ms = (sub.start.hours * 3600 + sub.start.minutes * 60 + sub.start.seconds) * 1000 + sub.start.milliseconds
-        end_ms = (sub.end.hours * 3600 + sub.end.minutes * 60 + sub.end.seconds) * 1000 + sub.end.milliseconds
+        start_ms = (sub.start.hours * 3600 + sub.start.minutes * 60 +
+                    sub.start.seconds) * 1000 + sub.start.milliseconds
+        end_ms = (sub.end.hours * 3600 + sub.end.minutes * 60 +
+                  sub.end.seconds) * 1000 + sub.end.milliseconds
 
         text = normalize_tts_text(sub.text).replace('"', '').replace("'", "")
         if not text:
@@ -833,49 +841,61 @@ def generate_piper(subs, model_path: Path, concat_list: list, temp_files: list,
 
         target_duration = (end_ms - start_ms) / 1000.0
 
+        # ── Silence before segment ──────────────────────────
         sil_dur_ms = start_ms - current_time_ms
         if sil_dur_ms > 100:
-            sil_file = work_dir / f"sil_{i}.wav"
-            try:
-                num_samples = int((sil_dur_ms / 1000.0) * sample_rate)
-                silence_data = np.zeros(num_samples, dtype=np.float32)
-                sf.write(str(sil_file), silence_data, sample_rate)
+            sil_file = work_dir / f"piper_sil_{i}.wav"
+            if create_silence_wav(sil_dur_ms / 1000.0, str(sil_file), sample_rate) \
+                    and sil_file.exists():
                 concat_list.append(f"file '{sil_file}'")
                 temp_files.append(str(sil_file))
                 current_time_ms += sil_dur_ms
-            except Exception as e:
-                logging.debug(f"Piper silence generation failed for segment {i}: {e}")
+        max_drift = max(max_drift, current_time_ms - start_ms)
 
         f_temp = work_dir / f"p_raw_{i}.wav"
         f_final = work_dir / f"p_fin_{i}.wav"
 
-        if not f_final.exists():
+        if not _has_content(f_final, 1000):
             try:
                 cmd = [piper_cmd, "--model", str(model_path), "--output_file", str(f_temp)]
                 process = subprocess.Popen(cmd, stdin=subprocess.PIPE,
                                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-                stdout, stderr = process.communicate(input=text.encode('utf-8'))
-
-                if f_temp.exists() and f_temp.stat().st_size > 1000:
-                    if enable_stretch:
-                        if not stretch_audio_smart(str(f_temp), str(f_final), target_duration, work_dir, sample_rate):
-                            data, sr = sf.read(str(f_temp))
-                            sf.write(str(f_final), data, sr)
-                    else:
-                        data, sr = sf.read(str(f_temp))
-                        sf.write(str(f_final), data, sr)
-                    concat_list.append(f"file '{f_final}'")
-                    temp_files.append(str(f_final))
-                    generated_count += 1
+                _, stderr = process.communicate(input=text.encode('utf-8'))
+                if not _has_content(f_temp, 1000):
+                    logging.warning(f"Piper fail/empty for segment {i}: {text[:40]} "
+                                    f"({stderr.decode(errors='replace')[:100]})")
+                    current_time_ms = end_ms
+                    continue
+                temp_files.append(str(f_temp))
+                # S0: fit by speeding up only (bounded); pad short clips (see edge path).
+                if enable_stretch:
+                    if not stretch_audio_smart(str(f_temp), str(f_final), target_duration,
+                                               work_dir, sample_rate, allow_slowdown=False):
+                        sf.write(str(f_final), *sf.read(str(f_temp)), subtype="PCM_16")
                 else:
-                    logging.warning(f"Piper fail/empty: {text[:20]}... Error: {stderr.decode()[:100]}")
+                    sf.write(str(f_final), *sf.read(str(f_temp)), subtype="PCM_16")
             except Exception as e:
-                logging.error(f"Segment {i} error: {e}")
+                logging.error(f"Piper segment {i} error: {e}")
+                current_time_ms = end_ms
                 continue
 
-        current_time_ms = end_ms
+        # Placement runs whether the clip was just synthesized or restored from a previous
+        # run — otherwise a resumed job would silently drop every cached segment.
+        if _has_content(f_final, 1000):
+            next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
+            current_time_ms = _place_speech_block(f_final, start_ms, end_ms, next_start_ms,
+                                                  sample_rate, work_dir, i, concat_list, temp_files)
+            generated_count += 1
+            if quality_gate:
+                scores.append(score_speech(str(f_final), text, asr_model=asr_model,
+                                           lang=lang_code or None))
+        else:
+            current_time_ms = end_ms
 
-    logging.info(f"✓ Generated {generated_count}/{len(subs)} segments")
+    logging.info(f"✓ Piper generated {generated_count}/{len(subs)} segments")
+    _log_sync_drift(max_drift, "piper")
+    if quality_gate:
+        log_quality_report(scores, "piper")
 
 
 async def get_edge_voice(lang_code: str, emotion: Optional[str] = None) -> Tuple[str, bool]:
@@ -2015,7 +2035,9 @@ async def _tts_piper(subs, args, work_dir, video_path, gate_asr, logger):
     logger.info("🎙️  Using Piper (offline mode)")
     concat_list, temp_files = [], []
     generate_piper(subs, model_path, concat_list, temp_files, work_dir,
-                   enable_stretch=not args.no_stretch)
+                   enable_stretch=not args.no_stretch,
+                   lang_code=args.target_lang[:2].lower(),
+                   quality_gate=args.quality_gate, asr_model=gate_asr)
     return concat_list, temp_files
 
 

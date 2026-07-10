@@ -638,6 +638,77 @@ def _fake_sub(text, start_ms, end_ms):
     return SimpleNamespace(text=text, start=_t(start_ms), end=_t(end_ms))
 
 
+# ── T1: Piper brought up to the S0/SY2 standard ──────────
+class _FakePiperPopen:
+    """Stand-in for the piper binary: writes a non-empty WAV to --output_file."""
+    def __init__(self, cmd, **kwargs):
+        self.cmd = cmd
+
+    def communicate(self, input=None):
+        from pathlib import Path as _P
+        out = _P(self.cmd[self.cmd.index("--output_file") + 1])
+        out.write_bytes(b"RAW".ljust(1500, b"0"))
+        return b"", b""
+
+
+def _patch_piper_placement(monkeypatch):
+    """Replace placement with a recorder; returns the list it appends to."""
+    placed = []
+
+    def _place(final_file, start_ms, end_ms, next_start_ms, sr, work_dir, tag,
+               concat_list, temp_files):
+        placed.append({"tag": tag, "start": start_ms, "next": next_start_ms})
+        concat_list.append(f"file '{final_file}'")
+        return float(next_start_ms) if next_start_ms is not None else float(end_ms)
+
+    monkeypatch.setattr(autodub, "_place_speech_block", _place)
+    return placed
+
+
+def test_piper_anchors_placement_and_never_slows_down(tmp_path, monkeypatch):
+    monkeypatch.setattr(autodub.shutil, "which", lambda name: "piper")
+    monkeypatch.setattr(autodub.subprocess, "Popen", _FakePiperPopen)
+
+    captured = {}
+
+    def _stretch(src, dst, target, work_dir, sr, allow_slowdown=True):
+        captured["allow_slowdown"] = allow_slowdown
+        __import__("pathlib").Path(dst).write_bytes(b"FIN".ljust(1500, b"0"))
+        return True
+    monkeypatch.setattr(autodub, "stretch_audio_smart", _stretch)
+    placed = _patch_piper_placement(monkeypatch)
+
+    subs = [_fake_sub("Salam dostlar.", 0, 1000), _fake_sub("Necəsən?", 1500, 2500)]
+    concat, temps = [], []
+    autodub.generate_piper(subs, tmp_path / "model.onnx", concat, temps, tmp_path,
+                           enable_stretch=True)
+
+    assert captured["allow_slowdown"] is False        # S0: speed up only, never drag
+    assert len(placed) == 2                            # every segment placed
+    assert placed[0]["next"] == 1500                   # SY2: anchored to the next onset
+    assert placed[1]["next"] is None                   # last segment pads to its window
+
+
+def test_piper_resume_places_cached_segment(tmp_path, monkeypatch):
+    """Regression: placement used to live inside the `not exists` branch, so a resumed run
+    silently dropped every already-synthesized segment from the concat list."""
+    monkeypatch.setattr(autodub.shutil, "which", lambda name: "piper")
+
+    def _boom(*a, **k):
+        raise AssertionError("piper must not be re-invoked for a cached segment")
+    monkeypatch.setattr(autodub.subprocess, "Popen", _boom)
+    placed = _patch_piper_placement(monkeypatch)
+
+    (tmp_path / "p_fin_0.wav").write_bytes(b"CACHED".ljust(1500, b"0"))
+
+    concat, temps = [], []
+    autodub.generate_piper([_fake_sub("Salam.", 0, 1000)], tmp_path / "model.onnx",
+                           concat, temps, tmp_path, enable_stretch=True)
+
+    assert len(placed) == 1
+    assert concat and "p_fin_0.wav" in concat[0]
+
+
 def test_a3_regen_keeps_best_take(tmp_path, monkeypatch):
     """A3 orchestration (dev-side, XTTS mocked): a flagged first take is re-rolled and the
     best-scoring candidate is promoted to the placed file. Validates the regen loop without
