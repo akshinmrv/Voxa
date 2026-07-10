@@ -2428,7 +2428,8 @@ Examples:
                              f"LLM translations for dub timing (default: {DEFAULT_SPEECH_RATE_CPS}). "
                              f"Higher = allow longer translations (faster delivery).")
     parser.add_argument("--parallel", action="store_true",
-                        help="Enable parallel translation (faster)")
+                        help="Translate segments in parallel threads (google/ollama only — "
+                             "LLM translators already batch whole blocks in one call)")
     parser.add_argument("--workers", type=int, default=4,
                         help="Number of parallel workers (default: 4)")
 
@@ -2453,7 +2454,8 @@ Examples:
     parser.add_argument("--no-stretch", action="store_true",
                         help="Disable audio time-stretching")
     parser.add_argument("--detect-emotion", action="store_true",
-                        help="Enable emotion detection (edge TTS only)")
+                        help="Expressive delivery: edge TTS voice styles, and for OpenAI TTS "
+                             "an LLM tags each line with a delivery direction (A2 T1)")
     parser.add_argument("--auto-rate", action="store_true",
                         help="Auto adjust TTS rate")
     parser.add_argument("--background-volume", type=float, default=0.05,
@@ -2508,6 +2510,12 @@ Examples:
                   f"   Set {_pinfo['env_key']} or pass --{args.translator}_api_key.")
             return 1
 
+    # --parallel is only wired into the google/ollama path; say so instead of silently
+    # ignoring it (LLM translators take the batch branch before --parallel is consulted).
+    if args.parallel and args.translator in LLM_PROVIDERS:
+        print(f"ℹ️  --parallel is ignored with the {args.translator} translator: "
+              f"lines are already translated in context-aware batches.")
+
     # Fail fast if OpenAI TTS is selected but no OpenAI key is available.
     if args.tts == "openai" and not (args.openai_api_key or os.environ.get("OPENAI_API_KEY")):
         print("❌ OpenAI TTS selected but no API key found.\n"
@@ -2533,7 +2541,12 @@ Examples:
     if args.translator in LLM_PROVIDERS:
         logger.info(f"🤖 {args.translator} Model: {getattr(args, f'{args.translator}_model')}")
     logger.info(f"🧠 Whisper Model: {args.whisper_model}")
-    logger.info(f"⚡ Parallel Processing: {'Yes' if args.parallel else 'No'}")
+    if args.translator in LLM_PROVIDERS:
+        # --parallel never reaches an LLM translator: context-aware batch translation
+        # handles the whole block in one call and takes that branch first.
+        logger.info("⚡ Parallel Processing: n/a (context-aware batch translation)")
+    else:
+        logger.info(f"⚡ Parallel Processing: {'Yes' if args.parallel else 'No'}")
     logger.info(f"🎭 Emotion Detection: {'Yes' if args.detect_emotion else 'No'}")
     logger.info(f"📈 Auto Rate Adjust: {'Yes' if args.auto_rate else 'No'}")
     logger.info(f"🎵 Audio Stretching: {'Yes' if not args.no_stretch else 'No'}")
