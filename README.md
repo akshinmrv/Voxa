@@ -32,15 +32,26 @@ brew install ffmpeg
 ### Python Dependencies
 ```bash
 python3 -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-pip install -r install.txt
+source venv/bin/activate            # Windows: venv\Scripts\activate
 
-# Only needed for XTTS voice cloning. `coqui-tts` is the maintained community fork —
-# the original `TTS` package has been unmaintained since Coqui shut down in Jan 2024.
-# ⚠️ XTTS-v2 model weights are NON-COMMERCIAL (CPML). See NOTICE.md.
-pip install coqui-tts
+# CPU-only torch keeps the install a lot smaller (skip on a CUDA machine)
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+pip install .                       # or: pip install -r requirements.txt
 ```
+
+Optional engines are **extras** — install only what you use:
+
+| Command | Enables |
+|---------|---------|
+| `pip install "voxa[faster]"` | `--whisper-backend faster` (2-4x quicker, no torch) |
+| `pip install "voxa[piper]"` | `--tts piper` (fully offline) |
+| `pip install "voxa[anthropic]"` | `--translator anthropic` |
+| `pip install "voxa[xtts]"` | `--tts xtts` voice cloning — ⚠️ **non-commercial weights**, see [NOTICE.md](NOTICE.md) |
+
+`voxa[xtts]` installs [`coqui-tts`](https://github.com/idiap/coqui-ai-TTS), the maintained
+community fork; the original `TTS` package has been unmaintained since Coqui shut down in
+January 2024.
 
 ##  Local Translation with Ollama (Optional)
 
@@ -56,18 +67,18 @@ ollama pull llama3
 ## Quick Start
 
 ```bash
-# 1. Install dependencies (see Requirements above for the full setup)
-pip install -r install.txt
+# 1. Install (see Requirements above for ffmpeg and the CPU-only torch tip)
+pip install .
 
 # 2. (Optional) add API keys for LLM translation
 cp .env.example .env    # then edit
 
 # 3. Dub a video
-python voxa.py video.mp4 --target_lang ru
+voxa video.mp4 --target_lang ru
 ```
 
-On Linux you can instead run `chmod +x setup.sh && ./setup.sh`, which creates a
-`venv` and a `run.sh` wrapper.
+Installing the package puts a `voxa` command on your PATH. Without installing you can
+always run the script directly: `python voxa.py video.mp4 --target_lang ru`.
 
 ### Basic Usage (Edge TTS - Recommended)
 ```bash
@@ -99,10 +110,10 @@ python voxa.py video.mp4 --tts xtts --voice-sample my_voice.wav --target_lang en
 
 ```bash
 # Use Ollama with default llama3 model
-./run.sh video.mp4 --translator ollama
+voxa video.mp4 --translator ollama
 
 # Use a specific model (e.g., Mistral)
-./run.sh video.mp4 --translator ollama --ollama_model mistral 
+voxa video.mp4 --translator ollama --ollama_model mistral
 ```
 
 ### OpenAI TTS (multilingual, instructable)
@@ -190,7 +201,7 @@ options:
   --whisper-backend {openai,faster}
                         Transcription engine (default: openai). "faster" uses
                         faster-whisper — 2-4x quicker on long videos / large models
-                        (pip install faster-whisper)
+                        (pip install "voxa[faster]")
   --no-speech-threshold F
                         Drop transcription segments with no_speech_prob > F (music /
                         intro that Whisper hallucinated as text). Default 0.6; 1.0 off
@@ -279,7 +290,7 @@ Upgrade: `pip install -U "edge-tts>=7.0"`.
 ### "TorchCodec is required"
 This is already patched in the code. If you still see it, update PyTorch:
 ```bash
-pip install --upgrade torch torchaudio
+pip install --upgrade torch
 ```
 
 ### Piper model missing

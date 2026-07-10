@@ -29,29 +29,29 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
+# Only what the default command needs: `voxa video.mp4` = whisper + google + edge TTS.
+# torch is listed explicitly because voxa imports it, but openai-whisper requires it too.
 dependencies = [
     "openai-whisper",
     "edge-tts>=7.0",
     "deep-translator",
     "openai",
-    "anthropic",
     "tqdm",
     "requests",
     "torch",
-    "torchaudio",
-    "omegaconf",
-    "transformers<4.40",
     "soundfile",
     "noisereduce",
     "numpy",
 ]
 
 [project.optional-dependencies]
-# Coqui Inc. shut down in Jan 2024; `coqui-tts` is the maintained community fork.
+# Coqui Inc. shut down in Jan 2024; `coqui-tts` is the maintained community fork, and it
+# declares its own transformers/omegaconf constraints — voxa no longer pins them globally.
 # NOTE: the XTTS-v2 model weights are non-commercial (CPML). See NOTICE.md.
-xtts = ["coqui-tts"]
+xtts = ["coqui-tts", "torchaudio"]
 piper = ["piper-tts"]
 faster = ["faster-whisper"]
+anthropic = ["anthropic"]
 dev = ["pytest", "ruff"]
 
 [project.urls]

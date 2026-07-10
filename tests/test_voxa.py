@@ -815,6 +815,21 @@ def test_read_srt_empty_file(tmp_path):
     assert voxa.read_srt(_write(tmp_path, "d.srt", "")) == []
 
 
+# ── Optional dependencies must not block startup ─────────
+def test_optional_import_does_not_block_startup(monkeypatch, capsys):
+    monkeypatch.setattr(voxa, "_MISSING_DEPS", [])
+    # An extra (torchaudio lives in voxa[xtts]) may be absent on a default install.
+    assert voxa._try_import("voxa_no_such_module", optional=True) is None
+    assert voxa._MISSING_DEPS == []
+    assert voxa._check_runtime_deps() is True
+
+    # A core dependency, on the other hand, must stop the run with guidance.
+    assert voxa._try_import("voxa_no_such_module") is None
+    assert voxa._MISSING_DEPS == ["voxa_no_such_module"]
+    assert voxa._check_runtime_deps() is False
+    assert "requirements.txt" in capsys.readouterr().out
+
+
 # ── OpenAI client factory (one client per endpoint) ──────
 def test_openai_client_cached_per_endpoint(monkeypatch):
     monkeypatch.setattr(voxa, "_openai_clients", {})

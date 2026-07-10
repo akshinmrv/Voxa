@@ -20,13 +20,19 @@ from datetime import timedelta, datetime
 _MISSING_DEPS: List[str] = []
 
 
-def _try_import(name, attr=None):
-    """Import a module (or attribute) and record it if missing. Returns the object or None."""
+def _try_import(name, attr=None, optional: bool = False):
+    """Import a module (or attribute). Returns it, or None when absent.
+
+    Missing *required* modules are recorded so _check_runtime_deps() can refuse to run.
+    Optional ones belong to an extra (e.g. torchaudio, only used by the XTTS path) and
+    their absence must not stop a default install from working.
+    """
     try:
         mod = __import__(name)
         return getattr(mod, attr) if attr else mod
     except ImportError:
-        _MISSING_DEPS.append(name)
+        if not optional:
+            _MISSING_DEPS.append(name)
         return None
 
 
@@ -34,8 +40,8 @@ np = _try_import("numpy")
 requests = _try_import("requests")
 whisper = _try_import("whisper")
 edge_tts = _try_import("edge_tts")
-torch = _try_import("torch")
-torchaudio = _try_import("torchaudio")
+torch = _try_import("torch")                        # pulled in by openai-whisper
+torchaudio = _try_import("torchaudio", optional=True)   # only the XTTS path patches it
 try:
     import soundfile as sf
     import noisereduce as nr
@@ -157,7 +163,7 @@ def _check_runtime_deps() -> bool:
     """Return True if all runtime dependencies are importable, else print guidance."""
     if _MISSING_DEPS:
         print("❌ Missing required packages: " + ", ".join(_MISSING_DEPS) +
-              "\n   Install them first:  pip install -r install.txt")
+              "\n   Install them first:  pip install -r requirements.txt")
         return False
     return True
 
@@ -340,7 +346,7 @@ def load_xtts_model():
         _LOG.info(f"✓ XTTS v2 loaded on {device.upper()}")
         return tts
     except ImportError:
-        _LOG.error("❌ TTS package not found. Install with: pip install TTS")
+        _LOG.error("❌ Coqui TTS not found. Install with: pip install 'voxa[xtts]'")
         return None
     except Exception as e:
         _LOG.error(f"❌ Failed to load XTTS model: {e}")
@@ -1037,7 +1043,7 @@ def get_anthropic_client(api_key: Optional[str] = None):
     try:
         import anthropic
     except ImportError:
-        _LOG.error("❌ 'anthropic' package not installed. Run: pip install anthropic")
+        _LOG.error("❌ 'anthropic' package not installed. Run: pip install 'voxa[anthropic]'")
         return None
     key = api_key or os.environ.get("ANTHROPIC_API_KEY")
     if not key:
@@ -1850,7 +1856,7 @@ def transcribe_audio(audio_path: str, model_name: str, backend: str, device: str
         try:
             from faster_whisper import WhisperModel
         except ImportError:
-            raise RuntimeError("faster-whisper not installed. Run: pip install faster-whisper")
+            raise RuntimeError("faster-whisper not installed. Run: pip install 'voxa[faster]'")
         compute_type = "float16" if device == "cuda" else "int8"
         # faster-whisper names the turbo model 'large-v3-turbo'.
         fw_model = "large-v3-turbo" if model_name == "turbo" else model_name
@@ -1956,7 +1962,7 @@ def _get_gate_asr(model_name: str = "tiny"):
     try:
         from faster_whisper import WhisperModel
     except ImportError:
-        _LOG.warning("Quality gate needs faster-whisper (pip install faster-whisper); "
+        _LOG.warning("Quality gate needs faster-whisper (pip install 'voxa[faster]'); "
                         "scoring without ASR round-trip")
         return None
     device = "cuda" if (torch is not None and torch.cuda.is_available()) else "cpu"
@@ -2426,7 +2432,7 @@ Examples:
                         help="Whisper model size (default: turbo)")
     parser.add_argument("--whisper-backend", choices=["openai", "faster"], default="openai",
                         help="Transcription engine: openai (openai-whisper, default) or "
-                             "faster (faster-whisper — 2-4x faster; pip install faster-whisper)")
+                             "faster (faster-whisper — 2-4x faster; pip install 'voxa[faster]')")
     parser.add_argument("--no-speech-threshold", type=float, default=0.6,
                         help="Drop transcription segments whose no_speech_prob exceeds this "
                              "(0-1) — removes music/intro that Whisper transcribed as phantom "

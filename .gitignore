@@ -13,7 +13,6 @@ venv/
 *.srt
 voxa.log
 state.json
-run.sh
 
 # Media (input videos / generated audio are user data, not source)
 *.mp4
