@@ -815,6 +815,30 @@ def test_read_srt_empty_file(tmp_path):
     assert voxa.read_srt(_write(tmp_path, "d.srt", "")) == []
 
 
+# ── OpenAI client factory (one client per endpoint) ──────
+def test_openai_client_cached_per_endpoint(monkeypatch):
+    monkeypatch.setattr(voxa, "_openai_clients", {})
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    a1 = voxa.get_openai_client("key-A")
+    a2 = voxa.get_openai_client("key-A")
+    b = voxa.get_openai_client("key-B")
+    local = voxa.get_openai_client(None, "http://localhost:8004/v1")
+
+    assert a1 is a2                  # same endpoint reuses the client
+    assert a1 is not b               # a different key must not reuse the first one
+    assert local is not None         # a self-hosted endpoint needs no API key
+    assert local is not a1
+    assert str(local.base_url).startswith("http://localhost:8004/v1")
+    assert len(voxa._openai_clients) == 3
+
+
+def test_openai_client_requires_key_or_base_url(monkeypatch):
+    monkeypatch.setattr(voxa, "_openai_clients", {})
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    assert voxa.get_openai_client() is None
+
+
 # ── Logging must stay inside the "voxa" logger ───────────
 def test_logger_configures_named_logger_not_root(tmp_path):
     import logging as _logging

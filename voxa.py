@@ -987,31 +987,46 @@ def translate_ollama(text: str, target_lang: str, model_name: str) -> str:
 #  LLM translation providers (OpenAI, Anthropic, …)
 # ─────────────────────────────────────────────
 
-_openai_client = None
+# Clients are cached per (api_key, base_url) rather than as one global instance:
+# translation and speech may legitimately target different endpoints — for example a
+# local, OpenAI-compatible TTS server — with different credentials.
+_openai_clients: Dict[Tuple[str, str], object] = {}
 _anthropic_client = None
 
 
-def get_openai_client(api_key: Optional[str] = None):
-    """Lazily create and cache a single OpenAI client instance."""
-    global _openai_client
-    if _openai_client is not None:
-        return _openai_client
+def get_openai_client(api_key: Optional[str] = None, base_url: Optional[str] = None):
+    """Return an OpenAI client for one endpoint, creating it on first use.
+
+    Clients are cached per (api_key, base_url). The previous single global instance meant
+    the first caller won: once translation had built a client, speech could not point at a
+    different endpoint or use a different key. `base_url` targets any OpenAI-compatible
+    server; such servers usually ignore the key, so one is not required in that case.
+    """
     try:
         from openai import OpenAI
     except ImportError:
         _LOG.error("❌ 'openai' package not installed. Run: pip install openai")
         return None
+
     key = api_key or os.environ.get("OPENAI_API_KEY")
-    if not key:
+    url = base_url or None
+    if not key and not url:
         _LOG.error("❌ OpenAI API key not found. "
-                      "Set the OPENAI_API_KEY environment variable or pass --openai_api_key")
+                   "Set the OPENAI_API_KEY environment variable or pass --openai_api_key")
         return None
+
+    cache_key = (key or "", url or "")
+    if cache_key in _openai_clients:
+        return _openai_clients[cache_key]
+
     try:
-        _openai_client = OpenAI(api_key=key)
+        # A self-hosted endpoint still needs a non-empty key to satisfy the SDK.
+        client = OpenAI(api_key=key or "not-needed", base_url=url) if url else OpenAI(api_key=key)
     except Exception as e:
         _LOG.error(f"❌ Failed to initialize OpenAI client: {e}")
         return None
-    return _openai_client
+    _openai_clients[cache_key] = client
+    return client
 
 
 def get_anthropic_client(api_key: Optional[str] = None):
