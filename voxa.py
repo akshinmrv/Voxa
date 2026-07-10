@@ -8,7 +8,7 @@ context-aware batch translation. TTS: Edge (online), OpenAI (instructable),
 Piper (offline), or XTTS (voice cloning). Transcription backends: openai-whisper
 or faster-whisper.
 """
-import sys, os, asyncio, subprocess, argparse, json, re, time, logging, shutil, functools, random, contextlib
+import sys, os, asyncio, subprocess, argparse, json, re, time, logging, shutil, functools, random, contextlib, inspect
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, NamedTuple, Optional, Tuple
@@ -465,19 +465,16 @@ def _xtts_fit_candidate(tts_model, text: str, speaker_wav: str, xtts_lang: str,
     return _has_content(fin_path, 1000)
 
 
-def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
-                  concat_list: list, temp_files: list,
-                  work_dir: Path, enable_stretch: bool,
-                  quality_gate: bool = False, asr_model=None):
-    """Generate cloned speech with XTTS v2, applying the S0 pipeline standard: text
-    normalization + chunk caps, natural-pace (no-slowdown) fitting, and absolute-timeline
-    placement so short clips are padded rather than dragged out and over-runs don't drift."""
-    sample_rate = 24000  # XTTS output rate
-
-    xtts_lang = lang_code[:2].lower()   # XTTS uses 2-letter codes
+async def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
+                        concat_list: list, temp_files: list,
+                        work_dir: Path, enable_stretch: bool,
+                        quality_gate: bool = False, asr_model=None):
+    """Cloned speech with XTTS v2. Timeline, placement and scoring come from
+    synthesize_timeline; A3 quality-gate regeneration runs in the on_ready hook."""
+    sample_rate = 24000
+    xtts_lang = lang_code[:2].lower()
     if xtts_lang not in XTTS_SUPPORTED_LANGS:
         logging.warning(f"⚠️  XTTS may not support '{xtts_lang}', attempting anyway")
-
     if not Path(speaker_wav).exists():
         logging.error(f"❌ Speaker WAV not found: {speaker_wav}")
         return
@@ -485,102 +482,49 @@ def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
     logging.info(f"🎙️  XTTS voice cloning from: {speaker_wav}")
     logging.info(f"🌍 Target language: {xtts_lang}")
 
-    generated_count = 0
-    current_time_ms = 0
-    scores: List[Dict] = []
-    max_drift = 0.0
-
-    for i, sub in enumerate(tqdm(subs, desc="XTTS Synthesis", unit="phrase")):
-        start_ms = (sub.start.hours * 3600 + sub.start.minutes * 60 +
-                    sub.start.seconds) * 1000 + sub.start.milliseconds
-        end_ms = (sub.end.hours * 3600 + sub.end.minutes * 60 +
-                  sub.end.seconds) * 1000 + sub.end.milliseconds
-
-        text = sub.text.strip()
-        if not text:
-            continue
-
-        target_duration = (end_ms - start_ms) / 1000.0
-
-        # ── Silence before segment ──────────────────────────
-        sil_dur_ms = start_ms - current_time_ms
-        if sil_dur_ms > 100:
-            sil_file = work_dir / f"xtts_sil_{i}.wav"
-            if create_silence_wav(sil_dur_ms / 1000.0, str(sil_file), sample_rate) \
-                    and sil_file.exists():
-                concat_list.append(f"file '{sil_file}'")
-                temp_files.append(str(sil_file))
-                current_time_ms += sil_dur_ms
-        max_drift = max(max_drift, current_time_ms - start_ms)
-
-        # ── Speech generation ────────────────────────────────
+    def _render(i, text, final_file, target_duration):
         raw_file = work_dir / f"xtts_raw_{i}.wav"
-        final_file = work_dir / f"xtts_fin_{i}.wav"
+        if not _xtts_synthesize_segment(tts_model, text, speaker_wav, xtts_lang,
+                                        raw_file, work_dir, i, sample_rate):
+            logging.warning(f"XTTS produced empty output for segment {i}: {text[:40]}")
+            return False
+        temp_files.append(str(raw_file))
+        return _fit_to_window(raw_file, final_file, target_duration, work_dir,
+                              sample_rate, enable_stretch)
 
-        if not _has_content(final_file, 1000):
-            try:
-                if not _xtts_synthesize_segment(tts_model, text, speaker_wav, xtts_lang,
-                                                raw_file, work_dir, i, sample_rate):
-                    logging.warning(f"XTTS produced empty output for segment {i}: {text[:40]}")
-                    current_time_ms = end_ms
-                    continue
-                # S0: fit by speeding up only (bounded); pad short clips (see edge path).
-                if enable_stretch:
-                    if not stretch_audio_smart(str(raw_file), str(final_file), target_duration,
-                                               work_dir, sample_rate, allow_slowdown=False):
-                        sf.write(str(final_file), *sf.read(str(raw_file)), subtype="PCM_16")
-                else:
-                    sf.write(str(final_file), *sf.read(str(raw_file)), subtype="PCM_16")
-            except Exception as e:
-                logging.error(f"XTTS segment {i} error: {e}")
-                current_time_ms = end_ms
-                continue
-
-        # A3: quality-gate auto-regeneration. XTTS is stochastic, so a flagged take can be
-        # improved by re-rolling; synthesize up to XTTS_REGEN_ATTEMPTS more times and keep
-        # the best-scoring one. Scored BEFORE placement (placement may trim to fit, which
-        # would skew the ASR round-trip). Only runs with --quality-gate (needs the gate ASR).
-        gate_score = None
-        if quality_gate and asr_model is not None and _has_content(final_file, 1000):
-            gate_score = score_speech(str(final_file), text, asr_model=asr_model, lang=xtts_lang)
-            attempt = 0
-            while not gate_score["ok"] and attempt < XTTS_REGEN_ATTEMPTS:
-                attempt += 1
-                cand_raw = work_dir / f"xtts_rawcand_{i}_{attempt}.wav"
-                cand_fin = work_dir / f"xtts_fincand_{i}_{attempt}.wav"
-                if not _xtts_fit_candidate(tts_model, text, speaker_wav, xtts_lang,
-                                           cand_raw, cand_fin, work_dir, f"{i}c{attempt}",
-                                           sample_rate, target_duration, enable_stretch):
-                    _safe_unlink(cand_raw, cand_fin)
-                    continue
-                cand_score = score_speech(str(cand_fin), text, asr_model=asr_model, lang=xtts_lang)
-                if _score_better(cand_score, gate_score):
-                    shutil.copyfile(str(cand_fin), str(final_file))
-                    gate_score = cand_score
+    def _regenerate(i, text, final_file, target_duration):
+        """A3: XTTS sampling is stochastic, so a flagged take can be improved by re-rolling.
+        Scored BEFORE placement, because placement trims over-runs and that would skew the
+        ASR round-trip. Only active with --quality-gate (it needs the gate ASR model)."""
+        if not (quality_gate and asr_model is not None and _has_content(final_file, 1000)):
+            return None
+        best = score_speech(str(final_file), text, asr_model=asr_model, lang=xtts_lang)
+        attempt = 0
+        while not best["ok"] and attempt < XTTS_REGEN_ATTEMPTS:
+            attempt += 1
+            cand_raw = work_dir / f"xtts_rawcand_{i}_{attempt}.wav"
+            cand_fin = work_dir / f"xtts_fincand_{i}_{attempt}.wav"
+            if not _xtts_fit_candidate(tts_model, text, speaker_wav, xtts_lang,
+                                       cand_raw, cand_fin, work_dir, f"{i}c{attempt}",
+                                       sample_rate, target_duration, enable_stretch):
                 _safe_unlink(cand_raw, cand_fin)
-            if attempt:
-                logging.info(f"♻️  segment {i}: regenerated {attempt}x → "
-                             f"{'ok' if gate_score['ok'] else 'best-effort'} "
-                             f"(wer {gate_score.get('wer', 'n/a')})")
+                continue
+            cand = score_speech(str(cand_fin), text, asr_model=asr_model, lang=xtts_lang)
+            if _score_better(cand, best):
+                shutil.copyfile(str(cand_fin), str(final_file))
+                best = cand
+            _safe_unlink(cand_raw, cand_fin)
+        if attempt:
+            logging.info(f"♻️  segment {i}: regenerated {attempt}x → "
+                         f"{'ok' if best['ok'] else 'best-effort'} "
+                         f"(wer {best.get('wer', 'n/a')})")
+        return best
 
-        if _has_content(final_file, 1000):
-            next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
-            current_time_ms = _place_speech_block(final_file, start_ms, end_ms, next_start_ms,
-                                                  sample_rate, work_dir, i, concat_list, temp_files)
-            generated_count += 1
-            if quality_gate:
-                scores.append(gate_score if gate_score is not None
-                              else score_speech(str(final_file), text, asr_model=asr_model,
-                                                lang=xtts_lang))
-        else:
-            current_time_ms = end_ms
-
-    logging.info(f"✓ XTTS generated {generated_count}/{len(subs)} segments")
-    _log_sync_drift(max_drift, "xtts")
-    if quality_gate:
-        log_quality_report(scores, "xtts")
-
-
+    await synthesize_timeline(
+        subs, engine="xtts", prefix="xtts", sample_rate=sample_rate, work_dir=work_dir,
+        concat_list=concat_list, temp_files=temp_files, render=_render, on_ready=_regenerate,
+        text_of=lambda s: s.text.strip(), desc="XTTS Synthesis", unit="phrase",
+        quality_gate=quality_gate, asr_model=asr_model, gate_lang=xtts_lang)
 def infer_delivery(text: str) -> str:
     """Language-agnostic delivery hint from a line's punctuation/structure (questions,
     exclamations, trailing-off), appended to the TTS instruction. A cheap structural tier;
@@ -666,23 +610,17 @@ def infer_delivery_llm(texts: List[str], client, *,
     return _parse_delivery_json(raw, n)
 
 
-def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
-                        lang_code: str, concat_list: list, temp_files: list,
-                        work_dir: Path, enable_stretch: bool,
-                        quality_gate: bool = False, asr_model=None,
-                        emotion_detection: bool = False):
-    """Generate speech with OpenAI TTS (gpt-4o-mini-tts). Multilingual, instructable
-    delivery, no cloning — the recommended engine for languages XTTS can't clone (e.g.
-    Azerbaijani). Applies the S0 standard: normalize, no-slowdown fit, timeline placement.
-    With emotion_detection, an LLM tags each line with a delivery direction (A2 T1)."""
-    sample_rate = 24000  # OpenAI TTS output rate
-    generated_count = 0
-    current_time_ms = 0
-    scores: List[Dict] = []
-    max_drift = 0.0
+async def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
+                             lang_code: str, concat_list: list, temp_files: list,
+                             work_dir: Path, enable_stretch: bool,
+                             quality_gate: bool = False, asr_model=None,
+                             emotion_detection: bool = False):
+    """Speech via OpenAI TTS (gpt-4o-mini-tts): multilingual, instructable delivery, no
+    cloning. With emotion_detection an LLM tags each line with a delivery direction (A2 T1).
+    Timeline, placement and scoring come from synthesize_timeline."""
+    sample_rate = 24000
 
-    # A2 T1: optionally pre-compute an LLM delivery direction per line (cached, one API
-    # call for the whole job). Falls back per-line to the structural infer_delivery() hint.
+    # A2 T1: one cached LLM pass over the whole job, before any synthesis.
     deliveries: List[str] = []
     if emotion_detection:
         cache = work_dir / "deliveries.json"
@@ -699,80 +637,33 @@ def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
             except Exception:
                 pass
 
-    for i, sub in enumerate(tqdm(subs, desc="OpenAI TTS", unit="phrase")):
-        start_ms = (sub.start.hours * 3600 + sub.start.minutes * 60 +
-                    sub.start.seconds) * 1000 + sub.start.milliseconds
-        end_ms = (sub.end.hours * 3600 + sub.end.minutes * 60 +
-                  sub.end.seconds) * 1000 + sub.end.milliseconds
-
-        text = normalize_tts_text(sub.text)
-        if not text:
-            continue
-
-        target_duration = (end_ms - start_ms) / 1000.0
-
-        sil_dur_ms = start_ms - current_time_ms
-        if sil_dur_ms > 100:
-            sil_file = work_dir / f"otts_sil_{i}.wav"
-            if create_silence_wav(sil_dur_ms / 1000.0, str(sil_file), sample_rate) \
-                    and sil_file.exists():
-                concat_list.append(f"file '{sil_file}'")
-                temp_files.append(str(sil_file))
-                current_time_ms += sil_dur_ms
-        max_drift = max(max_drift, current_time_ms - start_ms)
-
+    def _render(i, text, final_file, target_duration):
         raw_file = work_dir / f"otts_raw_{i}.wav"
-        final_file = work_dir / f"otts_fin_{i}.wav"
+        hint = _delivery_hint(i, deliveries, subs[i].text)
+        seg_instr = " ".join(x for x in (instructions, hint) if x).strip()
+        kwargs = {"model": model, "voice": voice, "input": text, "response_format": "wav"}
+        if seg_instr:
+            kwargs["instructions"] = seg_instr
+        try:
+            resp = client.audio.speech.create(**kwargs)
+        except TypeError:
+            # Older openai SDK without the `instructions` parameter.
+            kwargs.pop("instructions", None)
+            resp = client.audio.speech.create(**kwargs)
+        Path(raw_file).write_bytes(resp.content)
+        if not _has_content(raw_file, 1000):
+            logging.warning(f"OpenAI TTS returned empty audio for segment {i}: {text[:40]}")
+            return False
+        temp_files.append(str(raw_file))
+        return _fit_to_window(raw_file, final_file, target_duration, work_dir,
+                              sample_rate, enable_stretch)
 
-        if not _has_content(final_file, 1000):
-            try:
-                # A2: delivery hint added to the base instruction — LLM-inferred per line
-                # (T1) when available, else the structural question/exclamation heuristic (T0).
-                hint = _delivery_hint(i, deliveries, sub.text)
-                seg_instr = " ".join(x for x in (instructions, hint) if x).strip()
-                kwargs = {"model": model, "voice": voice, "input": text,
-                          "response_format": "wav"}
-                if seg_instr:
-                    kwargs["instructions"] = seg_instr
-                try:
-                    resp = client.audio.speech.create(**kwargs)
-                except TypeError:
-                    # Older openai SDK without the `instructions` parameter.
-                    kwargs.pop("instructions", None)
-                    resp = client.audio.speech.create(**kwargs)
-                Path(raw_file).write_bytes(resp.content)
-            except Exception as e:
-                logging.error(f"OpenAI TTS segment {i} error: {e}")
-                current_time_ms = end_ms
-                continue
-            if not _has_content(raw_file, 1000):
-                logging.warning(f"OpenAI TTS empty output for segment {i}: {text[:40]}")
-                current_time_ms = end_ms
-                continue
-            if enable_stretch:
-                if not stretch_audio_smart(str(raw_file), str(final_file), target_duration,
-                                           work_dir, sample_rate, allow_slowdown=False):
-                    sf.write(str(final_file), *sf.read(str(raw_file)), subtype="PCM_16")
-            else:
-                sf.write(str(final_file), *sf.read(str(raw_file)), subtype="PCM_16")
-
-        if _has_content(final_file, 1000):
-            next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
-            current_time_ms = _place_speech_block(final_file, start_ms, end_ms, next_start_ms,
-                                                  sample_rate, work_dir, i, concat_list, temp_files)
-            generated_count += 1
-            if quality_gate:
-                scores.append(score_speech(str(final_file), text, asr_model=asr_model,
-                                           lang=lang_code))
-        else:
-            current_time_ms = end_ms
-
-    logging.info(f"✓ OpenAI TTS generated {generated_count}/{len(subs)} segments")
-    _log_sync_drift(max_drift, "openai")
-    if quality_gate:
-        log_quality_report(scores, "openai")
-
-
+    await synthesize_timeline(
+        subs, engine="openai", prefix="otts", sample_rate=sample_rate, work_dir=work_dir,
+        concat_list=concat_list, temp_files=temp_files, render=_render,
+        text_of=lambda s: normalize_tts_text(s.text),
+        desc="OpenAI TTS", unit="phrase",
+        quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code)
 # ─────────────────────────────────────────────
 #  Existing code below — unchanged
 # ─────────────────────────────────────────────
@@ -860,12 +751,11 @@ def download_piper_model(lang_code: str, models_dir: Path) -> Optional[Path]:
         return None
 
 
-def generate_piper(subs, model_path: Path, concat_list: list, temp_files: list,
-                   work_dir: Path, enable_stretch: bool, lang_code: str = "",
-                   quality_gate: bool = False, asr_model=None):
-    """Generate offline speech with Piper, applying the same pipeline standard as the other
-    engines (T1): text normalization, natural-pace (no-slowdown) fitting, absolute-timeline
-    placement so over-runs are trimmed instead of accumulating drift, and optional scoring."""
+async def generate_piper(subs, model_path: Path, concat_list: list, temp_files: list,
+                         work_dir: Path, enable_stretch: bool, lang_code: str = "",
+                         quality_gate: bool = False, asr_model=None):
+    """Offline speech via the Piper binary. Timeline, placement and scoring come from
+    synthesize_timeline; this only turns one line of text into one WAV."""
     piper_cmd = shutil.which("piper")
     if not piper_cmd:
         possible_path = Path(sys.executable).parent / "piper"
@@ -877,82 +767,28 @@ def generate_piper(subs, model_path: Path, concat_list: list, temp_files: list,
 
     logging.info(f"🎙️ Using Piper binary: {piper_cmd}")
     logging.info(f"📂 Model path: {model_path}")
-
     sample_rate = 22050
-    generated_count = 0
-    current_time_ms = 0
-    scores: List[Dict] = []
-    max_drift = 0.0
 
-    for i, sub in enumerate(tqdm(subs, desc="Piper Synthesis", unit="phrase")):
-        start_ms = (sub.start.hours * 3600 + sub.start.minutes * 60 +
-                    sub.start.seconds) * 1000 + sub.start.milliseconds
-        end_ms = (sub.end.hours * 3600 + sub.end.minutes * 60 +
-                  sub.end.seconds) * 1000 + sub.end.milliseconds
+    def _render(i, text, final_file, target_duration):
+        raw_file = work_dir / f"piper_raw_{i}.wav"
+        cmd = [piper_cmd, "--model", str(model_path), "--output_file", str(raw_file)]
+        process = subprocess.Popen(cmd, stdin=subprocess.PIPE,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        _, stderr = process.communicate(input=text.encode("utf-8"))
+        if not _has_content(raw_file, 1000):
+            logging.warning(f"Piper produced no audio for segment {i}: {text[:40]} "
+                            f"({stderr.decode(errors='replace')[:100]})")
+            return False
+        temp_files.append(str(raw_file))
+        return _fit_to_window(raw_file, final_file, target_duration, work_dir,
+                              sample_rate, enable_stretch)
 
-        text = normalize_tts_text(sub.text).replace('"', '').replace("'", "")
-        if not text:
-            continue
-
-        target_duration = (end_ms - start_ms) / 1000.0
-
-        # ── Silence before segment ──────────────────────────
-        sil_dur_ms = start_ms - current_time_ms
-        if sil_dur_ms > 100:
-            sil_file = work_dir / f"piper_sil_{i}.wav"
-            if create_silence_wav(sil_dur_ms / 1000.0, str(sil_file), sample_rate) \
-                    and sil_file.exists():
-                concat_list.append(f"file '{sil_file}'")
-                temp_files.append(str(sil_file))
-                current_time_ms += sil_dur_ms
-        max_drift = max(max_drift, current_time_ms - start_ms)
-
-        f_temp = work_dir / f"p_raw_{i}.wav"
-        f_final = work_dir / f"p_fin_{i}.wav"
-
-        if not _has_content(f_final, 1000):
-            try:
-                cmd = [piper_cmd, "--model", str(model_path), "--output_file", str(f_temp)]
-                process = subprocess.Popen(cmd, stdin=subprocess.PIPE,
-                                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-                _, stderr = process.communicate(input=text.encode('utf-8'))
-                if not _has_content(f_temp, 1000):
-                    logging.warning(f"Piper fail/empty for segment {i}: {text[:40]} "
-                                    f"({stderr.decode(errors='replace')[:100]})")
-                    current_time_ms = end_ms
-                    continue
-                temp_files.append(str(f_temp))
-                # S0: fit by speeding up only (bounded); pad short clips (see edge path).
-                if enable_stretch:
-                    if not stretch_audio_smart(str(f_temp), str(f_final), target_duration,
-                                               work_dir, sample_rate, allow_slowdown=False):
-                        sf.write(str(f_final), *sf.read(str(f_temp)), subtype="PCM_16")
-                else:
-                    sf.write(str(f_final), *sf.read(str(f_temp)), subtype="PCM_16")
-            except Exception as e:
-                logging.error(f"Piper segment {i} error: {e}")
-                current_time_ms = end_ms
-                continue
-
-        # Placement runs whether the clip was just synthesized or restored from a previous
-        # run — otherwise a resumed job would silently drop every cached segment.
-        if _has_content(f_final, 1000):
-            next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
-            current_time_ms = _place_speech_block(f_final, start_ms, end_ms, next_start_ms,
-                                                  sample_rate, work_dir, i, concat_list, temp_files)
-            generated_count += 1
-            if quality_gate:
-                scores.append(score_speech(str(f_final), text, asr_model=asr_model,
-                                           lang=lang_code or None))
-        else:
-            current_time_ms = end_ms
-
-    logging.info(f"✓ Piper generated {generated_count}/{len(subs)} segments")
-    _log_sync_drift(max_drift, "piper")
-    if quality_gate:
-        log_quality_report(scores, "piper")
-
-
+    await synthesize_timeline(
+        subs, engine="piper", prefix="piper", sample_rate=sample_rate, work_dir=work_dir,
+        concat_list=concat_list, temp_files=temp_files, render=_render,
+        text_of=lambda s: normalize_tts_text(s.text).replace('"', "").replace("'", ""),
+        desc="Piper Synthesis", unit="phrase",
+        quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code or None)
 async def get_edge_voice(lang_code: str, emotion: Optional[str] = None) -> Tuple[str, bool]:
     try:
         voices = await edge_tts.VoicesManager.create()
@@ -1579,6 +1415,106 @@ def _sub_start_ms(sub) -> int:
     return (t.hours * 3600 + t.minutes * 60 + t.seconds) * 1000 + t.milliseconds
 
 
+def _sub_end_ms(sub) -> int:
+    t = sub.end
+    return (t.hours * 3600 + t.minutes * 60 + t.seconds) * 1000 + t.milliseconds
+
+
+def _fit_to_window(src: Path, dst: Path, target_duration: float, work_dir: Path,
+                   sample_rate: int, enable_stretch: bool) -> bool:
+    """Fit a freshly synthesized clip into its source window: speed it up when it over-runs
+    (S0 — never slow it down, that sounds dragged), otherwise copy it through unchanged and
+    let placement pad the remainder."""
+    if enable_stretch and stretch_audio_smart(str(src), str(dst), target_duration,
+                                              work_dir, sample_rate, allow_slowdown=False):
+        return True
+    try:
+        sf.write(str(dst), *sf.read(str(src)), subtype="PCM_16")
+    except Exception as e:
+        logging.error(f"Could not write {dst.name}: {e}")
+        return False
+    return True
+
+
+async def _maybe_await(value):
+    """Allow an engine's render callback to be either a coroutine (edge) or a plain
+    function (piper / xtts / openai)."""
+    return await value if inspect.isawaitable(value) else value
+
+
+async def synthesize_timeline(subs, *, engine: str, prefix: str, sample_rate: int,
+                              work_dir: Path, concat_list: list, temp_files: list,
+                              render, text_of, desc: str, unit: str = "segment",
+                              min_bytes: int = 1000, quality_gate: bool = False,
+                              asr_model=None, gate_lang=None, on_ready=None) -> int:
+    """Drive one TTS engine across the subtitle timeline (Template Method).
+
+    Every engine shares this loop — leading silence, cached synthesis, absolute-anchor
+    placement, drift tracking and optional quality scoring — and supplies only `render`:
+    how one line of text becomes one WAV file. Duplicating this loop per engine is what
+    let Piper silently miss both the no-slowdown and the anchored-placement fixes, and
+    hide a resume bug for months; there is now exactly one copy of it.
+
+    `render(i, text, final_file, target_duration) -> bool` may be sync or async.
+    `on_ready(i, text, final_file, target_duration) -> Optional[Dict]` runs after synthesis
+    and before placement (XTTS re-rolls a flagged take there), returning a gate score if it
+    already computed one. Returns the number of segments placed.
+    """
+    scores: List[Dict] = []
+    generated = 0
+    cursor_ms = 0.0
+    max_drift = 0.0
+
+    for i, sub in enumerate(tqdm(subs, desc=desc, unit=unit)):
+        start_ms = _sub_start_ms(sub)
+        end_ms = _sub_end_ms(sub)
+        text = text_of(sub)
+        if not text:
+            continue
+        target_duration = (end_ms - start_ms) / 1000.0
+
+        # ── Silence up to this segment's source onset ───────
+        sil_ms = start_ms - cursor_ms
+        if sil_ms > 100:
+            sil_file = work_dir / f"{prefix}_sil_{i}.wav"
+            if create_silence_wav(sil_ms / 1000.0, str(sil_file), sample_rate) and sil_file.exists():
+                concat_list.append(f"file '{sil_file}'")
+                temp_files.append(str(sil_file))
+                cursor_ms += sil_ms
+        max_drift = max(max_drift, cursor_ms - start_ms)
+
+        final_file = work_dir / f"{prefix}_fin_{i}.wav"
+        if not _has_content(final_file, min_bytes):
+            try:
+                ok = await _maybe_await(render(i, text, final_file, target_duration))
+            except Exception as e:
+                logging.error(f"{engine} segment {i} error: {e}")
+                ok = False
+            if not ok:
+                cursor_ms = end_ms
+                continue
+
+        gate_score = on_ready(i, text, final_file, target_duration) if on_ready else None
+
+        if _has_content(final_file, min_bytes):
+            next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
+            cursor_ms = _place_speech_block(final_file, start_ms, end_ms, next_start_ms,
+                                            sample_rate, work_dir, i, concat_list, temp_files)
+            generated += 1
+            if quality_gate:
+                scores.append(gate_score if gate_score is not None
+                              else score_speech(str(final_file), text, asr_model=asr_model,
+                                                lang=gate_lang))
+        else:
+            cursor_ms = end_ms
+
+    logging.info(f"✓ {engine} generated {generated}/{len(subs)} segments")
+    _log_sync_drift(max_drift, engine)
+    if quality_gate:
+        log_quality_report(scores, engine)
+    return generated
+
+
 def _fade_ends(data, sr, fade_ms: float = 8.0):
     """Fade the first/last few ms of an audio array in place (declick); returns it."""
     n = int(sr * fade_ms / 1000.0)
@@ -1836,97 +1772,57 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
                                   rate_adjust: bool, has_emotion_support: bool = False,
                                   quality_gate: bool = False, asr_model=None,
                                   gate_lang=None) -> Tuple[List[str], List[str]]:
+    """Speech via Microsoft Edge voices. Timeline, placement and scoring come from
+    synthesize_timeline; this only turns one line of text into one WAV."""
     concat_list, temp_files = [], []
-    scores: List[Dict] = []
-    current_time_ms = 0
-    max_drift = 0.0
     target_sr = 44100
-    emotion_stats = {}
+    emotion_stats: Dict[str, int] = {}
 
-    for i, s in enumerate(tqdm(subs, desc="Edge TTS", unit="sentence")):
-        start_ms = (s.start.hours*3600 + s.start.minutes*60 + s.start.seconds)*1000 + s.start.milliseconds
-        end_ms = (s.end.hours*3600 + s.end.minutes*60 + s.end.seconds)*1000 + s.end.milliseconds
-        txt = normalize_tts_text(s.text)
-        if not txt:
-            continue
-        target_duration = (end_ms - start_ms) / 1000.0
+    async def _render(i, txt, final_file, target_duration):
+        raw_file = work_dir / f"edge_raw_{i}.mp3"
+        wav_file = work_dir / f"edge_cnv_{i}.wav"
 
-        silence_dur_ms = start_ms - current_time_ms
-        if silence_dur_ms > 100:
-            silence_file = work_dir / f"silence_{i}.wav"
-            if not silence_file.exists():
-                create_silence_wav(silence_dur_ms / 1000.0, str(silence_file), target_sr)
-            if silence_file.exists():
-                concat_list.append(f"file '{silence_file}'")
-                temp_files.append(str(silence_file))
-                current_time_ms += silence_dur_ms
-        max_drift = max(max_drift, current_time_ms - start_ms)
+        emotion = None
+        if emotion_detection and has_emotion_support:
+            emotion = detect_emotion(txt)
+            if emotion:
+                emotion_stats[emotion] = emotion_stats.get(emotion, 0) + 1
 
-        raw_file = work_dir / f"speech_{i}_raw.mp3"
-        wav_file = work_dir / f"speech_{i}_converted.wav"
-        final_file = work_dir / f"speech_{i}_final.wav"
+        rate = "+0%"
+        if rate_adjust and target_duration > 0:
+            words = len(txt.split())
+            estimated_duration = (words / 150) * 60
+            if estimated_duration > 0:
+                rate_factor = max(-0.5, min(0.5, (estimated_duration / target_duration) - 1))
+                rate = f"{rate_factor * 100:+.0f}%"
 
-        if not _has_content(final_file, 100):
-            emotion = None
-            if emotion_detection and has_emotion_support:
-                emotion = detect_emotion(txt)
-                if emotion:
-                    emotion_stats[emotion] = emotion_stats.get(emotion, 0) + 1
+        if not _has_content(raw_file):
+            if not await generate_tts_edge(txt, voice, str(raw_file), emotion, rate,
+                                           has_emotion_support):
+                return False
+        temp_files.append(str(raw_file))
 
-            rate = "+0%"
-            if rate_adjust and target_duration > 0:
-                words = len(txt.split())
-                estimated_duration = (words / 150) * 60
-                if estimated_duration > 0:
-                    rate_factor = max(-0.5, min(0.5, (estimated_duration / target_duration) - 1))
-                    rate = f"{rate_factor*100:+.0f}%"
+        if not _has_content(wav_file):
+            run_ffmpeg(["ffmpeg", "-y", "-i", str(raw_file),
+                        "-ar", str(target_sr), "-ac", "1", str(wav_file)],
+                       f"Segment {i} MP3 to WAV conversion")
+        temp_files.append(str(wav_file))
 
-            if not _has_content(raw_file):
-                success = await generate_tts_edge(txt, voice, str(raw_file), emotion, rate, has_emotion_support)
-                if not success:
-                    continue
+        # S0: no noise reduction on clean synthetic speech - stationary NR on a clean
+        # TTS signal only risks musical-noise artifacts. Fit straight from the WAV.
+        return _fit_to_window(wav_file, final_file, target_duration, work_dir,
+                              target_sr, enable_stretch)
 
-            if not _has_content(wav_file):
-                try:
-                    subprocess.run([
-                        "ffmpeg", "-y", "-i", str(raw_file),
-                        "-ar", str(target_sr), "-ac", "1", str(wav_file)
-                    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-                except Exception as e:
-                    logging.error(f"Failed to convert MP3 to WAV for segment {i}: {e}")
-                    continue
-
-            # S0: no noise reduction on clean synthetic speech — stationary NR on a clean
-            # TTS signal only risks musical-noise artifacts. Stretch straight from the WAV.
-            if enable_stretch:
-                # S0: fit by speeding up only (bounded); never slow speech down.
-                success = stretch_audio_smart(str(wav_file), str(final_file),
-                                              target_duration, work_dir, target_sr,
-                                              allow_slowdown=False)
-                if not success:
-                    sf.write(str(final_file), *sf.read(str(wav_file)))
-            else:
-                sf.write(str(final_file), *sf.read(str(wav_file)))
-
-        if _has_content(final_file, 100):
-            # Pillar 1: anchor to the next segment's source onset so drift can't accumulate.
-            next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
-            current_time_ms = _place_speech_block(final_file, start_ms, end_ms, next_start_ms,
-                                                  target_sr, work_dir, i, concat_list, temp_files)
-            if quality_gate:
-                scores.append(score_speech(str(final_file), txt, asr_model=asr_model,
-                                           lang=gate_lang))
-        else:
-            current_time_ms = end_ms
+    await synthesize_timeline(
+        subs, engine="edge", prefix="edge", sample_rate=target_sr, work_dir=work_dir,
+        concat_list=concat_list, temp_files=temp_files, render=_render,
+        text_of=lambda s: normalize_tts_text(s.text),
+        desc="Edge TTS", unit="sentence", min_bytes=100,
+        quality_gate=quality_gate, asr_model=asr_model, gate_lang=gate_lang)
 
     if emotion_stats:
         logging.info(f"🎭 Emotion usage: {emotion_stats}")
-    _log_sync_drift(max_drift, "edge")
-    if quality_gate:
-        log_quality_report(scores, "edge")
     return concat_list, temp_files
-
-
 def transcribe_audio(audio_path: str, model_name: str, backend: str, device: str) -> Tuple[List[Dict], str]:
     """Transcribe audio and return (segments, detected_language). `segments` is a list
     of dicts each having at least 'start', 'end', 'text' — normalized across backends.
@@ -2147,7 +2043,7 @@ async def _tts_piper(subs, args, work_dir, video_path, gate_asr, logger):
         raise TTSError("Failed to download Piper model")
     logger.info("🎙️  Using Piper (offline mode)")
     concat_list, temp_files = [], []
-    generate_piper(subs, model_path, concat_list, temp_files, work_dir,
+    await generate_piper(subs, model_path, concat_list, temp_files, work_dir,
                    enable_stretch=not args.no_stretch,
                    lang_code=args.target_lang[:2].lower(),
                    quality_gate=args.quality_gate, asr_model=gate_asr)
@@ -2182,7 +2078,7 @@ async def _tts_xtts(subs, args, work_dir, video_path, gate_asr, logger):
         raise TTSError("Failed to load XTTS model")
 
     concat_list, temp_files = [], []
-    generate_xtts(
+    await generate_xtts(
         subs, tts_model, speaker_wav, lang_code,
         concat_list, temp_files, work_dir,
         enable_stretch=not args.no_stretch,
@@ -2197,7 +2093,7 @@ async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
         raise TTSError("OpenAI TTS requires an API key (OPENAI_API_KEY or --openai_api_key)")
     logger.info(f"🎙️  OpenAI TTS: {args.openai_tts_model} / voice '{args.openai_voice}'")
     concat_list, temp_files = [], []
-    generate_openai_tts(
+    await generate_openai_tts(
         subs, client, args.openai_voice, args.openai_tts_model,
         args.openai_tts_instructions, args.target_lang[:2].lower(),
         concat_list, temp_files, work_dir,

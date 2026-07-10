@@ -164,8 +164,9 @@ def test_generate_openai_tts_places_segments(tmp_path):
 
     subs = [_Sub(0, 1000, "Salam."), _Sub(1000, 2000, "Necəsən?")]
     concat, temp = [], []
-    voxa.generate_openai_tts(subs, _Client(), "alloy", "gpt-4o-mini-tts", "", "az",
-                                concat, temp, tmp_path, enable_stretch=True)
+    import asyncio
+    asyncio.run(voxa.generate_openai_tts(subs, _Client(), "alloy", "gpt-4o-mini-tts", "", "az",
+                                         concat, temp, tmp_path, enable_stretch=True))
     finals = [c for c in concat if "otts_fin_" in c]
     assert len(finals) == 2
 
@@ -678,10 +679,11 @@ def test_piper_anchors_placement_and_never_slows_down(tmp_path, monkeypatch):
     monkeypatch.setattr(voxa, "stretch_audio_smart", _stretch)
     placed = _patch_piper_placement(monkeypatch)
 
+    import asyncio
     subs = [_fake_sub("Salam dostlar.", 0, 1000), _fake_sub("Necəsən?", 1500, 2500)]
     concat, temps = [], []
-    voxa.generate_piper(subs, tmp_path / "model.onnx", concat, temps, tmp_path,
-                           enable_stretch=True)
+    asyncio.run(voxa.generate_piper(subs, tmp_path / "model.onnx", concat, temps, tmp_path,
+                                    enable_stretch=True))
 
     assert captured["allow_slowdown"] is False        # S0: speed up only, never drag
     assert len(placed) == 2                            # every segment placed
@@ -699,14 +701,15 @@ def test_piper_resume_places_cached_segment(tmp_path, monkeypatch):
     monkeypatch.setattr(voxa.subprocess, "Popen", _boom)
     placed = _patch_piper_placement(monkeypatch)
 
-    (tmp_path / "p_fin_0.wav").write_bytes(b"CACHED".ljust(1500, b"0"))
+    (tmp_path / "piper_fin_0.wav").write_bytes(b"CACHED".ljust(1500, b"0"))
 
+    import asyncio
     concat, temps = [], []
-    voxa.generate_piper([_fake_sub("Salam.", 0, 1000)], tmp_path / "model.onnx",
-                           concat, temps, tmp_path, enable_stretch=True)
+    asyncio.run(voxa.generate_piper([_fake_sub("Salam.", 0, 1000)], tmp_path / "model.onnx",
+                                    concat, temps, tmp_path, enable_stretch=True))
 
     assert len(placed) == 1
-    assert concat and "p_fin_0.wav" in concat[0]
+    assert concat and "piper_fin_0.wav" in concat[0]
 
 
 def test_a3_regen_keeps_best_take(tmp_path, monkeypatch):
@@ -745,10 +748,11 @@ def test_a3_regen_keeps_best_take(tmp_path, monkeypatch):
                         lambda final_file, *a, **k: (placed.update(
                             bytes=final_file.read_bytes()) or 1000.0))
 
+    import asyncio
     concat, temps = [], []
-    voxa.generate_xtts([_fake_sub("Merhaba dünya", 0, 1000)], object(), str(spk), "tr",
-                          concat, temps, tmp_path, enable_stretch=True,
-                          quality_gate=True, asr_model=object())
+    asyncio.run(voxa.generate_xtts([_fake_sub("Merhaba dünya", 0, 1000)], object(), str(spk), "tr",
+                                   concat, temps, tmp_path, enable_stretch=True,
+                                   quality_gate=True, asr_model=object()))
 
     assert calls["fit"] == 2                       # re-rolled until it passed (2 attempts)
     assert placed["bytes"].startswith(b"CAND2")    # the passing take was promoted + placed
