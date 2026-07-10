@@ -19,14 +19,14 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       # The heavy runtime deps (torch/whisper/ffmpeg) are NOT installed here:
-      # autodub guards those imports so the pure logic can be unit-tested cheaply.
+      # voxa guards those imports so the pure logic can be unit-tested cheaply.
       - name: Install test tooling
         run: |
           python -m pip install --upgrade pip
           pip install pytest
 
       - name: Syntax check
-        run: python -m py_compile autodub.py
+        run: python -m py_compile voxa.py
 
       - name: Run unit tests
         run: pytest

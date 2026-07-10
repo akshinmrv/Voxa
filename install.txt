@@ -19,7 +19,8 @@ numpy
 
 # ── Optional TTS engines ─────────────────────────────────
 piper-tts               # only needed for --tts piper (offline)
-# TTS                   # uncomment for --tts xtts (Coqui voice cloning)
+# coqui-tts             # uncomment for --tts xtts (voice cloning; maintained Coqui fork)
+#                       # NOTE: XTTS-v2 weights are non-commercial (CPML) — see NOTICE.md
 
 # ── Optional transcription backend ───────────────────────
 # faster-whisper        # uncomment for --whisper-backend faster (2-4x faster)

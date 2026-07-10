@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AutoDub Pro v4.1 - Professional Video Translation and Dubbing Tool
+Voxa v1.0 — Professional Video Translation and Dubbing
 
 Pipeline: extract audio -> Whisper transcription -> translate -> TTS -> mux.
 Translation: Google, Ollama, or an LLM provider (OpenAI / Anthropic) with
@@ -735,7 +735,7 @@ class _JsonFormatter(logging.Formatter):
 class Logger:
     """Enhanced logging with both file and console output."""
     def __init__(self, work_dir: Path, level: int = logging.INFO, json_format: bool = False):
-        self.log_file = work_dir / "autodub.log"
+        self.log_file = work_dir / "voxa.log"
         formatter = _JsonFormatter() if json_format else \
             logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         handlers = [
@@ -2365,27 +2365,27 @@ async def batch_process(video_files: List[str], args, logger: Logger):
 
 async def main():
     parser = argparse.ArgumentParser(
-        description="AutoDub Pro v4.0 - Professional Video Dubbing",
+        description="Voxa v1.0 — Professional Video Dubbing",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Basic usage
-  python autodub.py video.mp4 --target_lang ru
+  python voxa.py video.mp4 --target_lang ru
 
   # High quality with all enhancements
-  python autodub.py video.mp4 --target_lang es --whisper_model large --detect-emotion --auto-rate
+  python voxa.py video.mp4 --target_lang es --whisper_model large --detect-emotion --auto-rate
 
   # XTTS voice cloning (clone voice from source video automatically)
-  python autodub.py video.mp4 --target_lang ru --tts xtts
+  python voxa.py video.mp4 --target_lang ru --tts xtts
 
   # XTTS with custom voice reference
-  python autodub.py video.mp4 --target_lang ru --tts xtts --voice-sample my_voice.wav
+  python voxa.py video.mp4 --target_lang ru --tts xtts --voice-sample my_voice.wav
 
   # Batch processing
-  python autodub.py video1.mp4 video2.mp4 --target_lang fr --parallel
+  python voxa.py video1.mp4 video2.mp4 --target_lang fr --parallel
 
   # Subtitles only
-  python autodub.py video.mp4 --target_lang de --subtitles-only
+  python voxa.py video.mp4 --target_lang de --subtitles-only
         """
     )
 
@@ -2530,7 +2530,7 @@ Examples:
                     json_format=(args.log_format == "json"))
 
     logger.info("╔════════════════════════════════════════════════════════╗")
-    logger.info("║           AutoDub Pro v4.0 - Configuration           ║")
+    logger.info("║" + " " * 15 + "Voxa v1.0 - Configuration" + " " * 16 + "║")
     logger.info("╚════════════════════════════════════════════════════════╝")
     logger.info(f"📹 Videos: {len(args.videos)}")
     logger.info(f"🌍 Target Language: {args.target_lang}")

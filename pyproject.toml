@@ -3,14 +3,31 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "autodub"
-version = "4.1.0"
-description = "Professional video translation & dubbing (Whisper + OpenAI/Anthropic/Google/Ollama + Edge/Piper/XTTS)"
+name = "voxa"
+version = "1.0.0"
+description = "Voxa — automatic video translation and dubbing (Whisper + LLM translation + multi-engine TTS)"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-authors = [{ name = "AutoDub" }]
-keywords = ["dubbing", "translation", "whisper", "tts", "openai", "subtitles"]
+authors = [{ name = "Akshin Miranov", email = "akshinmiranov@gmail.com" }]
+keywords = ["dubbing", "video", "translation", "whisper", "tts", "openai", "subtitles", "voice-cloning"]
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 
 dependencies = [
     "openai-whisper",
@@ -31,16 +48,24 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Coqui Inc. shut down in Jan 2024; `coqui-tts` is the maintained community fork.
+# NOTE: the XTTS-v2 model weights are non-commercial (CPML). See NOTICE.md.
+xtts = ["coqui-tts"]
 piper = ["piper-tts"]
-xtts = ["TTS"]
 faster = ["faster-whisper"]
-dev = ["pytest"]
+dev = ["pytest", "ruff"]
+
+[project.urls]
+Homepage = "https://github.com/akshinmrv/Voxa"
+Repository = "https://github.com/akshinmrv/Voxa"
+Issues = "https://github.com/akshinmrv/Voxa/issues"
+Changelog = "https://github.com/akshinmrv/Voxa/blob/main/CHANGELOG.md"
 
 [project.scripts]
-autodub = "autodub:cli"
+voxa = "voxa:cli"
 
 [tool.setuptools]
-py-modules = ["autodub"]
+py-modules = ["voxa"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

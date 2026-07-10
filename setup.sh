@@ -3,7 +3,7 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}=== AI Video Dubber: Installation ===${NC}"
+echo -e "${BLUE}=== Voxa: Installation ===${NC}"
 
 # 1. Install system packages
 if [ -f /etc/fedora-release ]; then
@@ -27,14 +27,14 @@ cat <<EOF > run.sh
 #!/bin/bash
 source $(pwd)/venv/bin/activate
 if [ "\$1" == "--help" ] || [ "\$1" == "-h" ] || [ -z "\$1" ]; then
-    echo "AI Video Dubber Ultimate - Help"
+    echo "Voxa - Help"
     echo "--------------------------------"
     echo "Usage: ./run.sh [video_file] [options]"
     echo ""
     echo "Options:"
-    echo "  --tts [edge|piper|xtts]          TTS Engine (default: edge)"
+    echo "  --tts [edge|piper|xtts|openai]   TTS Engine (default: edge)"
     echo "  --target_lang [code]             Target language (default: ru)"
-    echo "  --translator [google|ollama|openai]  Translation engine (default: google)"
+    echo "  --translator [google|ollama|openai|anthropic]  Translation engine (default: google)"
     echo "  --voice-sample [file.wav]        Reference voice sample for XTTS (optional)"
     echo "  --openai_model [model]           OpenAI model name (default: gpt-5)"
     echo "  --ollama_model [model]           Ollama model name (default: llama3)"
@@ -45,7 +45,7 @@ if [ "\$1" == "--help" ] || [ "\$1" == "-h" ] || [ -z "\$1" ]; then
     echo "  ./run.sh video.mp4 --target_lang en --translator openai"
     exit 0
 fi
-python $(pwd)/autodub.py "\$@"
+python $(pwd)/voxa.py "\$@"
 EOF
 
 chmod +x run.sh

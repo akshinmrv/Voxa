@@ -17,7 +17,7 @@ import json
 import os
 from pathlib import Path
 
-import autodub
+import voxa
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("UPDATE_GOLDEN") == "1"
@@ -58,12 +58,12 @@ def _plans(merged, cps):
         start_ms = m["start"] * 1000.0
         if i + 1 < len(merged):
             next_start_ms = merged[i + 1]["start"] * 1000.0
-            trim_ms, pad_ms = autodub._plan_anchored_block(actual_ms, start_ms, next_start_ms)
+            trim_ms, pad_ms = voxa._plan_anchored_block(actual_ms, start_ms, next_start_ms)
             cursor_ms = next_start_ms
         else:
             # Last block has no next onset to protect: pad to its own window, never trim.
             trim_ms = 0.0
-            pad_ms, cursor_ms = autodub._plan_block(actual_ms, start_ms, m["end"] * 1000.0)
+            pad_ms, cursor_ms = voxa._plan_block(actual_ms, start_ms, m["end"] * 1000.0)
         plans.append({"trim_ms": _r(trim_ms, 1), "pad_ms": _r(pad_ms, 1),
                       "cursor_ms": _r(cursor_ms, 1)})
     return plans
@@ -74,21 +74,21 @@ def run_transcript_pipeline(raw_segments):
     # SY5: tighten each segment to its first/last word onset.
     refined = [
         {
-            "start": autodub._refine_bounds(s["start"], s["end"], s.get("words") or [])[0],
-            "end": autodub._refine_bounds(s["start"], s["end"], s.get("words") or [])[1],
+            "start": voxa._refine_bounds(s["start"], s["end"], s.get("words") or [])[0],
+            "end": voxa._refine_bounds(s["start"], s["end"], s.get("words") or [])[1],
             "text": s["text"],
             "no_speech_prob": s.get("no_speech_prob", 0.0),
         }
         for s in raw_segments
     ]
     # SY4: drop what Whisper itself flags as non-speech (music/intro phantom text).
-    kept = autodub.filter_nonspeech_segments(refined, threshold=0.6)
+    kept = voxa.filter_nonspeech_segments(refined, threshold=0.6)
     # Merge into sentences (punctuation, >0.5s pause, or max duration).
-    merged = autodub.merge_segments_into_sentences(kept, max_duration=10.0)
+    merged = voxa.merge_segments_into_sentences(kept, max_duration=10.0)
     # A1: per-line translation length budget so the dub fits at a natural pace.
-    budgets = [autodub._duration_to_max_chars(m["end"] - m["start"]) for m in merged]
+    budgets = [voxa._duration_to_max_chars(m["end"] - m["start"]) for m in merged]
     # SRT block timing.
-    srt = [f"{autodub.format_timestamp(m['start'])} --> {autodub.format_timestamp(m['end'])}"
+    srt = [f"{voxa.format_timestamp(m['start'])} --> {voxa.format_timestamp(m['end'])}"
            for m in merged]
     return {
         "kept": len(kept),
@@ -107,13 +107,13 @@ def run_tts_text_pipeline(lines):
     """The deterministic text preparation each TTS engine performs per subtitle line."""
     out = []
     for raw in lines:
-        normalized = autodub.normalize_tts_text(raw)
+        normalized = voxa.normalize_tts_text(raw)
         out.append({
             "raw": raw,
             "normalized": normalized,
-            "chunks": autodub.split_for_tts(normalized),
+            "chunks": voxa.split_for_tts(normalized),
             # Delivery is inferred from the RAW line: normalization folds '…' to '.'.
-            "delivery": autodub._delivery_hint(0, [], raw),
+            "delivery": voxa._delivery_hint(0, [], raw),
         })
     return out
 

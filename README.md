@@ -1,5 +1,5 @@
 
-# AutoDub - Automatic Video Translation & Dubbing
+# Voxa — Automatic Video Translation & Dubbing
 
 Automatically transcribe, translate, and dub videos into different languages using AI-powered text-to-speech.
 
@@ -7,10 +7,11 @@ Automatically transcribe, translate, and dub videos into different languages usi
 
 - 🎙️ **Speech Recognition**: Whisper transcription (openai-whisper or faster-whisper)
 - 🌍 **Translation**: Google, Ollama (local LLM), or context-aware LLM (OpenAI / Anthropic)
-- 🗣️ **Three TTS Engines**:
-    - **Edge TTS**: High-quality Microsoft voices (recommended)
+- 🗣️ **Four TTS Engines**:
+    - **Edge TTS**: High-quality Microsoft voices (default; unofficial endpoint — see [NOTICE.md](NOTICE.md))
+    - **OpenAI TTS**: Multilingual, instructable delivery (needs an API key)
     - **Piper**: Fast offline TTS (no internet after model download)
-    - **XTTS**: Voice cloning from a short reference sample
+    - **XTTS**: Voice cloning from a short reference sample (**non-commercial weights** — see [NOTICE.md](NOTICE.md))
 - 🎬 **Video Preservation**: Keeps original video, mixes the original audio in as a faint ambience bed (5%) under the dubbed voice (150%)
 - 📝 **Subtitle Generation**: Creates SRT files for translated text
 
@@ -34,12 +35,16 @@ python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 pip install -r install.txt
-pip install TTS  # Only needed for XTTS voice cloning
+
+# Only needed for XTTS voice cloning. `coqui-tts` is the maintained community fork —
+# the original `TTS` package has been unmaintained since Coqui shut down in Jan 2024.
+# ⚠️ XTTS-v2 model weights are NON-COMMERCIAL (CPML). See NOTICE.md.
+pip install coqui-tts
 ```
 
 ##  Local Translation with Ollama (Optional)
 
-AutoDub now supports fully offline translation using **Ollama**. This is ideal for privacy, avoiding API limits, and achieving more context-aware translations.
+Voxa now supports fully offline translation using **Ollama**. This is ideal for privacy, avoiding API limits, and achieving more context-aware translations.
 
 ### 1. Install Ollama
 **For Linux (Fedora/Ubuntu/etc.):**
@@ -58,7 +63,7 @@ pip install -r install.txt
 cp .env.example .env    # then edit
 
 # 3. Dub a video
-python autodub.py video.mp4 --target_lang ru
+python voxa.py video.mp4 --target_lang ru
 ```
 
 On Linux you can instead run `chmod +x setup.sh && ./setup.sh`, which creates a
@@ -67,27 +72,27 @@ On Linux you can instead run `chmod +x setup.sh && ./setup.sh`, which creates a
 ### Basic Usage (Edge TTS - Recommended)
 ```bash
 # Dub to Russian (default)
-python autodub.py video.mp4
+python voxa.py video.mp4
 
 # Dub to English
-python autodub.py video.mp4 --target_lang en
+python voxa.py video.mp4 --target_lang en
 
 # Dub to German
-python autodub.py video.mp4 --target_lang de
+python voxa.py video.mp4 --target_lang de
 ```
 
 ### Piper TTS (Faster, offline)
 ```bash
 # Offline synthesis (model downloaded to ~/.piper_models on first use)
-python autodub.py video.mp4 --tts piper --target_lang ru
+python voxa.py video.mp4 --tts piper --target_lang ru
 ```
 ### XTTS Voice Cloning (Most Natural)
 ```bash
 # Auto-extracts a reference sample from the source video
-python autodub.py video.mp4 --tts xtts --target_lang en
+python voxa.py video.mp4 --tts xtts --target_lang en
 
 # Or provide your own clean voice sample
-python autodub.py video.mp4 --tts xtts --voice-sample my_voice.wav --target_lang en
+python voxa.py video.mp4 --tts xtts --voice-sample my_voice.wav --target_lang en
 ```
 
 ### Ollama translator
@@ -105,8 +110,8 @@ python autodub.py video.mp4 --tts xtts --voice-sample my_voice.wav --target_lang
 A cloud speech engine for languages XTTS can't clone. Needs `OPENAI_API_KEY`.
 
 ```bash
-python autodub.py video.mp4 --tts openai --target_lang en --openai-voice nova
-python autodub.py video.mp4 --tts openai --openai-tts-instructions "Warm, upbeat narrator."
+python voxa.py video.mp4 --tts openai --target_lang en --openai-voice nova
+python voxa.py video.mp4 --tts openai --openai-tts-instructions "Warm, upbeat narrator."
 ```
 
 Voices: alloy, echo, fable, onyx, nova, shimmer, ash, ballad, coral, sage, verse.
@@ -120,25 +125,25 @@ expressive, content-aware prosody (one cheap API call per job, cached; falls bac
 punctuation heuristic if unavailable):
 
 ```bash
-python autodub.py video.mp4 --tts openai --target_lang az --detect-emotion
+python voxa.py video.mp4 --tts openai --target_lang az --detect-emotion
 ```
 
 ### LLM translators — OpenAI & Anthropic (most natural)
 
 Professional, native-sounding translations via an LLM. Two providers are built in
 (`--translator openai` and `--translator anthropic`), and adding another is a small
-change in the `LLM_PROVIDERS` registry in `autodub.py`. The model is fully configurable.
+change in the `LLM_PROVIDERS` registry in `voxa.py`. The model is fully configurable.
 
 ```bash
 # OpenAI (key via env var — recommended)
 export OPENAI_API_KEY="sk-..."          # PowerShell: $env:OPENAI_API_KEY="sk-..."
-python autodub.py video.mp4 --translator openai --target_lang ru
-python autodub.py video.mp4 --translator openai --openai_model gpt-5-mini
+python voxa.py video.mp4 --translator openai --target_lang ru
+python voxa.py video.mp4 --translator openai --openai_model gpt-5-mini
 
 # Anthropic (Claude)
 export ANTHROPIC_API_KEY="sk-ant-..."   # PowerShell: $env:ANTHROPIC_API_KEY="sk-ant-..."
-python autodub.py video.mp4 --translator anthropic --target_lang ru
-python autodub.py video.mp4 --translator anthropic --anthropic_model claude-sonnet-5
+python voxa.py video.mp4 --translator anthropic --target_lang ru
+python voxa.py video.mp4 --translator anthropic --anthropic_model claude-sonnet-5
 ```
 
 LLM translation is **context-aware**: subtitle lines are translated in blocks
@@ -149,11 +154,11 @@ If a block response is invalid, it automatically falls back to per-line translat
 
 Robustness: transient (rate-limit / 5xx) errors are retried with backoff, and token
 usage is logged after translation. To also print an estimated cost, add your model's
-prices to the `LLM_PRICING` table in `autodub.py`.
+prices to the `LLM_PRICING` table in `voxa.py`.
 
 ```bash
 # Larger blocks = more context (and fewer API calls); smaller = safer for long lines
-python autodub.py video.mp4 --translator openai --llm_batch_size 25
+python voxa.py video.mp4 --translator openai --llm_batch_size 25
 ```
 
 | Option | Description | Default |
@@ -171,7 +176,7 @@ positional arguments:
 
 options:
   -h, --help            Show help message
-  --tts {edge,piper,xtts}
+  --tts {edge,openai,piper,xtts}
                         TTS engine (default: edge)
   --target_lang LANG    Target language code (default: ru)
                         Supports: ru, en, de, fr, es, it, pt, ja, zh, etc.
@@ -206,7 +211,7 @@ options:
 ## Configuration
 
 **API keys via `.env`** — copy `.env.example` to `.env` (gitignored) and fill in your
-keys; AutoDub loads it automatically on startup. Real environment variables always win.
+keys; Voxa loads it automatically on startup. Real environment variables always win.
 
 ```bash
 cp .env.example .env      # then edit; no need to `export` on every run
@@ -219,7 +224,7 @@ Keys are the long option names with dashes as underscores. Explicit CLI flags ov
 { "translator": "openai", "target_lang": "ru", "tts": "edge", "llm_batch_size": 30 }
 ```
 ```bash
-python autodub.py video.mp4 --config my_defaults.json
+python voxa.py video.mp4 --config my_defaults.json
 ```
 
 **Structured logging** — `--log-format json` emits one JSON object per log line (for log
@@ -263,7 +268,7 @@ pip install soundfile
 
 ### Dub speaks during a music/intro (no original speech there)
 Whisper transcribes non-speech audio (intros, music) as phantom text, which then
-gets dubbed. AutoDub drops segments with `no_speech_prob > 0.6` by default; lower
+gets dubbed. Voxa drops segments with `no_speech_prob > 0.6` by default; lower
 `--no-speech-threshold` (e.g. 0.4) to be more aggressive, or use
 `--whisper-backend faster` (built-in VAD removes non-speech at the source).
 
@@ -320,15 +325,26 @@ Use Edge TTS or XTTS instead. Piper is designed for speed, not quality.
 
 ## License
 
-MIT License - see LICENSE file
+Voxa is released under the [MIT License](LICENSE).
+
+**Voxa ships no model weights and vendors no third-party code**, but the engines it drives
+have their own licenses — and some are stricter than Voxa's. Before using Voxa commercially,
+read [NOTICE.md](NOTICE.md). The short version:
+
+| Configuration | Commercial use |
+|---|:---:|
+| `--tts piper` + `--translator ollama` (fully offline) | ✅ |
+| `--tts openai` + `--translator openai` (paid APIs) | ✅ |
+| `--tts edge` / `--translator google` (defaults, unofficial endpoints) | ⚠️ grey area |
+| `--tts xtts` (XTTS-v2 weights are CPML) | ❌ non-commercial only |
 
 ## Credits
 
-- [OpenAI Whisper](https://github.com/openai/whisper) - Speech recognition
-- [Edge-TTS](https://github.com/rany2/edge-tts) - Microsoft TTS
-- [Piper](https://github.com/rhasspy/piper) - Offline neural TTS
-- [Coqui TTS](https://github.com/coqui-ai/TTS) - XTTS voice cloning
+- [OpenAI Whisper](https://github.com/openai/whisper) — speech recognition (MIT)
+- [Edge-TTS](https://github.com/rany2/edge-tts) — Microsoft TTS (LGPL-3.0, unofficial endpoint)
+- [Piper](https://github.com/rhasspy/piper) — offline neural TTS (MIT)
+- [coqui-tts](https://github.com/idiap/coqui-ai-TTS) — maintained fork of Coqui TTS, used for XTTS voice cloning
 
 ## Contributing
 
-Issues and pull requests welcome!
+Issues and pull requests welcome! Run the test suite with `pytest` before opening a PR.
