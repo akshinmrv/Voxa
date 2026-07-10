@@ -354,7 +354,7 @@ def test_duration_to_max_chars():
 
 def test_openai_batch_returns_input_when_no_client(monkeypatch):
     monkeypatch.setattr(voxa, "get_openai_client", lambda api_key=None: None)
-    out = voxa.translate_openai_batch(["a", "b", "c"], "ru", "gpt-5")
+    out = voxa.translate_llm_batch(["a", "b", "c"], "ru", "openai", "gpt-5")
     assert out == ["a", "b", "c"]
 
 

@@ -1107,7 +1107,12 @@ def _openai_chat(client, messages, model: str, want_json: bool = False,
                     time.sleep(wait)
                     backoff = min(backoff * 2, 60)
                     continue
-                break   # non-transient or parameter error → move to next param combo
+                break   # non-transient: decide below whether degrading can help
+        # Only a rejected *parameter* is worth retrying with a reduced request. An auth
+        # failure or an unknown model fails identically for every combination, so stop
+        # rather than burn three more calls proving it.
+        if not _is_param_error(last_err):
+            break
     raise last_err if last_err else RuntimeError("OpenAI request failed")
 
 
@@ -1187,12 +1192,6 @@ def _llm_translate_single(text: str, target_lang: str, model: str, chat_fn,
         return text
     result = _clean_line(result)
     return result if result else text
-
-
-def translate_openai(text: str, target_lang: str, model: str,
-                     api_key: Optional[str] = None) -> str:
-    """Backward-compatible single-line OpenAI translation (delegates to the registry)."""
-    return _llm_translate_single(text, target_lang, model, _openai_chat_text, api_key)
 
 
 # ─────────────────────────────────────────────
@@ -1339,13 +1338,6 @@ def translate_llm_batch(texts: List[str], target_lang: str, provider: str,
                                 p["chat"], api_key, batch_size, max_chars)
 
 
-def translate_openai_batch(texts: List[str], target_lang: str, model: str,
-                           api_key: Optional[str] = None,
-                           batch_size: int = DEFAULT_LLM_BATCH_SIZE) -> List[str]:
-    """Backward-compatible OpenAI batch translation (delegates to the registry)."""
-    return translate_llm_batch(texts, target_lang, "openai", model, api_key, batch_size)
-
-
 def merge_segments_into_sentences(segments: List[Dict], max_duration: float = 10.0) -> List[Dict]:
     sentence_endings = re.compile(r'[.!?;:]\s*$')
     merged = []
@@ -1375,19 +1367,6 @@ def merge_segments_into_sentences(segments: List[Dict], max_duration: float = 10
     if current_group['text']:
         merged.append(current_group)
     return merged
-
-
-def get_audio_duration(audio_file: str) -> Optional[float]:
-    try:
-        result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", audio_file],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
-        )
-        return float(result.stdout.strip())
-    except Exception as e:
-        logging.debug(f"ffprobe duration failed for {audio_file}: {e}")
-        return None
 
 
 def _plan_block(actual_ms: float, start_ms: float, end_ms: float) -> Tuple[float, float]:
