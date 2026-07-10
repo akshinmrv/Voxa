@@ -32,7 +32,6 @@ classifiers = [
 dependencies = [
     "openai-whisper",
     "edge-tts>=7.0",
-    "pysrt",
     "deep-translator",
     "openai",
     "anthropic",

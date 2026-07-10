@@ -4,13 +4,14 @@ Voxa v1.0 — Professional Video Translation and Dubbing
 
 Pipeline: extract audio -> Whisper transcription -> translate -> TTS -> mux.
 Translation: Google, Ollama, or an LLM provider (OpenAI / Anthropic) with
-context-aware batch translation. TTS: Edge (online), Piper (offline), or XTTS
-(voice cloning). Transcription backends: openai-whisper or faster-whisper.
+context-aware batch translation. TTS: Edge (online), OpenAI (instructable),
+Piper (offline), or XTTS (voice cloning). Transcription backends: openai-whisper
+or faster-whisper.
 """
 import sys, os, asyncio, subprocess, argparse, json, re, time, logging, shutil, functools, random, contextlib
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, NamedTuple, Optional, Tuple
 from datetime import timedelta, datetime
 
 # Heavy / third-party dependencies are guarded so the module can still be imported
@@ -32,7 +33,6 @@ def _try_import(name, attr=None):
 np = _try_import("numpy")
 requests = _try_import("requests")
 whisper = _try_import("whisper")
-pysrt = _try_import("pysrt")
 edge_tts = _try_import("edge_tts")
 torch = _try_import("torch")
 torchaudio = _try_import("torchaudio")
@@ -921,6 +921,64 @@ def format_timestamp(seconds: float) -> str:
     secs = td.seconds % 60
     millis = td.microseconds // 1000
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+
+# ── SRT reading ─────────────────────────────────────────────────────────────
+# Voxa writes its own SRT (see format_timestamp above) and reads it back before
+# synthesis. That round-trip used to pull in `pysrt`, whose GPL-3.0 license is
+# incompatible with shipping this MIT project as a bundled artifact. The parser
+# below covers the SubRip subset Voxa produces, plus the common variations found
+# in externally supplied files (BOM, CRLF, missing index line, multi-line text).
+
+class SubTime(NamedTuple):
+    """SubRip timestamp, exposing the same fields the TTS engines already read."""
+    hours: int
+    minutes: int
+    seconds: int
+    milliseconds: int
+
+
+class Subtitle(NamedTuple):
+    index: int
+    start: SubTime
+    end: SubTime
+    text: str
+
+
+_SRT_TIME_RE = re.compile(r"(\d+):(\d{2}):(\d{2})[,.](\d{1,3})")
+
+
+def _parse_srt_time(value: str) -> Optional[SubTime]:
+    m = _SRT_TIME_RE.search(value)
+    if not m:
+        return None
+    h, mnt, sec, frac = m.groups()
+    return SubTime(int(h), int(mnt), int(sec), int(frac.ljust(3, "0")))
+
+
+def read_srt(path) -> List[Subtitle]:
+    """Parse an SRT file into Subtitle records. Blocks that carry no usable timestamp
+    are skipped rather than raising, so one malformed cue cannot abort a whole dub."""
+    raw = Path(path).read_text(encoding="utf-8-sig")
+    subs: List[Subtitle] = []
+    for block in re.split(r"\r?\n[ \t]*\r?\n", raw.strip()):
+        lines = [ln.rstrip("\r") for ln in block.split("\n") if ln.strip()]
+        if not lines:
+            continue
+        cursor = 0
+        index = len(subs) + 1
+        if lines[0].strip().isdigit() and len(lines) > 1 and "-->" in lines[1]:
+            index = int(lines[0].strip())
+            cursor = 1
+        if cursor >= len(lines) or "-->" not in lines[cursor]:
+            continue
+        left, _, right = lines[cursor].partition("-->")
+        start, end = _parse_srt_time(left), _parse_srt_time(right)
+        if start is None or end is None:
+            continue
+        text = "\n".join(lines[cursor + 1:]).strip()
+        subs.append(Subtitle(index, start, end, text))
+    return subs
 
 
 def detect_emotion(text: str) -> Optional[str]:
@@ -2273,7 +2331,7 @@ async def process_video(video_path: str, args, logger: Logger):
         logger.info("[6/7] ✓ Speech synthesis already completed")
     else:
         logger.info("[6/7] Synthesizing speech...")
-        subs = pysrt.open(str(srt_file))
+        subs = read_srt(srt_file)
         gate_asr = _get_gate_asr(args.gate_model) if args.quality_gate else None
 
         spec = TTS_PROVIDERS.get(args.tts)

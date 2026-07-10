@@ -752,3 +752,60 @@ def test_a3_regen_keeps_best_take(tmp_path, monkeypatch):
 
     assert calls["fit"] == 2                       # re-rolled until it passed (2 attempts)
     assert placed["bytes"].startswith(b"CAND2")    # the passing take was promoted + placed
+
+
+# ── SRT reading (replaces the GPL-3.0 pysrt dependency) ──
+def _write(tmp_path, name, content):
+    p = tmp_path / name
+    p.write_text(content, encoding="utf-8")
+    return p
+
+
+def test_read_srt_roundtrips_what_voxa_writes(tmp_path):
+    # Build the file exactly the way process_video does.
+    segs = [{"start": 17.02, "end": 19.62, "text": "Salam dostlar."},
+            {"start": 24.1, "end": 27.42, "text": "Necəsən?"}]
+    body = "".join(
+        f"{i + 1}\n{voxa.format_timestamp(s['start'])} --> {voxa.format_timestamp(s['end'])}\n"
+        f"{s['text']}\n\n"
+        for i, s in enumerate(segs))
+    subs = voxa.read_srt(_write(tmp_path, "a.srt", body))
+
+    assert [s.text for s in subs] == ["Salam dostlar.", "Necəsən?"]
+    assert [s.index for s in subs] == [1, 2]
+    assert (subs[0].start.hours, subs[0].start.minutes,
+            subs[0].start.seconds, subs[0].start.milliseconds) == (0, 0, 17, 20)
+    assert subs[0].end.milliseconds == 620
+    # the engines derive their timeline from this helper — it must accept our records
+    assert voxa._sub_start_ms(subs[1]) == 24100
+
+
+def test_read_srt_tolerates_bom_crlf_and_missing_index(tmp_path):
+    # Written as bytes so the CRLF line endings and the BOM reach the parser verbatim
+    # (write_text would re-translate newlines on Windows).
+    body = ("﻿00:00:01,000 --> 00:00:02,500\r\n"
+            "First line\r\n"
+            "\r\n"
+            "2\r\n"
+            "00:00:03,000 --> 00:00:04,000\r\n"
+            "Second\r\n")
+    path = tmp_path / "b.srt"
+    path.write_bytes(body.encode("utf-8"))
+    subs = voxa.read_srt(path)
+    assert [s.text for s in subs] == ["First line", "Second"]
+    assert subs[0].index == 1          # synthesized when the index line is absent
+    assert subs[1].index == 2
+
+
+def test_read_srt_keeps_multiline_text_and_skips_malformed(tmp_path):
+    body = ("1\n00:00:01,000 --> 00:00:02,000\nline one\nline two\n\n"
+            "2\nthis block has no timestamp\n\n"
+            "3\n00:00:05,000 --> 00:00:06,000\nlast\n")
+    subs = voxa.read_srt(_write(tmp_path, "c.srt", body))
+    assert len(subs) == 2                      # the malformed cue is skipped, not fatal
+    assert subs[0].text == "line one\nline two"
+    assert subs[1].text == "last"
+
+
+def test_read_srt_empty_file(tmp_path):
+    assert voxa.read_srt(_write(tmp_path, "d.srt", "")) == []

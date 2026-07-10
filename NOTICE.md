@@ -36,7 +36,6 @@ Licenses below were read from the installed package metadata.
 |---|---|---|
 | [openai-whisper](https://github.com/openai/whisper) | Speech recognition | MIT |
 | [edge-tts](https://github.com/rany2/edge-tts) | Default TTS engine | **LGPL-3.0** |
-| [pysrt](https://github.com/byroot/pysrt) | Subtitle parsing | **GPL-3.0** |
 | [deep-translator](https://github.com/nidhaloff/deep-translator) | Google translation backend | MIT |
 | [openai](https://github.com/openai/openai-python) | OpenAI API client | Apache-2.0 |
 | [anthropic](https://github.com/anthropics/anthropic-sdk-python) | Anthropic API client | MIT |
@@ -57,14 +56,14 @@ Licenses below were read from the installed package metadata.
 
 ### ⚠️ Copyleft dependencies you should know about
 
-- **`pysrt` is GPL-3.0** and is currently a required dependency. Voxa's own source is MIT and
-  does not include any pysrt code, but if you redistribute a bundled artifact (for example a
-  frozen binary or a container image that vendors pysrt), the combined work may fall under the
-  GPL. *Voxa uses pysrt for exactly one call — reading back a subtitle file Voxa itself wrote —
-  and replacing it with a permissive implementation is tracked as a planned change.*
 - **`edge-tts` is LGPL-3.0.** Importing it without modification is generally compatible with an
   MIT application, provided users remain able to replace the library. Do not vendor a modified
-  copy without complying with the LGPL.
+  copy without complying with the LGPL. To ship a fully permissive bundle, use `--tts openai`
+  or `--tts piper` and do not install `edge-tts`.
+
+> **Removed:** Voxa used to require `pysrt` (GPL-3.0) for a single call — reading back the
+> subtitle file it had just written itself. That call was replaced with a small built-in SubRip
+> parser, so **no GPL-licensed package is required to run Voxa.**
 
 ---
 
