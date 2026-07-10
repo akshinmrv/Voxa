@@ -2113,10 +2113,14 @@ async def _tts_xtts(subs, args, work_dir, video_path, gate_asr, logger):
 
 
 async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
-    client = get_openai_client(args.openai_api_key)
+    base_url = getattr(args, "openai_tts_base_url", None)
+    client = get_openai_client(args.openai_api_key, base_url)
     if client is None:
-        raise TTSError("OpenAI TTS requires an API key (OPENAI_API_KEY or --openai_api_key)")
-    logger.info(f"🎙️  OpenAI TTS: {args.openai_tts_model} / voice '{args.openai_voice}'")
+        raise TTSError("OpenAI TTS requires an API key (OPENAI_API_KEY or --openai_api_key), "
+                       "or an --openai-tts-base-url pointing at a compatible server")
+    where = base_url or "api.openai.com"
+    logger.info(f"🎙️  OpenAI TTS: {args.openai_tts_model} / voice '{args.openai_voice}' "
+                f"@ {where}")
     concat_list, temp_files = [], []
     await generate_openai_tts(
         subs, client, args.openai_voice, args.openai_tts_model,
@@ -2476,6 +2480,11 @@ Examples:
                              "ash, ballad, coral, sage, verse)")
     parser.add_argument("--openai-tts-model", default="gpt-4o-mini-tts",
                         help="OpenAI TTS model (default: gpt-4o-mini-tts)")
+    parser.add_argument("--openai-tts-base-url", default=os.environ.get("OPENAI_TTS_BASE_URL"),
+                        help="Send speech requests to an OpenAI-compatible server instead of "
+                             "OpenAI (e.g. http://localhost:8004/v1 for Chatterbox-TTS-Server "
+                             "or LocalAI). No API key is required. Translation still uses "
+                             "OpenAI unless you change --translator")
     parser.add_argument("--openai-tts-instructions",
                         default="Speak naturally and clearly at a steady, even pace that "
                                 "matches the natural rhythm of speech. Do not slow down or "
@@ -2550,10 +2559,13 @@ Examples:
         print(f"ℹ️  --parallel is ignored with the {args.translator} translator: "
               f"lines are already translated in context-aware batches.")
 
-    # Fail fast if OpenAI TTS is selected but no OpenAI key is available.
-    if args.tts == "openai" and not (args.openai_api_key or os.environ.get("OPENAI_API_KEY")):
+    # Fail fast if OpenAI TTS is selected with neither a key nor a self-hosted endpoint.
+    if (args.tts == "openai"
+            and not (args.openai_api_key or os.environ.get("OPENAI_API_KEY"))
+            and not args.openai_tts_base_url):
         print("❌ OpenAI TTS selected but no API key found.\n"
-              "   Set OPENAI_API_KEY or pass --openai_api_key.")
+              "   Set OPENAI_API_KEY or pass --openai_api_key,\n"
+              "   or point --openai-tts-base-url at a compatible server (no key needed).")
         return 1
 
     # Preflight: fail before creating a workspace or loading a model, so a typo in a

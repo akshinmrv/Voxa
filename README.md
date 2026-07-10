@@ -126,9 +126,45 @@ python voxa.py video.mp4 --tts openai --openai-tts-instructions "Warm, upbeat na
 ```
 
 Voices: alloy, echo, fable, onyx, nova, shimmer, ash, ballad, coral, sage, verse.
-Note: OpenAI voices are strongest for major languages; for languages with a dedicated
-Microsoft neural voice (e.g. `az-AZ`), Edge/Azure often sounds more native — compare with
-`--quality-gate --gate-model base`.
+
+### Which engine for which language?
+
+Measured with `--quality-gate --gate-model base` (ASR round-trip word error rate — lower is
+better). Don't assume the cloud engine wins:
+
+| Language | Engine | WER | Verdict |
+|----------|--------|-----|---------|
+| English | OpenAI TTS | 0.02 | ✅ excellent |
+| Azerbaijani (`az`) | Edge (`az-AZ` native voice) | **0.41** | ✅ use this |
+| Azerbaijani (`az`) | OpenAI TTS | 0.81 | ❌ foreign accent |
+
+**Rule of thumb:** if a language has a dedicated native neural voice in Edge/Azure, prefer it.
+OpenAI TTS is strongest for major languages and for anything XTTS cannot clone.
+
+> Score your own combination before deciding — and for a low-resource language use
+> `--gate-model base`, because the `tiny` gate model false-positives (it scored the same
+> Azerbaijani audio 0.74 instead of 0.41).
+
+### Self-hosted / OpenAI-compatible endpoints
+
+`--openai-tts-base-url` points the speech requests at any server that speaks OpenAI's
+`/v1/audio/speech` API — **no API key needed, no extra Python dependency**. This is the
+recommended way to get **license-clean voice cloning**, since XTTS's weights are
+non-commercial (see [NOTICE.md](NOTICE.md)) while
+[Chatterbox](https://github.com/resemble-ai/chatterbox) is MIT.
+
+```bash
+# 1. Run an OpenAI-compatible TTS server, e.g. Chatterbox-TTS-Server (MIT, CPU or GPU):
+#    https://github.com/devnen/Chatterbox-TTS-Server
+
+# 2. Point Voxa at it — translation still goes wherever --translator says
+voxa video.mp4 --target_lang tr \
+     --tts openai --openai-tts-base-url http://localhost:8004/v1
+```
+
+Also works with LocalAI, Kokoro-FastAPI, or anything else exposing that route. Set
+`OPENAI_TTS_BASE_URL` instead of passing the flag every time. Note that Chatterbox embeds
+an inaudible watermark in its output and does not support Azerbaijani.
 
 Add `--detect-emotion` to have an LLM tag each line with a short delivery direction
 (emotion / energy / pace) that is passed to OpenAI TTS as a per-line instruction, for more

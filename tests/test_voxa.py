@@ -522,15 +522,40 @@ def test_tts_xtts_rejects_unsupported_language():
 
 
 def test_tts_openai_requires_key(monkeypatch):
-    # No usable client -> adapter raises TTSError (dispatch turns this into exit 1).
+    # Neither a key nor a self-hosted endpoint -> TTSError (dispatch turns this into exit 1).
     import asyncio
     from types import SimpleNamespace
     monkeypatch.setattr(voxa, "get_openai_client", lambda *a, **k: None)
-    args = SimpleNamespace(openai_api_key=None, target_lang="en", no_stretch=True,
-                           quality_gate=False, openai_voice="nova",
+    args = SimpleNamespace(openai_api_key=None, openai_tts_base_url=None, target_lang="en",
+                           no_stretch=True, quality_gate=False, openai_voice="nova",
                            openai_tts_model="gpt-4o-mini-tts", openai_tts_instructions="")
+    with pytest.raises(voxa.TTSError) as e:
+        asyncio.run(voxa._tts_openai(None, args, None, None, None, _fake_logger()))
+    assert "base-url" in str(e.value)          # the self-hosted route is offered
+
+
+def test_tts_openai_passes_base_url_to_the_client(monkeypatch):
+    """--openai-tts-base-url must reach the client factory, so speech can target a
+    self-hosted OpenAI-compatible server (Chatterbox-TTS-Server, LocalAI, ...)."""
+    import asyncio
+    from types import SimpleNamespace
+    captured = {}
+
+    def _factory(api_key=None, base_url=None):
+        captured["api_key"] = api_key
+        captured["base_url"] = base_url
+        return None                            # short-circuit into TTSError
+
+    monkeypatch.setattr(voxa, "get_openai_client", _factory)
+    args = SimpleNamespace(openai_api_key=None,
+                           openai_tts_base_url="http://localhost:8004/v1",
+                           target_lang="en", no_stretch=True, quality_gate=False,
+                           openai_voice="nova", openai_tts_model="gpt-4o-mini-tts",
+                           openai_tts_instructions="")
     with pytest.raises(voxa.TTSError):
         asyncio.run(voxa._tts_openai(None, args, None, None, None, _fake_logger()))
+
+    assert captured == {"api_key": None, "base_url": "http://localhost:8004/v1"}
 
 
 # ── A2 T1: LLM-inferred per-line delivery ────────────────
