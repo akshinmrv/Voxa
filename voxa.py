@@ -8,11 +8,24 @@ context-aware batch translation. TTS: Edge (online), OpenAI (instructable),
 Piper (offline), or XTTS (voice cloning). Transcription backends: openai-whisper
 or faster-whisper.
 """
-import sys, os, asyncio, subprocess, argparse, json, re, time, logging, shutil, functools, random, contextlib, inspect
-from pathlib import Path
+import argparse
+import asyncio
+import contextlib
+import functools
+import inspect
+import json
+import logging
+import os
+import random
+import re
+import shutil
+import subprocess
+import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, NamedTuple, Optional, Tuple
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, List, NamedTuple, Optional, Tuple
 
 # Heavy / third-party dependencies are guarded so the module can still be imported
 # (e.g. for unit tests) when they are not installed. They are required to actually
@@ -43,8 +56,8 @@ edge_tts = _try_import("edge_tts")
 torch = _try_import("torch")                        # pulled in by openai-whisper
 torchaudio = _try_import("torchaudio", optional=True)   # only the XTTS path patches it
 try:
-    import soundfile as sf
     import noisereduce as nr
+    import soundfile as sf
 except ImportError:
     sf = nr = None
     _MISSING_DEPS.append("soundfile/noisereduce")
@@ -778,7 +791,7 @@ def download_piper_model(lang_code: str, models_dir: Path) -> Optional[Path]:
         return manual_path
     else:
         _LOG.error(f"❌ Model file missing: {manual_path}")
-        _LOG.error("👉 Please run the wget commands from the instructions to download the model manually!")
+        _LOG.error("👉 Download the model manually using the wget commands in the docs")
         return None
 
 
@@ -903,26 +916,51 @@ def read_srt(path) -> List[Subtitle]:
     return subs
 
 
+_EMOTION_WORDS = {
+    'angry': ['angry', 'hate', 'terrible', 'worst', 'stupid', 'damn', 'hell'],
+    'sad': ['sad', 'unfortunately', 'sorry', 'tragic', 'died', 'death', 'crying'],
+    'excited': ['wow', 'amazing', 'awesome', 'fantastic', 'incredible', 'wonderful'],
+    'cheerful': ['great', 'good', 'nice', 'happy', 'excellent'],
+    'terrified': ['scared', 'terrified', 'afraid', 'panic', 'scream'],
+    'whispering': ['whisper', 'quietly', 'secret', 'shh'],
+    'friendly': ['hello', 'hi', 'welcome', 'thanks', 'thank you', 'please'],
+    'hopeful': ['hope', 'maybe', 'perhaps', 'possibly', 'wish'],
+}
+
+# Matched on word boundaries. A plain substring test made "hello" angry (it contains
+# "hell"), "whatever" angry ("hate"), and "this" friendly ("hi").
+_EMOTION_PATTERNS = {
+    emotion: re.compile(r"\b(?:" + "|".join(re.escape(w) for w in words) + r")\b")
+    for emotion, words in _EMOTION_WORDS.items()
+}
+
+
 def detect_emotion(text: str) -> Optional[str]:
+    """Guess a delivery style from keywords. Used only by the edge engine's voice styles
+    (--detect-emotion); OpenAI TTS uses infer_delivery / infer_delivery_llm instead."""
     text_lower = text.lower()
-    if any(word in text_lower for word in ['angry', 'hate', 'terrible', 'worst', 'stupid', 'damn', 'hell']):
+
+    def has(emotion: str) -> bool:
+        return _EMOTION_PATTERNS[emotion].search(text_lower) is not None
+
+    if has('angry'):
         return 'angry'
-    if any(word in text_lower for word in ['sad', 'unfortunately', 'sorry', 'tragic', 'died', 'death', 'crying']):
+    if has('sad'):
         return 'sad'
     exclamation_count = text.count('!')
-    if exclamation_count >= 2 or any(word in text_lower for word in ['wow', 'amazing', 'awesome', 'fantastic', 'incredible', 'wonderful']):
+    if exclamation_count >= 2 or has('excited'):
         return 'excited'
-    elif exclamation_count == 1 or any(word in text_lower for word in ['great', 'good', 'nice', 'happy', 'excellent']):
+    elif exclamation_count == 1 or has('cheerful'):
         return 'cheerful'
-    if any(word in text_lower for word in ['scared', 'terrified', 'afraid', 'panic', 'scream']):
+    if has('terrified'):
         return 'terrified'
     if text.isupper() and len(text) > 10:
         return 'shouting'
-    if any(word in text_lower for word in ['whisper', 'quietly', 'secret', 'shh']):
+    if has('whispering'):
         return 'whispering'
-    if any(word in text_lower for word in ['hello', 'hi', 'welcome', 'thanks', 'thank you', 'please']):
+    if has('friendly'):
         return 'friendly'
-    if any(word in text_lower for word in ['hope', 'maybe', 'perhaps', 'possibly', 'wish']):
+    if has('hopeful'):
         return 'hopeful'
     return None
 
@@ -1148,8 +1186,9 @@ def _openai_chat(client, messages, model: str, want_json: bool = False,
                 last_err = e
                 if _is_transient_error(e) and attempt < max_backoff_retries - 1:
                     wait = backoff + random.uniform(0, 1)
-                    _LOG.warning(f"OpenAI transient error (try {attempt + 1}/{max_backoff_retries}): "
-                                    f"{e}; retrying in {wait:.1f}s")
+                    _LOG.warning(
+                        f"OpenAI transient error (try {attempt + 1}/{max_backoff_retries}): "
+                        f"{e}; retrying in {wait:.1f}s")
                     time.sleep(wait)
                     backoff = min(backoff * 2, 60)
                     continue
@@ -1318,7 +1357,8 @@ def _llm_translate_chunk(chunk: List[str], full_lang: str, target_lang: str, mod
     parsed = _parse_batch_translations(raw, len(chunk))
     if parsed is not None:
         return parsed
-    _LOG.warning("LLM batch: response count/parse mismatch — falling back to per-line for this chunk")
+    _LOG.warning("LLM batch: response count/parse mismatch — "
+                 "falling back to per-line for this chunk")
     return [_llm_translate_single(t, target_lang, model, chat_fn, api_key) for t in chunk]
 
 
@@ -1426,7 +1466,8 @@ def _plan_block(actual_ms: float, start_ms: float, end_ms: float) -> Tuple[float
     return 0.0, float(start_ms) + max(actual_ms, float(window_ms))
 
 
-def _plan_anchored_block(actual_ms: float, start_ms: float, next_start_ms: float) -> Tuple[float, float]:
+def _plan_anchored_block(actual_ms: float, start_ms: float,
+                         next_start_ms: float) -> Tuple[float, float]:
     """Pure math for the anchored slot [start_ms, next_start_ms] (Pillar 1). Returns
     (trim_ms, pad_ms): trim if the clip over-runs the slot, else pad the remainder."""
     room = float(next_start_ms) - float(start_ms)
@@ -1502,7 +1543,8 @@ async def synthesize_timeline(subs, *, engine: str, prefix: str, sample_rate: in
         sil_ms = start_ms - cursor_ms
         if sil_ms > 100:
             sil_file = work_dir / f"{prefix}_sil_{i}.wav"
-            if create_silence_wav(sil_ms / 1000.0, str(sil_file), sample_rate) and sil_file.exists():
+            made = create_silence_wav(sil_ms / 1000.0, str(sil_file), sample_rate)
+            if made and sil_file.exists():
                 concat_list.append(f"file '{sil_file}'")
                 temp_files.append(str(sil_file))
                 cursor_ms += sil_ms
@@ -1716,7 +1758,8 @@ def normalize_audio(input_file: str, output_file: str, target_level: float = -20
     second = base
     try:
         p1 = subprocess.run(
-            ["ffmpeg", "-y", "-i", input_file, "-af", base + ":print_format=json", "-f", "null", "-"],
+            ["ffmpeg", "-y", "-i", input_file, "-af", base + ":print_format=json",
+             "-f", "null", "-"],
             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         m = re.search(r"\{[\s\S]*\}", p1.stderr or "")
         if m:
@@ -1848,7 +1891,8 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
     if emotion_stats:
         _LOG.info(f"🎭 Emotion usage: {emotion_stats}")
     return concat_list, temp_files
-def transcribe_audio(audio_path: str, model_name: str, backend: str, device: str) -> Tuple[List[Dict], str]:
+def transcribe_audio(audio_path: str, model_name: str, backend: str,
+                     device: str) -> Tuple[List[Dict], str]:
     """Transcribe audio and return (segments, detected_language). `segments` is a list
     of dicts each having at least 'start', 'end', 'text' — normalized across backends.
     backend: 'openai' (openai-whisper, default) or 'faster' (faster-whisper)."""
@@ -2283,8 +2327,10 @@ async def process_video(video_path: str, args, logger: Logger):
                 text = seg['text'].strip()
                 if not text:
                     continue
-                translated = translate_with_retry(text, args.target_lang, args.translator, args.ollama_model)
-                translated_segments.append({'text': translated, 'start': seg['start'], 'end': seg['end']})
+                translated = translate_with_retry(text, args.target_lang,
+                                                  args.translator, args.ollama_model)
+                translated_segments.append({'text': translated, 'start': seg['start'],
+                                            'end': seg['end']})
         with open(translated_json, 'w', encoding='utf-8') as f:
             json.dump(translated_segments, f, ensure_ascii=False, indent=2)
         state.mark_completed('translation')
@@ -2462,9 +2508,10 @@ Examples:
                         help=f"Subtitle lines translated together per LLM call for context "
                              f"(default: {DEFAULT_LLM_BATCH_SIZE})")
     parser.add_argument("--speech-rate", type=float, default=DEFAULT_SPEECH_RATE_CPS,
-                        help=f"Assumed speaking rate in characters/second used to length-budget "
-                             f"LLM translations for dub timing (default: {DEFAULT_SPEECH_RATE_CPS}). "
-                             f"Higher = allow longer translations (faster delivery).")
+                        help=f"Assumed speaking rate (chars/second) used to length-budget "
+                             f"LLM translations for dub timing "
+                             f"(default: {DEFAULT_SPEECH_RATE_CPS}). "
+                             f"Higher = longer translations (faster delivery).")
     parser.add_argument("--parallel", action="store_true",
                         help="Translate segments in parallel threads (google/ollama only — "
                              "LLM translators already batch whole blocks in one call)")

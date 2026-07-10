@@ -74,3 +74,7 @@ addopts = "-q"
 [tool.ruff]
 line-length = 100
 target-version = "py39"
+
+[tool.ruff.lint]
+# pycodestyle errors/warnings, pyflakes, and import sorting. Enforced in CI.
+select = ["E", "F", "W", "I"]

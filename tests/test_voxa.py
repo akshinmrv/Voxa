@@ -102,6 +102,20 @@ def test_normalize_tts_text_folds_typography():
     assert voxa.normalize_tts_text("“hi” — there…") == '"hi" , there.'
 
 
+def test_detect_emotion_matches_whole_words_only():
+    # Real matches still work, including a multi-word keyword.
+    assert voxa.detect_emotion("I hate this") == "angry"
+    assert voxa.detect_emotion("Hello and welcome") == "friendly"
+    assert voxa.detect_emotion("Wow, amazing!! Incredible!") == "excited"
+    assert voxa.detect_emotion("Thank you") == "friendly"
+    # Substring matching used to fire on all of these: "hell" inside hello, "hate" inside
+    # whatever, "hi" inside this/ship, "sad" inside unsaddle.
+    assert voxa.detect_emotion("whatever") is None
+    assert voxa.detect_emotion("this is a ship") is None
+    assert voxa.detect_emotion("unsaddle the horse") is None
+    assert voxa.detect_emotion("The meeting is at three") is None
+
+
 def test_infer_delivery():
     assert "question" in voxa.infer_delivery("Necəsən?")
     assert "energetic" in voxa.infer_delivery("Bu mükəmməldir!")
@@ -132,6 +146,7 @@ def test_split_for_tts_hard_wraps_unpunctuated():
 # ── S2: OpenAI TTS engine (fake client, no network) ──────
 def test_generate_openai_tts_places_segments(tmp_path):
     import io
+
     import numpy as np
     import soundfile as sf
 
@@ -193,8 +208,10 @@ def test_word_error_rate():
 
 def test_artifact_ratios():
     import numpy as np
-    assert voxa._clipping_ratio(np.array([1.0, 0.0, -1.0, 0.5], dtype="float32")) == pytest.approx(0.5)
-    assert voxa._silence_ratio(np.array([0.0, 0.0, 0.5, 0.5], dtype="float32")) == pytest.approx(0.5)
+    clip = voxa._clipping_ratio(np.array([1.0, 0.0, -1.0, 0.5], dtype="float32"))
+    silence = voxa._silence_ratio(np.array([0.0, 0.0, 0.5, 0.5], dtype="float32"))
+    assert clip == pytest.approx(0.5)
+    assert silence == pytest.approx(0.5)
 
 
 def test_score_speech_flags_silence_passes_clean(tmp_path):
@@ -247,7 +264,7 @@ def test_plan_block_pads_short_clip_to_window():
 def test_plan_block_overrun_pushes_cursor():
     pad, cursor = voxa._plan_block(actual_ms=2500, start_ms=1000, end_ms=3000)  # window 2000
     assert pad == 0.0
-    assert cursor == 3500                                                          # next gap shrinks
+    assert cursor == 3500        # next gap shrinks
 
 
 def test_plan_block_within_tolerance_no_pad():
@@ -747,9 +764,11 @@ def test_a3_regen_keeps_best_take(tmp_path, monkeypatch):
     # First-attempt synth + fit -> writes raw then final (>=1000 bytes each).
     monkeypatch.setattr(voxa, "_xtts_synthesize_segment",
                         lambda *a, **k: (a[4].write_bytes(b"FIRST".ljust(1500, b"0")) or True))
-    monkeypatch.setattr(voxa, "stretch_audio_smart",
-                        lambda src, dst, *a, **k: (__import__("pathlib").Path(dst)
-                                                   .write_bytes(b"FIRST".ljust(1500, b"0")) or True))
+    def _first_take(src, dst, *a, **k):
+        __import__("pathlib").Path(dst).write_bytes(b"FIRST".ljust(1500, b"0"))
+        return True
+
+    monkeypatch.setattr(voxa, "stretch_audio_smart", _first_take)
 
     # Each regeneration writes distinctive content so we can see which one was promoted.
     calls = {"fit": 0}
