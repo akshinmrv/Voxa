@@ -147,6 +147,12 @@ def _allow_unsafe_torch_load():
         torch.load = original
 
 
+# Library-level logging goes to this named logger. Voxa never configures the root
+# logger, so importing it (or embedding it in another app) leaves that app's
+# logging configuration untouched.
+_LOG = logging.getLogger("voxa")
+
+
 def _check_runtime_deps() -> bool:
     """Return True if all runtime dependencies are importable, else print guidance."""
     if _MISSING_DEPS:
@@ -232,7 +238,7 @@ def load_dotenv(path: str = ".env") -> int:
                 os.environ[key] = val
                 loaded += 1
     except Exception as e:
-        logging.warning(f"Failed to read {path}: {e}")
+        _LOG.warning(f"Failed to read {path}: {e}")
     return loaded
 
 
@@ -241,13 +247,13 @@ def load_config_defaults(path: str) -> Dict:
     {"translator": "openai", "target_lang": "ru"}). Returns {} on missing/invalid."""
     p = Path(path)
     if not p.exists():
-        logging.warning(f"Config file not found: {path}")
+        _LOG.warning(f"Config file not found: {path}")
         return {}
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
     except Exception as e:
-        logging.warning(f"Failed to parse config {path}: {e}")
+        _LOG.warning(f"Failed to parse config {path}: {e}")
         return {}
 
 
@@ -325,19 +331,19 @@ def load_xtts_model():
     """Load XTTS v2 model (downloaded automatically on first run)"""
     try:
         from TTS.api import TTS
-        logging.info("🔄 Loading XTTS v2 model (first run may take a while)...")
+        _LOG.info("🔄 Loading XTTS v2 model (first run may take a while)...")
         device = "cuda" if torch.cuda.is_available() else "cpu"
         # XTTS checkpoints store config objects, so they need weights_only=False —
         # scoped to this trusted local load only (see _allow_unsafe_torch_load).
         with _allow_unsafe_torch_load():
             tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
-        logging.info(f"✓ XTTS v2 loaded on {device.upper()}")
+        _LOG.info(f"✓ XTTS v2 loaded on {device.upper()}")
         return tts
     except ImportError:
-        logging.error("❌ TTS package not found. Install with: pip install TTS")
+        _LOG.error("❌ TTS package not found. Install with: pip install TTS")
         return None
     except Exception as e:
-        logging.error(f"❌ Failed to load XTTS model: {e}")
+        _LOG.error(f"❌ Failed to load XTTS model: {e}")
         return None
 
 
@@ -370,15 +376,15 @@ def extract_voice_sample(video_path: str, output_wav: str,
         except Exception:
             cleaned_dur = None
         if cleaned_dur is not None and cleaned_dur < 3.0:
-            logging.warning("Cleaned reference < 3s; falling back to a plain 30s extraction")
+            _LOG.warning("Cleaned reference < 3s; falling back to a plain 30s extraction")
             subprocess.run([
                 "ffmpeg", "-y", "-i", video_path, "-vn", "-acodec", "pcm_s16le",
                 "-ar", "22050", "-ac", "1", "-t", "30", output_wav
             ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        logging.info(f"✓ Extracted cleaned voice sample: {output_wav}")
+        _LOG.info(f"✓ Extracted cleaned voice sample: {output_wav}")
         return True
     except Exception as e:
-        logging.error(f"❌ Failed to extract voice sample: {e}")
+        _LOG.error(f"❌ Failed to extract voice sample: {e}")
         return False
 
 
@@ -409,14 +415,14 @@ def _xtts_synthesize_segment(tts_model, text: str, speaker_wav: str, lang: str,
         try:
             _xtts_call(tts_model, chunk, speaker_wav, lang, str(cf))
         except Exception as e:
-            logging.error(f"XTTS chunk {tag}.{ci} error: {e}")
+            _LOG.error(f"XTTS chunk {tag}.{ci} error: {e}")
             continue
         if _has_content(cf, 1000):
             try:
                 data, _ = sf.read(str(cf), dtype="float32")
                 pieces.append(data)
             except Exception as e:
-                logging.warning(f"XTTS chunk {tag}.{ci} read failed: {e}")
+                _LOG.warning(f"XTTS chunk {tag}.{ci} read failed: {e}")
     if not pieces:
         return False
     joined = pieces[0] if len(pieces) == 1 else np.concatenate(pieces)
@@ -474,19 +480,19 @@ async def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
     sample_rate = 24000
     xtts_lang = lang_code[:2].lower()
     if xtts_lang not in XTTS_SUPPORTED_LANGS:
-        logging.warning(f"⚠️  XTTS may not support '{xtts_lang}', attempting anyway")
+        _LOG.warning(f"⚠️  XTTS may not support '{xtts_lang}', attempting anyway")
     if not Path(speaker_wav).exists():
-        logging.error(f"❌ Speaker WAV not found: {speaker_wav}")
+        _LOG.error(f"❌ Speaker WAV not found: {speaker_wav}")
         return
 
-    logging.info(f"🎙️  XTTS voice cloning from: {speaker_wav}")
-    logging.info(f"🌍 Target language: {xtts_lang}")
+    _LOG.info(f"🎙️  XTTS voice cloning from: {speaker_wav}")
+    _LOG.info(f"🌍 Target language: {xtts_lang}")
 
     def _render(i, text, final_file, target_duration):
         raw_file = work_dir / f"xtts_raw_{i}.wav"
         if not _xtts_synthesize_segment(tts_model, text, speaker_wav, xtts_lang,
                                         raw_file, work_dir, i, sample_rate):
-            logging.warning(f"XTTS produced empty output for segment {i}: {text[:40]}")
+            _LOG.warning(f"XTTS produced empty output for segment {i}: {text[:40]}")
             return False
         temp_files.append(str(raw_file))
         return _fit_to_window(raw_file, final_file, target_duration, work_dir,
@@ -515,7 +521,7 @@ async def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
                 best = cand
             _safe_unlink(cand_raw, cand_fin)
         if attempt:
-            logging.info(f"♻️  segment {i}: regenerated {attempt}x → "
+            _LOG.info(f"♻️  segment {i}: regenerated {attempt}x → "
                          f"{'ok' if best['ok'] else 'best-effort'} "
                          f"(wer {best.get('wer', 'n/a')})")
         return best
@@ -605,7 +611,7 @@ def infer_delivery_llm(texts: List[str], client, *,
         )
         raw = resp.choices[0].message.content
     except Exception as e:
-        logging.debug(f"delivery LLM failed ({e}); falling back to structural hints")
+        _LOG.debug(f"delivery LLM failed ({e}); falling back to structural hints")
         return [""] * n
     return _parse_delivery_json(raw, n)
 
@@ -630,7 +636,7 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
             except Exception:
                 deliveries = []
         if not isinstance(deliveries, list) or len(deliveries) != len(subs):
-            logging.info("🎭 Inferring per-line delivery directions (LLM)...")
+            _LOG.info("🎭 Inferring per-line delivery directions (LLM)...")
             deliveries = infer_delivery_llm([s.text for s in subs], client)
             try:
                 cache.write_text(json.dumps(deliveries, ensure_ascii=False), encoding="utf-8")
@@ -652,7 +658,7 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
             resp = client.audio.speech.create(**kwargs)
         Path(raw_file).write_bytes(resp.content)
         if not _has_content(raw_file, 1000):
-            logging.warning(f"OpenAI TTS returned empty audio for segment {i}: {text[:40]}")
+            _LOG.warning(f"OpenAI TTS returned empty audio for segment {i}: {text[:40]}")
             return False
         temp_files.append(str(raw_file))
         return _fit_to_window(raw_file, final_file, target_duration, work_dir,
@@ -679,7 +685,14 @@ class _JsonFormatter(logging.Formatter):
 
 
 class Logger:
-    """Enhanced logging with both file and console output."""
+    """Configure the "voxa" logger for one CLI run: a file in the workspace plus the console.
+
+    Only that named logger is touched. This used to call logging.basicConfig(force=True),
+    which silently replaced the root logger's handlers — acceptable in a script, hostile in
+    an importable module. With --verbose the same handlers are additionally attached to the
+    root logger so third-party libraries (httpx, openai) become visible; at normal levels
+    their chatter stays out of the way.
+    """
     def __init__(self, work_dir: Path, level: int = logging.INFO, json_format: bool = False):
         self.log_file = work_dir / "voxa.log"
         formatter = _JsonFormatter() if json_format else \
@@ -690,8 +703,20 @@ class Logger:
         ]
         for h in handlers:
             h.setFormatter(formatter)
-        logging.basicConfig(level=level, handlers=handlers, force=True)
-        self.logger = logging.getLogger(__name__)
+
+        self.logger = _LOG
+        self.logger.setLevel(level)
+        for h in list(self.logger.handlers):   # a batch run reconfigures within one process
+            self.logger.removeHandler(h)
+        for h in handlers:
+            self.logger.addHandler(h)
+        self.logger.propagate = False
+
+        if level <= logging.DEBUG:
+            root = logging.getLogger()
+            root.setLevel(level)
+            for h in handlers:
+                root.addHandler(h)
 
     def info(self, msg): self.logger.info(msg)
     def warning(self, msg): self.logger.warning(msg)
@@ -732,7 +757,7 @@ def create_silence_wav(duration_seconds: float, output_file: str, sample_rate: i
         sf.write(output_file, silence, sample_rate, subtype='PCM_16')
         return True
     except Exception as e:
-        logging.error(f"Failed to create silence: {e}")
+        _LOG.error(f"Failed to create silence: {e}")
         return False
 
 
@@ -743,11 +768,11 @@ def download_piper_model(lang_code: str, models_dir: Path) -> Optional[Path]:
         model_name = "en_US-lessac-medium.onnx"
     manual_path = Path.home() / ".piper_models" / model_name
     if manual_path.exists():
-        logging.info(f"✓ Found manual model: {manual_path}")
+        _LOG.info(f"✓ Found manual model: {manual_path}")
         return manual_path
     else:
-        logging.error(f"❌ Model file missing: {manual_path}")
-        logging.error("👉 Please run the wget commands from the instructions to download the model manually!")
+        _LOG.error(f"❌ Model file missing: {manual_path}")
+        _LOG.error("👉 Please run the wget commands from the instructions to download the model manually!")
         return None
 
 
@@ -762,11 +787,11 @@ async def generate_piper(subs, model_path: Path, concat_list: list, temp_files: 
         if possible_path.exists():
             piper_cmd = str(possible_path)
     if not piper_cmd:
-        logging.error("❌ Piper command not found!")
+        _LOG.error("❌ Piper command not found!")
         return
 
-    logging.info(f"🎙️ Using Piper binary: {piper_cmd}")
-    logging.info(f"📂 Model path: {model_path}")
+    _LOG.info(f"🎙️ Using Piper binary: {piper_cmd}")
+    _LOG.info(f"📂 Model path: {model_path}")
     sample_rate = 22050
 
     def _render(i, text, final_file, target_duration):
@@ -776,7 +801,7 @@ async def generate_piper(subs, model_path: Path, concat_list: list, temp_files: 
                                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         _, stderr = process.communicate(input=text.encode("utf-8"))
         if not _has_content(raw_file, 1000):
-            logging.warning(f"Piper produced no audio for segment {i}: {text[:40]} "
+            _LOG.warning(f"Piper produced no audio for segment {i}: {text[:40]} "
                             f"({stderr.decode(errors='replace')[:100]})")
             return False
         temp_files.append(str(raw_file))
@@ -919,16 +944,16 @@ def translate_with_retry(text: str, target_lang: str, translator_type: str,
                     return translated
         except Exception as e:
             if attempt == max_retries - 1:
-                logging.warning(f"Translation failed after {max_retries} attempts: {e}")
+                _LOG.warning(f"Translation failed after {max_retries} attempts: {e}")
     try:
         if translator_type == "google":
-            logging.info("Falling back to Ollama translator")
+            _LOG.info("Falling back to Ollama translator")
             return translate_ollama(text, target_lang, ollama_model)
         else:
-            logging.info("Falling back to Google translator")
+            _LOG.info("Falling back to Google translator")
             return GoogleTranslator(source='auto', target=target_lang).translate(text)
     except Exception as e:
-        logging.error(f"All translation methods failed for '{text[:50]}...': {e}")
+        _LOG.error(f"All translation methods failed for '{text[:50]}...': {e}")
         return text
 
 
@@ -954,7 +979,7 @@ def translate_ollama(text: str, target_lang: str, model_name: str) -> str:
             return res.strip('"').strip("'").strip()
         return text
     except Exception as e:
-        logging.warning(f"Ollama error: {e}")
+        _LOG.warning(f"Ollama error: {e}")
         return text
 
 
@@ -974,17 +999,17 @@ def get_openai_client(api_key: Optional[str] = None):
     try:
         from openai import OpenAI
     except ImportError:
-        logging.error("❌ 'openai' package not installed. Run: pip install openai")
+        _LOG.error("❌ 'openai' package not installed. Run: pip install openai")
         return None
     key = api_key or os.environ.get("OPENAI_API_KEY")
     if not key:
-        logging.error("❌ OpenAI API key not found. "
+        _LOG.error("❌ OpenAI API key not found. "
                       "Set the OPENAI_API_KEY environment variable or pass --openai_api_key")
         return None
     try:
         _openai_client = OpenAI(api_key=key)
     except Exception as e:
-        logging.error(f"❌ Failed to initialize OpenAI client: {e}")
+        _LOG.error(f"❌ Failed to initialize OpenAI client: {e}")
         return None
     return _openai_client
 
@@ -997,17 +1022,17 @@ def get_anthropic_client(api_key: Optional[str] = None):
     try:
         import anthropic
     except ImportError:
-        logging.error("❌ 'anthropic' package not installed. Run: pip install anthropic")
+        _LOG.error("❌ 'anthropic' package not installed. Run: pip install anthropic")
         return None
     key = api_key or os.environ.get("ANTHROPIC_API_KEY")
     if not key:
-        logging.error("❌ Anthropic API key not found. "
+        _LOG.error("❌ Anthropic API key not found. "
                       "Set the ANTHROPIC_API_KEY environment variable or pass --anthropic_api_key")
         return None
     try:
         _anthropic_client = anthropic.Anthropic(api_key=key, max_retries=5)
     except Exception as e:
-        logging.error(f"❌ Failed to initialize Anthropic client: {e}")
+        _LOG.error(f"❌ Failed to initialize Anthropic client: {e}")
         return None
     return _anthropic_client
 
@@ -1045,7 +1070,7 @@ def log_llm_usage_summary(provider: str, model: str):
     total = u["input_tokens"] + u["output_tokens"]
     cost = _estimate_llm_cost(model, u["input_tokens"], u["output_tokens"])
     cost_str = f", est. cost ${cost:.4f}" if cost is not None else " (set LLM_PRICING for cost)"
-    logging.info(f"💰 {provider} usage: {u['calls']} calls, {total} tokens "
+    _LOG.info(f"💰 {provider} usage: {u['calls']} calls, {total} tokens "
                  f"(input {u['input_tokens']}, output {u['output_tokens']}){cost_str}")
 
 
@@ -1102,7 +1127,7 @@ def _openai_chat(client, messages, model: str, want_json: bool = False,
                 last_err = e
                 if _is_transient_error(e) and attempt < max_backoff_retries - 1:
                     wait = backoff + random.uniform(0, 1)
-                    logging.warning(f"OpenAI transient error (try {attempt + 1}/{max_backoff_retries}): "
+                    _LOG.warning(f"OpenAI transient error (try {attempt + 1}/{max_backoff_retries}): "
                                     f"{e}; retrying in {wait:.1f}s")
                     time.sleep(wait)
                     backoff = min(backoff * 2, 60)
@@ -1188,7 +1213,7 @@ def _llm_translate_single(text: str, target_lang: str, model: str, chat_fn,
     try:
         result = chat_fn(system_prompt, text, model, False, api_key)
     except Exception as e:
-        logging.warning(f"LLM translate error: {e}")
+        _LOG.warning(f"LLM translate error: {e}")
         return text
     result = _clean_line(result)
     return result if result else text
@@ -1266,13 +1291,13 @@ def _llm_translate_chunk(chunk: List[str], full_lang: str, target_lang: str, mod
     try:
         raw = chat_fn(system_prompt, user, model, True, api_key)
     except Exception as e:
-        logging.warning(f"LLM batch error: {e} — falling back to per-line for this chunk")
+        _LOG.warning(f"LLM batch error: {e} — falling back to per-line for this chunk")
         return [_llm_translate_single(t, target_lang, model, chat_fn, api_key) for t in chunk]
 
     parsed = _parse_batch_translations(raw, len(chunk))
     if parsed is not None:
         return parsed
-    logging.warning("LLM batch: response count/parse mismatch — falling back to per-line for this chunk")
+    _LOG.warning("LLM batch: response count/parse mismatch — falling back to per-line for this chunk")
     return [_llm_translate_single(t, target_lang, model, chat_fn, api_key) for t in chunk]
 
 
@@ -1410,7 +1435,7 @@ def _fit_to_window(src: Path, dst: Path, target_duration: float, work_dir: Path,
     try:
         sf.write(str(dst), *sf.read(str(src)), subtype="PCM_16")
     except Exception as e:
-        logging.error(f"Could not write {dst.name}: {e}")
+        _LOG.error(f"Could not write {dst.name}: {e}")
         return False
     return True
 
@@ -1467,7 +1492,7 @@ async def synthesize_timeline(subs, *, engine: str, prefix: str, sample_rate: in
             try:
                 ok = await _maybe_await(render(i, text, final_file, target_duration))
             except Exception as e:
-                logging.error(f"{engine} segment {i} error: {e}")
+                _LOG.error(f"{engine} segment {i} error: {e}")
                 ok = False
             if not ok:
                 cursor_ms = end_ms
@@ -1487,7 +1512,7 @@ async def synthesize_timeline(subs, *, engine: str, prefix: str, sample_rate: in
         else:
             cursor_ms = end_ms
 
-    logging.info(f"✓ {engine} generated {generated}/{len(subs)} segments")
+    _LOG.info(f"✓ {engine} generated {generated}/{len(subs)} segments")
     _log_sync_drift(max_drift, engine)
     if quality_gate:
         log_quality_report(scores, engine)
@@ -1515,7 +1540,7 @@ def _apply_micro_fades(path: Path, fade_ms: float = 8.0):
         data, sr = sf.read(str(path), dtype="float32")
         sf.write(str(path), _fade_ends(data, sr, fade_ms), sr, subtype="PCM_16")
     except Exception as e:
-        logging.debug(f"micro-fade skipped for {path}: {e}")
+        _LOG.debug(f"micro-fade skipped for {path}: {e}")
 
 
 def _trim_wav(path: Path, max_ms: float):
@@ -1527,10 +1552,10 @@ def _trim_wav(path: Path, max_ms: float):
         cut = len(data) - max_samples
         if cut > 0 and max_samples > 0:
             sf.write(str(path), _fade_ends(data[:max_samples], csr), csr, subtype="PCM_16")
-            logging.info(f"✂️  trimmed {cut / csr * 1000:.0f}ms over-run to keep sync "
+            _LOG.info(f"✂️  trimmed {cut / csr * 1000:.0f}ms over-run to keep sync "
                          f"(translation longer than its window)")
     except Exception as e:
-        logging.debug(f"trim failed for {path}: {e}")
+        _LOG.debug(f"trim failed for {path}: {e}")
 
 
 def _place_speech_block(final_file: Path, start_ms: float, end_ms: float, next_start_ms,
@@ -1636,7 +1661,7 @@ def stretch_audio_smart(input_file: str, output_file: str, target_duration: floa
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         return True
     except Exception as e:
-        logging.warning(f"Audio stretching failed: {e}, using original")
+        _LOG.warning(f"Audio stretching failed: {e}, using original")
         try:
             subprocess.run([
                 "ffmpeg", "-y", "-i", input_file,
@@ -1644,7 +1669,7 @@ def stretch_audio_smart(input_file: str, output_file: str, target_duration: floa
             ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
             return True
         except Exception as e:
-            logging.warning(f"Audio stretch fallback failed: {e}")
+            _LOG.warning(f"Audio stretch fallback failed: {e}")
             return False
 
 
@@ -1655,7 +1680,7 @@ def reduce_noise(input_file: str, output_file: str) -> bool:
         sf.write(output_file, reduced_noise, rate, subtype='PCM_16')
         return True
     except Exception as e:
-        logging.warning(f"Noise reduction failed: {e}")
+        _LOG.warning(f"Noise reduction failed: {e}")
         try:
             sf.write(output_file, *sf.read(input_file))
         except Exception:
@@ -1679,7 +1704,7 @@ def normalize_audio(input_file: str, output_file: str, target_level: float = -20
                       f"measured_LRA={s['input_lra']}:measured_thresh={s['input_thresh']}:"
                       f"offset={s['target_offset']}:linear=true")
     except Exception as e:
-        logging.debug(f"loudnorm measure pass failed, using single-pass: {e}")
+        _LOG.debug(f"loudnorm measure pass failed, using single-pass: {e}")
     try:
         subprocess.run([
             "ffmpeg", "-y", "-i", input_file, "-af", second,
@@ -1687,7 +1712,7 @@ def normalize_audio(input_file: str, output_file: str, target_level: float = -20
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         return True
     except Exception as e:
-        logging.warning(f"Audio normalization failed: {e}")
+        _LOG.warning(f"Audio normalization failed: {e}")
         shutil.copy(input_file, output_file)
         return False
 
@@ -1704,9 +1729,9 @@ async def generate_tts_edge(text: str, voice: str, output_file: str,
         await communicate.save(output_file)
         if _has_content(Path(output_file)):
             return True
-        logging.warning("Edge TTS produced an empty file; retrying")
+        _LOG.warning("Edge TTS produced an empty file; retrying")
     except Exception as e:
-        logging.error(f"Edge TTS failed: {e}")
+        _LOG.error(f"Edge TTS failed: {e}")
     # Retry once without the emotion style (also covers the empty-output case).
     try:
         communicate = edge_tts.Communicate(text, voice, rate=rate)
@@ -1714,7 +1739,7 @@ async def generate_tts_edge(text: str, voice: str, output_file: str,
         if _has_content(Path(output_file)):
             return True
     except Exception as e:
-        logging.debug(f"Edge TTS retry failed: {e}")
+        _LOG.debug(f"Edge TTS retry failed: {e}")
     return False
 
 
@@ -1742,7 +1767,7 @@ def parallel_translate(segments: List[Dict], target_lang: str, translator_type: 
                 idx, translated_seg = future.result()
                 results[idx] = translated_seg
             except Exception as e:
-                logging.error(f"Translation failed: {e}")
+                _LOG.error(f"Translation failed: {e}")
     return [r for r in results if r is not None]
 
 
@@ -1800,7 +1825,7 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
         quality_gate=quality_gate, asr_model=asr_model, gate_lang=gate_lang)
 
     if emotion_stats:
-        logging.info(f"🎭 Emotion usage: {emotion_stats}")
+        _LOG.info(f"🎭 Emotion usage: {emotion_stats}")
     return concat_list, temp_files
 def transcribe_audio(audio_path: str, model_name: str, backend: str, device: str) -> Tuple[List[Dict], str]:
     """Transcribe audio and return (segments, detected_language). `segments` is a list
@@ -1856,7 +1881,7 @@ def filter_nonspeech_segments(segments: List[Dict], threshold: float = 0.6) -> L
     kept = [s for s in segments if s.get("no_speech_prob", 0.0) <= threshold]
     dropped = len(segments) - len(kept)
     if dropped:
-        logging.info(f"🔇 Dropped {dropped} non-speech segment(s) "
+        _LOG.info(f"🔇 Dropped {dropped} non-speech segment(s) "
                      f"(no_speech_prob > {threshold}) — likely music/intro phantom text")
     return kept
 
@@ -1916,7 +1941,7 @@ def _get_gate_asr(model_name: str = "tiny"):
     try:
         from faster_whisper import WhisperModel
     except ImportError:
-        logging.warning("Quality gate needs faster-whisper (pip install faster-whisper); "
+        _LOG.warning("Quality gate needs faster-whisper (pip install faster-whisper); "
                         "scoring without ASR round-trip")
         return None
     device = "cuda" if (torch is not None and torch.cuda.is_available()) else "cpu"
@@ -1958,7 +1983,7 @@ def score_speech(audio_path: str, expected_text: str, *, asr_model=None, lang=No
             if wer > wer_thresh:
                 result["reasons"].append("asr")
         except Exception as e:
-            logging.debug(f"gate ASR failed: {e}")
+            _LOG.debug(f"gate ASR failed: {e}")
     result["ok"] = not result["reasons"]
     return result
 
@@ -1967,7 +1992,7 @@ def _log_sync_drift(max_drift_ms: float, engine: str):
     """Pillar-0 diagnostic: report the worst point at which a segment was placed later
     than its source onset (accumulated timeline drift). > ~400ms is audibly out of sync."""
     if max_drift_ms > 1:
-        level = logging.warning if max_drift_ms > 400 else logging.info
+        level = _LOG.warning if max_drift_ms > 400 else _LOG.info
         level(f"⏱️  {engine}: max sync drift {max_drift_ms:.0f}ms")
 
 
@@ -1979,13 +2004,13 @@ def log_quality_report(scores: List[Dict], engine: str):
     flagged = [s for s in scores if not s["ok"]]
     wers = [s["wer"] for s in scores if "wer" in s]
     avg_wer = f", avg WER {sum(wers) / len(wers):.2f}" if wers else ""
-    logging.info(f"🔎 Quality report ({engine}): {n} segments, {len(flagged)} flagged{avg_wer}")
+    _LOG.info(f"🔎 Quality report ({engine}): {n} segments, {len(flagged)} flagged{avg_wer}")
     for idx, s in enumerate(scores):
         if not s["ok"]:
-            logging.info(f"   ⚠️  segment {idx}: {', '.join(s['reasons'])} "
+            _LOG.info(f"   ⚠️  segment {idx}: {', '.join(s['reasons'])} "
                          f"(dur {s.get('dur')}s, wer {s.get('wer', 'n/a')})")
     if n and len(flagged) / n > 0.10:
-        logging.warning(f"⚠️  {len(flagged)}/{n} segments flagged — check reference/voice/language")
+        _LOG.warning(f"⚠️  {len(flagged)}/{n} segments flagged — check reference/voice/language")
 
 
 # ── TTS provider registry ────────────────────────────────────────────────────

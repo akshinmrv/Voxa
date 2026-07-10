@@ -815,6 +815,30 @@ def test_read_srt_empty_file(tmp_path):
     assert voxa.read_srt(_write(tmp_path, "d.srt", "")) == []
 
 
+# ── Logging must stay inside the "voxa" logger ───────────
+def test_logger_configures_named_logger_not_root(tmp_path):
+    import logging as _logging
+    root = _logging.getLogger()
+    named = _logging.getLogger("voxa")
+    sentinel = _logging.NullHandler()
+    root.addHandler(sentinel)
+    root_before = list(root.handlers)
+    lg = None
+    try:
+        lg = voxa.Logger(tmp_path)                       # default level: INFO
+        assert list(root.handlers) == root_before        # a host's logging is left alone
+        assert named.handlers                            # ...but ours is configured
+        assert named.propagate is False                  # and doesn't leak into root
+        lg.info("hello")
+        assert (tmp_path / "voxa.log").exists()
+    finally:
+        for h in list(named.handlers):
+            named.removeHandler(h)
+            h.close()
+        named.propagate = True
+        root.removeHandler(sentinel)
+
+
 # ── Preflight validation and ffmpeg diagnostics ──────────
 def test_check_input_videos(tmp_path, capsys):
     good = tmp_path / "ok.mp4"
