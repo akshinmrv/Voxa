@@ -1009,3 +1009,87 @@ def test_place_speech_block_trims_to_the_planned_slot(tmp_path, monkeypatch):
 
     assert trimmed["ms"] == 2000.0
     assert cursor == 2000.0                 # cursor is anchored: no drift can accumulate
+
+
+# ── Checkpoint invalidation: the stale-work-directory fix ──
+def _run_args(**over):
+    from types import SimpleNamespace
+    base = dict(
+        whisper_model="turbo", whisper_backend="openai",
+        max_sentence_duration=10.0, no_speech_threshold=0.6,
+        target_lang="tr", translator="openai", openai_model="gpt-5",
+        anthropic_model="claude-opus-4-8", ollama_model="llama3",
+        speech_rate=15.0, llm_batch_size=25, parallel=False,
+        tts="edge", no_stretch=False, detect_emotion=False, auto_rate=False,
+        voice_sample=None, quality_gate=False, gate_model="tiny",
+        openai_voice="alloy", openai_tts_model="gpt-4o-mini-tts",
+        openai_tts_base_url=None, openai_tts_instructions="",
+        openai_api_key="sk-secret",   # must never affect a signature
+    )
+    base.update(over)
+    return SimpleNamespace(**base)
+
+
+def test_stage_signature_is_stable():
+    a = _run_args()
+    assert voxa.stage_signature("synthesis", a) == voxa.stage_signature("synthesis", _run_args())
+
+
+def test_target_lang_reuses_transcription_but_not_translation_or_speech():
+    tr = _run_args(target_lang="tr")
+    az = _run_args(target_lang="az")
+    # The expensive source stage is shared across languages...
+    for stage in ("transcription", "merge_sentences"):
+        assert voxa.stage_signature(stage, tr) == voxa.stage_signature(stage, az), stage
+    # ...but translation and speech must regenerate. This is the actual bug.
+    assert voxa.stage_signature("translation", tr) != voxa.stage_signature("translation", az)
+    assert voxa.stage_signature("synthesis", tr) != voxa.stage_signature("synthesis", az)
+
+
+def test_upstream_change_invalidates_downstream():
+    a = _run_args(whisper_model="turbo")
+    b = _run_args(whisper_model="base")
+    # A different Whisper model changes the transcript, so everything downstream is stale.
+    for stage in ("transcription", "merge_sentences", "translation", "synthesis"):
+        assert voxa.stage_signature(stage, a) != voxa.stage_signature(stage, b), stage
+
+
+def test_engine_change_invalidates_only_synthesis():
+    edge = _run_args(tts="edge")
+    xtts = _run_args(tts="xtts")
+    assert voxa.stage_signature("translation", edge) == voxa.stage_signature("translation", xtts)
+    assert voxa.stage_signature("synthesis", edge) != voxa.stage_signature("synthesis", xtts)
+
+
+def test_signature_never_depends_on_api_keys():
+    a = _run_args(openai_api_key="sk-one")
+    b = _run_args(openai_api_key="sk-two")
+    for stage in voxa._PIPELINE_STAGES:
+        assert voxa.stage_signature(stage, a) == voxa.stage_signature(stage, b), stage
+
+
+def test_state_manager_is_valid_requires_matching_signature(tmp_path):
+    sm = voxa.StateManager(tmp_path)
+    sm.mark_completed("translation", "sig-tr")
+    assert sm.is_valid("translation", "sig-tr") is True
+    assert sm.is_valid("translation", "sig-az") is False     # different params
+    assert sm.is_valid("synthesis", "sig-tr") is False        # never completed
+    # Reloading from disk preserves the signature.
+    assert voxa.StateManager(tmp_path).is_valid("translation", "sig-tr") is True
+
+
+def test_purge_synthesis_artifacts_keeps_source_and_translation(tmp_path):
+    keep = ["original_audio.wav", "audio_clean.wav", "transcript.json",
+            "merged_sentences.json", "translated.json", "subtitles_tr.srt",
+            "auto_voice_sample.wav", "state.json"]
+    drop = ["edge_fin_0.wav", "edge_sil_1.wav", "otts_raw_0.wav", "xtts_fincand_0_1.wav",
+            "piper_fin_2.wav", "fill_3.wav", "voiceover.wav",
+            "voiceover_normalized.wav", "deliveries.json", "concat_list.txt"]
+    for name in keep + drop:
+        (tmp_path / name).write_bytes(b"x")
+
+    removed = voxa._purge_synthesis_artifacts(tmp_path)
+
+    assert removed == len(drop)
+    assert all((tmp_path / n).exists() for n in keep)         # source/translation survive
+    assert not any((tmp_path / n).exists() for n in drop)     # synthesis cleared

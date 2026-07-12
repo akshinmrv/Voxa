@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import contextlib
 import functools
+import hashlib
 import inspect
 import json
 import logging
@@ -765,13 +766,108 @@ class StateManager:
         with open(self.state_file, 'w') as f:
             json.dump(self.state, f, indent=2)
 
-    def mark_completed(self, step: str):
+    def _signatures(self) -> Dict:
+        # setdefault so state files written before signatures existed still work.
+        return self.state.setdefault('signatures', {})
+
+    def mark_completed(self, step: str, signature: Optional[str] = None):
         if step not in self.state['steps_completed']:
             self.state['steps_completed'].append(step)
+        if signature is not None:
+            self._signatures()[step] = signature
         self.save_state()
+
+    def set_signature(self, step: str, signature: str):
+        """Record the parameters a step is being run with, before it completes, so an
+        interrupted run can tell a same-parameter resume from a changed-parameter rerun."""
+        self._signatures()[step] = signature
+        self.save_state()
+
+    def signature_of(self, step: str) -> Optional[str]:
+        return self.state.get('signatures', {}).get(step)
 
     def is_completed(self, step: str) -> bool:
         return step in self.state['steps_completed']
+
+    def is_valid(self, step: str, signature: str) -> bool:
+        """A step may be reused only if it completed AND with the same parameters. This is
+        what stops a Turkish dub's cached translation/speech from being served for an
+        Azerbaijani run in the same <video>_work directory."""
+        return self.is_completed(step) and self.signature_of(step) == signature
+
+
+# Checkpointed pipeline stages, in dependency order. A stage's signature is CUMULATIVE —
+# it hashes its own output-affecting parameters plus every upstream stage's — so changing
+# an early parameter (e.g. the Whisper model) invalidates that stage and everything after
+# it, not just the stage itself. This is what fixes the stale-work-directory bug: dubbing
+# the same video to a second language reuses transcription but regenerates translation and
+# speech, instead of silently returning the first language's audio.
+_PIPELINE_STAGES = ["extract_audio", "audio_enhancement", "transcription",
+                    "merge_sentences", "translation", "synthesis"]
+
+
+def _stage_own_params(stage: str, args) -> Dict:
+    """The output-affecting parameters for one stage. Never includes API keys (they must
+    not sit in state.json and must not invalidate a cache). extract_audio and
+    audio_enhancement depend only on the source video, which is already covered by the
+    input_sig check, so they contribute nothing here."""
+    if stage == "transcription":
+        return {"whisper_model": args.whisper_model,
+                "whisper_backend": args.whisper_backend}
+    if stage == "merge_sentences":
+        # The non-speech filter runs every load, but merged_sentences.json is cached, so a
+        # threshold change must invalidate the merge (and downstream), not the transcript.
+        return {"max_sentence_duration": args.max_sentence_duration,
+                "no_speech_threshold": args.no_speech_threshold}
+    if stage == "translation":
+        model = getattr(args, f"{args.translator}_model", None)   # None for google
+        return {"target_lang": args.target_lang, "translator": args.translator,
+                "model": model, "speech_rate": args.speech_rate,
+                "llm_batch_size": args.llm_batch_size, "parallel": args.parallel}
+    if stage == "synthesis":
+        return {"target_lang": args.target_lang, "tts": args.tts,
+                "no_stretch": args.no_stretch, "detect_emotion": args.detect_emotion,
+                "auto_rate": args.auto_rate, "voice_sample": args.voice_sample,
+                "quality_gate": args.quality_gate, "gate_model": args.gate_model,
+                "openai_voice": getattr(args, "openai_voice", None),
+                "openai_tts_model": getattr(args, "openai_tts_model", None),
+                "openai_tts_base_url": getattr(args, "openai_tts_base_url", None),
+                "openai_tts_instructions": getattr(args, "openai_tts_instructions", None)}
+    return {}
+
+
+def stage_signature(stage: str, args) -> str:
+    """Short cumulative hash of this stage's parameters and all upstream stages'."""
+    idx = _PIPELINE_STAGES.index(stage)
+    chain = {s: _stage_own_params(s, args) for s in _PIPELINE_STAGES[:idx + 1]}
+    blob = json.dumps(chain, sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
+# Files produced by the synthesis stage. When synthesis is rerun with changed parameters,
+# these are cleared first — otherwise synthesize_timeline's per-segment cache (keyed only
+# by engine prefix and index, not by language) would reuse the previous run's clips.
+_SYNTHESIS_ARTIFACT_GLOBS = ["edge_*", "otts_*", "xtts_*", "piper_*", "fill_*"]
+_SYNTHESIS_ARTIFACT_FILES = ["voiceover.wav", "voiceover_normalized.wav",
+                             "deliveries.json", "concat_list.txt"]
+
+
+def _purge_synthesis_artifacts(work_dir: Path) -> int:
+    """Delete stale synthesis outputs, leaving the reusable source and translation stages
+    (original_audio.wav, audio_clean.wav, transcript.json, merged_sentences.json,
+    translated.json, subtitles_*.srt, auto_voice_sample.wav) intact. Returns the count."""
+    removed = 0
+    for pattern in _SYNTHESIS_ARTIFACT_GLOBS:
+        for p in work_dir.glob(pattern):
+            if p.is_file():
+                _safe_unlink(p)
+                removed += 1
+    for name in _SYNTHESIS_ARTIFACT_FILES:
+        p = work_dir / name
+        if p.exists():
+            _safe_unlink(p)
+            removed += 1
+    return removed
 
 
 def create_silence_wav(duration_seconds: float, output_file: str, sample_rate: int = 22050):
@@ -2258,7 +2354,8 @@ async def process_video(video_path: str, args, logger: Logger):
 
     # Step 3: Transcription
     segments = []
-    if state.is_completed('transcription') and transcript_json.exists():
+    transcription_sig = stage_signature('transcription', args)
+    if state.is_valid('transcription', transcription_sig) and transcript_json.exists():
         logger.info("[3/7] ✓ Transcription already completed")
         with open(transcript_json, 'r', encoding='utf-8') as f:
             segments = json.load(f)
@@ -2273,7 +2370,7 @@ async def process_video(video_path: str, args, logger: Logger):
             logger.info(f"🌍 Detected language: {detected_lang}")
             with open(transcript_json, 'w', encoding='utf-8') as f:
                 json.dump(segments, f, ensure_ascii=False, indent=2)
-            state.mark_completed('transcription')
+            state.mark_completed('transcription', transcription_sig)
         except Exception as e:
             logger.error(f"Transcription failed: {e}")
             return 1
@@ -2284,7 +2381,8 @@ async def process_video(video_path: str, args, logger: Logger):
 
     # Step 4: Merge into sentences
     merged_segments = []
-    if state.is_completed('merge_sentences') and merged_json.exists():
+    merge_sig = stage_signature('merge_sentences', args)
+    if state.is_valid('merge_sentences', merge_sig) and merged_json.exists():
         logger.info("[4/7] ✓ Sentence merging already completed")
         with open(merged_json, 'r', encoding='utf-8') as f:
             merged_segments = json.load(f)
@@ -2294,11 +2392,12 @@ async def process_video(video_path: str, args, logger: Logger):
         logger.info(f"✨ Merged {len(segments)} segments → {len(merged_segments)} sentences")
         with open(merged_json, 'w', encoding='utf-8') as f:
             json.dump(merged_segments, f, ensure_ascii=False, indent=2)
-        state.mark_completed('merge_sentences')
+        state.mark_completed('merge_sentences', merge_sig)
 
     # Step 5: Translation
     translated_segments = []
-    if state.is_completed('translation') and translated_json.exists():
+    translation_sig = stage_signature('translation', args)
+    if state.is_valid('translation', translation_sig) and translated_json.exists():
         logger.info("[5/7] ✓ Translation already completed")
         with open(translated_json, 'r', encoding='utf-8') as f:
             translated_segments = json.load(f)
@@ -2342,7 +2441,7 @@ async def process_video(video_path: str, args, logger: Logger):
                                             'end': seg['end']})
         with open(translated_json, 'w', encoding='utf-8') as f:
             json.dump(translated_segments, f, ensure_ascii=False, indent=2)
-        state.mark_completed('translation')
+        state.mark_completed('translation', translation_sig)
 
     # Generate SRT
     with open(srt_file, 'w', encoding='utf-8') as f:
@@ -2362,9 +2461,20 @@ async def process_video(video_path: str, args, logger: Logger):
         return 0
 
     # Step 6: Speech synthesis
-    if state.is_completed('synthesis') and voiceover_norm.exists():
+    synthesis_sig = stage_signature('synthesis', args)
+    if state.is_valid('synthesis', synthesis_sig) and voiceover_norm.exists():
         logger.info("[6/7] ✓ Speech synthesis already completed")
     else:
+        # If the last synthesis ran with different parameters (a new language, a different
+        # engine, an old pre-signature checkpoint), its per-segment clips are stale and the
+        # engine loop would reuse them by filename. Clear them before regenerating. A
+        # same-parameter resume keeps its partial clips (the signatures match).
+        if state.signature_of('synthesis') != synthesis_sig:
+            cleared = _purge_synthesis_artifacts(work_dir)
+            if cleared:
+                logger.info(f"🧹 Run parameters changed — cleared {cleared} stale speech "
+                            f"file(s) before re-synthesizing")
+        state.set_signature('synthesis', synthesis_sig)
         logger.info("[6/7] Synthesizing speech...")
         subs = read_srt(srt_file)
         gate_asr = _get_gate_asr(args.gate_model) if args.quality_gate else None
@@ -2407,7 +2517,7 @@ async def process_video(video_path: str, args, logger: Logger):
 
         logger.info("📊 Normalizing audio levels...")
         normalize_audio(str(voiceover_wav), str(voiceover_norm), target_level=-16.0)
-        state.mark_completed('synthesis')
+        state.mark_completed('synthesis', synthesis_sig)
 
     # Step 7: Final video assembly
     logger.info("[7/7] Assembling final video...")
