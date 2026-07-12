@@ -193,6 +193,11 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install .
 ```
 
+> [!NOTE]
+> `pip install .` PATH'inize bir **`voxa`** komutu ekler — aşağıdaki tüm örnekler bunu
+> kullanır. Kurmak istemiyorsanız (ya da yalnızca `pip install -r requirements.txt`
+> yaptıysanız), betiği doğrudan çalıştırın: `python voxa.py …`. İkisi birbirinin yerine geçer.
+
 **3. İsteğe bağlı motorlar** — yalnızca kullandığınızı kurun.
 
 | Komut | Neyi etkinleştirir |

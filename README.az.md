@@ -194,6 +194,11 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install .
 ```
 
+> [!NOTE]
+> `pip install .` PATH-ə **`voxa`** əmrini əlavə edir — aşağıdakı bütün nümunələr onu
+> işlədir. Quraşdırmaq istəmirsinizsə (və ya yalnız `pip install -r requirements.txt`
+> etmisinizsə), skripti birbaşa işlədin: `python voxa.py …`. İkisi eyni işi görür.
+
 **3. Opsional mühərriklər** — yalnız istifadə etdiyinizi quraşdırın.
 
 | Əmr | Nəyi açır |

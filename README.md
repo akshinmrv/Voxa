@@ -203,6 +203,11 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install .
 ```
 
+> [!NOTE]
+> `pip install .` puts a **`voxa`** command on your PATH — that is what every example below
+> uses. If you'd rather not install it (or you only ran `pip install -r requirements.txt`),
+> run the script directly instead: `python voxa.py …`. The two are interchangeable.
+
 **3. Optional engines** — install only what you use.
 
 | Command | Enables |
