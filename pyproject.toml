@@ -52,6 +52,8 @@ xtts = ["coqui-tts", "torchaudio"]
 piper = ["piper-tts"]
 faster = ["faster-whisper"]
 anthropic = ["anthropic"]
+# `voxa serve` — the optional operator web server (see voxa_server.py).
+serve = ["fastapi", "uvicorn[standard]", "python-multipart"]
 dev = ["pytest", "ruff"]
 
 [project.urls]
@@ -64,7 +66,7 @@ Changelog = "https://github.com/akshinmrv/Voxa/blob/main/CHANGELOG.md"
 voxa = "voxa:cli"
 
 [tool.setuptools]
-py-modules = ["voxa"]
+py-modules = ["voxa", "voxa_server"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

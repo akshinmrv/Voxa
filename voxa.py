@@ -2794,6 +2794,16 @@ Examples:
 
 def cli():
     """Synchronous console-script entry point (see pyproject [project.scripts])."""
+    # `voxa serve` launches the optional operator web server (see voxa_server.py).
+    # It lives behind the [serve] extra so the default install stays lean.
+    if sys.argv[1:2] == ["serve"]:
+        try:
+            from voxa_server import run_from_cli
+        except ImportError:
+            print("❌ `voxa serve` needs extra dependencies.\n"
+                  "   Install them with:  pip install \"voxa[serve]\"")
+            sys.exit(1)
+        sys.exit(run_from_cli(sys.argv[2:]))
     sys.exit(asyncio.run(main()))
 
 

@@ -47,3 +47,10 @@ OPEN_SOURCE_AUDIT_AND_ROADMAP_AZ.md
 SAAS_MASTER_STRATEGY.md
 SPEECH_SYNC_STRATEGY.md
 NEXT_GENERATION_SPEECH_PIPELINE_STRATEGY.md
+
+# Installed agent skills (ui-ux-pro-max etc.) — local tooling, not project source
+.agents/
+skills-lock.json
+
+# `voxa serve` runtime workspace — uploads and per-job output, never committed.
+.voxa_serve/
