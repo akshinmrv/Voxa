@@ -1,0 +1,183 @@
+{
+  "Meta": {
+    "title": "Voxa — İstənilən videonu dublyaj et, sinxronu qoru",
+    "description": "Açıq mənbəli AI video dublyaj. Whisper transkripsiya, kontekst-məlumatlı LLM tərcümə, dörd TTS mühərriki və danışana kilidli yerləşdirmə. MIT lisenziyalı. Öz maşınınızda işləyir."
+  },
+  "Nav": {
+    "features": "İmkanlar",
+    "howItWorks": "Necə işləyir",
+    "models": "Modellər",
+    "install": "Quraşdırma",
+    "faq": "FAQ",
+    "github": "GitHub"
+  },
+  "Hero": {
+    "badge": "Açıq mənbə · MIT",
+    "title": "İstənilən videonu başqa dilə dublyaj et — və sinxronu qoru.",
+    "subtitle": "Whisper transkripsiya, kontekst-məlumatlı LLM tərcümə, dörd TTS mühərriki və danışana kilidli yerləşdirmə. MIT lisenziyalı. Öz maşınınızda işləyir.",
+    "ctaPrimary": "Başla",
+    "ctaSecondary": "GitHub-da bax",
+    "terminalLabel": "bash",
+    "command": "voxa talk.mp4 --target_lang ru"
+  },
+  "Why": {
+    "label": "Niyə Voxa",
+    "title": "Dublyaj heç vaxt danışandan geri qalmır.",
+    "body": "Sadə alətlər klipləri birləşdirir və sürüşür. Voxa hər klipi mənbə zaman oxuna bağlayır — dublyaj danışana kilidli qalır, artan gecikmə yoxdur, əl ilə yenidən sinxronlaşdırma yoxdur."
+  },
+  "Features": {
+    "label": "İmkanlar",
+    "title": "Pipeline üçün lazım olan hər şey",
+    "subtitle": "Tam dublyaj alət zənciri — transkripsiyadan son montaja qədər — bir əmrdə.",
+    "items": [
+      {
+        "icon": "target",
+        "title": "Kilidli yerləşdirmə",
+        "body": "Hər klip mənbə zaman oxuna sancılır. Sürüşmə sıfırda qalır."
+      },
+      {
+        "icon": "audio-lines",
+        "title": "Dörd TTS mühərriki",
+        "body": "Edge, OpenAI, Piper (offline) və XTTS səs klonlama."
+      },
+      {
+        "icon": "languages",
+        "title": "Kontekst-məlumatlı tərcümə",
+        "body": "Google, Ollama, OpenAI və ya Anthropic — tam cümlə konteksti ilə tərcümə."
+      },
+      {
+        "icon": "gauge",
+        "title": "Keyfiyyət qapısı",
+        "body": "Opsional WER ballama hədəfə çatmayan sətirləri yenidən sintez edir."
+      },
+      {
+        "icon": "server",
+        "title": "Self-host olunan",
+        "body": "İstənilən OpenAI-uyğun TTS endpoint-i --openai-tts-base-url ilə qoş."
+      },
+      {
+        "icon": "refresh-cw",
+        "title": "Davam etdirilə bilən",
+        "body": "Checkpoint-lər dayanıb dəqiq qaldığınız yerdən davam etməyə imkan verir."
+      }
+    ]
+  },
+  "HowItWorks": {
+    "label": "Necə işləyir",
+    "title": "Yeddi addım, bir əmr",
+    "subtitle": "Voxa xam audiodan sinxron dublyaja qədər deterministik pipeline işlədir.",
+    "steps": [
+      { "title": "Audio çıxarış", "body": "ffmpeg ilə mənbə videodan audio zolağını çıxar." },
+      { "title": "Denoise", "body": "Transkripsiya dəqiq qalsın deyə fon səs-küyünü təmizlə." },
+      { "title": "Transkripsiya", "body": "Whisper nitqi zamanlanmış mətnə çevirir." },
+      { "title": "Cümlələri birləşdir", "body": "Fraqmentləri təbii, tərcümə oluna bilən cümlələrə qrupla." },
+      { "title": "Tərcümə", "body": "LLM tam cümlə konteksti ilə tərcümə edir." },
+      { "title": "Sintez", "body": "Seçilmiş TTS mühərriki hər sətri səsləndirir." },
+      { "title": "Montaj", "body": "Hər klipi zaman oxuna bağla və videonu yenidən montajla." }
+    ]
+  },
+  "Models": {
+    "label": "Dəstəklənən modellər",
+    "title": "Mühərrikini seç",
+    "subtitle": "Transkripsiya, tərcümə və nitqi öz quraşdırmana uyğun birləşdir.",
+    "colStage": "Mərhələ",
+    "colOptions": "Seçimlər",
+    "colNotes": "Qeydlər",
+    "rows": [
+      {
+        "stage": "Transkripsiya",
+        "options": "Whisper (faster-whisper / openai-whisper)",
+        "notes": "Lokal işləyir, müxtəlif model ölçüləri"
+      },
+      {
+        "stage": "Tərcümə",
+        "options": "Google · Ollama · OpenAI · Anthropic",
+        "notes": "Pulsuz Google və ya kontekst-məlumatlı LLM-lər"
+      },
+      {
+        "stage": "Mətn-nitq (TTS)",
+        "options": "Edge · OpenAI · Piper · XTTS",
+        "notes": "Bulud, offline və ya səs klonlama"
+      }
+    ]
+  },
+  "Install": {
+    "label": "Quraşdırma",
+    "title": "Bir dəqiqəyə işə hazır",
+    "subtitle": "Python 3.10+ və PATH-də ffmpeg tələb olunur.",
+    "cloneLabel": "clone",
+    "clone": "git clone https://github.com/akshinmrv/Voxa.git && cd Voxa",
+    "installLabel": "install",
+    "install": "pip install .",
+    "runLabel": "run",
+    "run": "voxa talk.mp4 --target_lang tr",
+    "note": "voxa əmri pip install .-dən gəlir; alternativ olaraq birbaşa python voxa.py da işlədə bilərsən."
+  },
+  "QuickStart": {
+    "label": "Sürətli başlanğıc",
+    "title": "Ən çox işlənən əmrlər",
+    "subtitle": "Kopyala, yapışdır, dublyaj et.",
+    "tabs": [
+      {
+        "name": "Dublyaj",
+        "label": "bash",
+        "command": "voxa talk.mp4 --target_lang ru"
+      },
+      {
+        "name": "Səs klonlama",
+        "label": "bash",
+        "command": "voxa talk.mp4 --target_lang tr --tts xtts --voice_sample me.wav"
+      },
+      {
+        "name": "Offline",
+        "label": "bash",
+        "command": "voxa talk.mp4 --target_lang az --translator ollama --tts piper"
+      },
+      {
+        "name": "Self-host",
+        "label": "bash",
+        "command": "voxa talk.mp4 --target_lang tr --tts openai --openai-tts-base-url http://localhost:8080/v1"
+      }
+    ]
+  },
+  "Faq": {
+    "label": "FAQ",
+    "title": "Suallar və cavablar",
+    "items": [
+      {
+        "q": "Dublyaj sinxrondan çıxıb sürüşürmü?",
+        "a": "Xeyr. Voxa hər klipi mənbə zaman oxuna bağlayır, ona görə yerləşdirmə danışana kilidli qalır."
+      },
+      {
+        "q": "Tam offline işləyə bilərmi?",
+        "a": "Bəli — Whisper lokal, tərcümə üçün Ollama və nitq üçün Piper. Heç bir bulud çağırışı lazım deyil."
+      },
+      {
+        "q": "Öz TTS serverimi istifadə edə bilərəmmi?",
+        "a": "Bəli. İstənilən OpenAI-uyğun endpoint --openai-tts-base-url ilə işləyir."
+      },
+      {
+        "q": "Hansı dillər dəstəklənir?",
+        "a": "Whisper təxminən 100 mənbə dili əhatə edir; hədəf dillər seçdiyin TTS mühərrikindən asılıdır."
+      },
+      {
+        "q": "Doğrudanmı pulsuzdur?",
+        "a": "Bəli, Voxa MIT lisenziyalıdır. Bəzi opsional mühərriklərin öz lisenziyaları var."
+      }
+    ]
+  },
+  "Footer": {
+    "tagline": "İstənilən videonu dublyaj et, sinxronu qoru.",
+    "license": "MIT Lisenziya",
+    "builtBy": "Servoogle tərəfindən",
+    "github": "GitHub",
+    "docs": "Sənədlər",
+    "licenseLink": "Lisenziya"
+  },
+  "Common": {
+    "languageLabel": "Dil",
+    "themeLabel": "Temanı dəyiş",
+    "copy": "Kopyala",
+    "copied": "Kopyalandı"
+  }
+}

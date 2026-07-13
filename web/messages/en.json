@@ -1,0 +1,183 @@
+{
+  "Meta": {
+    "title": "Voxa — Dub any video, keep it in sync",
+    "description": "Open-source AI video dubbing. Whisper transcription, context-aware LLM translation, four TTS engines, and placement locked to the speaker. MIT-licensed. Runs on your machine."
+  },
+  "Nav": {
+    "features": "Features",
+    "howItWorks": "How it works",
+    "models": "Models",
+    "install": "Install",
+    "faq": "FAQ",
+    "github": "GitHub"
+  },
+  "Hero": {
+    "badge": "Open source · MIT",
+    "title": "Dub any video into another language — and keep it in sync.",
+    "subtitle": "Whisper transcription, context-aware LLM translation, four TTS engines, and placement locked to the speaker. MIT-licensed. Runs on your machine.",
+    "ctaPrimary": "Get started",
+    "ctaSecondary": "View on GitHub",
+    "terminalLabel": "bash",
+    "command": "voxa talk.mp4 --target_lang ru"
+  },
+  "Why": {
+    "label": "Why Voxa",
+    "title": "The dub never falls behind the speaker.",
+    "body": "Naive tools concatenate clips and drift. Voxa anchors every clip to the source timeline, so the dub stays locked to the speaker — no growing lag, no re-syncing by hand."
+  },
+  "Features": {
+    "label": "Features",
+    "title": "Everything the pipeline needs",
+    "subtitle": "A complete dubbing toolchain — transcription to final mux — in a single command.",
+    "items": [
+      {
+        "icon": "target",
+        "title": "Anchored placement",
+        "body": "Every clip is pinned to the source timeline. Drift stays at zero."
+      },
+      {
+        "icon": "audio-lines",
+        "title": "Four TTS engines",
+        "body": "Edge, OpenAI, Piper (offline), and XTTS voice cloning."
+      },
+      {
+        "icon": "languages",
+        "title": "Context-aware translation",
+        "body": "Google, Ollama, OpenAI, or Anthropic — translate with full-sentence context."
+      },
+      {
+        "icon": "gauge",
+        "title": "Quality gate",
+        "body": "Optional WER scoring re-synthesizes lines that miss the mark."
+      },
+      {
+        "icon": "server",
+        "title": "Self-hostable",
+        "body": "Point any OpenAI-compatible TTS endpoint with --openai-tts-base-url."
+      },
+      {
+        "icon": "refresh-cw",
+        "title": "Resumable",
+        "body": "Checkpoints let you stop and pick up exactly where you left off."
+      }
+    ]
+  },
+  "HowItWorks": {
+    "label": "How it works",
+    "title": "Seven steps, one command",
+    "subtitle": "Voxa runs a deterministic pipeline from raw audio to a synced dub.",
+    "steps": [
+      { "title": "Extract audio", "body": "Pull the audio track from the source video with ffmpeg." },
+      { "title": "Denoise", "body": "Clean background noise so transcription stays accurate." },
+      { "title": "Transcribe", "body": "Whisper turns speech into timed text." },
+      { "title": "Merge sentences", "body": "Group fragments into natural, translatable sentences." },
+      { "title": "Translate", "body": "An LLM translates with full-sentence context." },
+      { "title": "Synthesize", "body": "The chosen TTS engine speaks each line." },
+      { "title": "Mux", "body": "Anchor every clip to the timeline and remux the video." }
+    ]
+  },
+  "Models": {
+    "label": "Supported models",
+    "title": "Pick your engine",
+    "subtitle": "Mix and match transcription, translation, and speech to fit your setup.",
+    "colStage": "Stage",
+    "colOptions": "Options",
+    "colNotes": "Notes",
+    "rows": [
+      {
+        "stage": "Transcription",
+        "options": "Whisper (faster-whisper / openai-whisper)",
+        "notes": "Runs locally, multiple model sizes"
+      },
+      {
+        "stage": "Translation",
+        "options": "Google · Ollama · OpenAI · Anthropic",
+        "notes": "Free Google or context-aware LLMs"
+      },
+      {
+        "stage": "Text-to-speech",
+        "options": "Edge · OpenAI · Piper · XTTS",
+        "notes": "Cloud, offline, or voice cloning"
+      }
+    ]
+  },
+  "Install": {
+    "label": "Installation",
+    "title": "Up and running in a minute",
+    "subtitle": "Requires Python 3.10+ and ffmpeg on your PATH.",
+    "cloneLabel": "clone",
+    "clone": "git clone https://github.com/akshinmrv/Voxa.git && cd Voxa",
+    "installLabel": "install",
+    "install": "pip install .",
+    "runLabel": "run",
+    "run": "voxa talk.mp4 --target_lang tr",
+    "note": "The voxa command comes from pip install .; you can also run python voxa.py directly."
+  },
+  "QuickStart": {
+    "label": "Quick start",
+    "title": "Common commands",
+    "subtitle": "Copy, paste, dub.",
+    "tabs": [
+      {
+        "name": "Dub",
+        "label": "bash",
+        "command": "voxa talk.mp4 --target_lang ru"
+      },
+      {
+        "name": "Voice clone",
+        "label": "bash",
+        "command": "voxa talk.mp4 --target_lang tr --tts xtts --voice_sample me.wav"
+      },
+      {
+        "name": "Offline",
+        "label": "bash",
+        "command": "voxa talk.mp4 --target_lang az --translator ollama --tts piper"
+      },
+      {
+        "name": "Self-host",
+        "label": "bash",
+        "command": "voxa talk.mp4 --target_lang tr --tts openai --openai-tts-base-url http://localhost:8080/v1"
+      }
+    ]
+  },
+  "Faq": {
+    "label": "FAQ",
+    "title": "Questions, answered",
+    "items": [
+      {
+        "q": "Does the dub drift out of sync?",
+        "a": "No. Voxa anchors every clip to the source timeline, so placement stays locked to the speaker."
+      },
+      {
+        "q": "Can it run fully offline?",
+        "a": "Yes — Whisper locally, Ollama for translation, and Piper for speech. No cloud calls required."
+      },
+      {
+        "q": "Can I use my own TTS server?",
+        "a": "Yes. Any OpenAI-compatible endpoint works via --openai-tts-base-url."
+      },
+      {
+        "q": "Which languages are supported?",
+        "a": "Whisper covers around 100 source languages; targets depend on the TTS engine you choose."
+      },
+      {
+        "q": "Is it really free?",
+        "a": "Yes, Voxa is MIT-licensed. Some optional engines carry their own licenses."
+      }
+    ]
+  },
+  "Footer": {
+    "tagline": "Dub any video, keep it in sync.",
+    "license": "MIT License",
+    "builtBy": "Built by Servoogle",
+    "github": "GitHub",
+    "docs": "Documentation",
+    "licenseLink": "License"
+  },
+  "Common": {
+    "languageLabel": "Language",
+    "themeLabel": "Toggle theme",
+    "copy": "Copy",
+    "copied": "Copied"
+  }
+}
