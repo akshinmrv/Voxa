@@ -231,9 +231,39 @@
     "settings": {
       "title": "Ayarlar",
       "subtitle": "API açarları, defolt dəyərlər və görünüş.",
-      "note": "Ayarlar hazırda .env-də saxlanılır. UI backend inteqrasiyası (D3) ilə gələcək.",
+      "note": "API açarları hazırda .env-də saxlanılır. Tema və dil aşağıdadır.",
       "theme": "Tema",
       "language": "Dil"
+    },
+    "status": {
+      "queued": "Növbədə",
+      "running": "İşləyir",
+      "done": "Hazır",
+      "failed": "Uğursuz"
+    },
+    "errors": {
+      "backendDown": "Voxa serverinə çatmaq olmur. `voxa serve` ilə başladın, sonra yenidən cəhd edin.",
+      "retry": "Yenidən",
+      "loading": "Yüklənir…"
+    },
+    "job": {
+      "back": "İşlərə qayıt",
+      "progress": "Gedişat",
+      "logs": "Loqlar",
+      "result": "Nəticə",
+      "download": "Videonu yüklə",
+      "downloadSrt": "Altyazıları yüklə",
+      "failed": "Bu iş uğursuz oldu. Aşağıdakı loqlara baxın.",
+      "connecting": "İşə qoşulur…",
+      "steps": [
+        "Audio çıxarış",
+        "Denoise",
+        "Transkripsiya",
+        "Cümlələri birləşdir",
+        "Tərcümə",
+        "Sintez",
+        "Montaj"
+      ]
     }
   }
 }

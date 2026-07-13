@@ -1,6 +1,7 @@
 import { setRequestLocale } from "next-intl/server";
 import { AppSidebar } from "@/components/app/app-sidebar";
 import { AppTopbar } from "@/components/app/app-topbar";
+import { QueryProvider } from "@/components/query-provider";
 
 export default async function AppLayout({
   children,
@@ -13,12 +14,14 @@ export default async function AppLayout({
   setRequestLocale(locale);
 
   return (
-    <div className="flex flex-1">
-      <AppSidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <AppTopbar />
-        <main className="flex-1 px-5 py-8 md:px-8">{children}</main>
+    <QueryProvider>
+      <div className="flex flex-1">
+        <AppSidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <AppTopbar />
+          <main className="flex-1 px-5 py-8 md:px-8">{children}</main>
+        </div>
       </div>
-    </div>
+    </QueryProvider>
   );
 }

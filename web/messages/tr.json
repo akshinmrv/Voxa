@@ -231,9 +231,39 @@
     "settings": {
       "title": "Ayarlar",
       "subtitle": "API anahtarları, varsayılanlar ve görünüm.",
-      "note": "Ayarlar şimdilik .env dosyanda tutulur. Arayüz, arka uç entegrasyonuyla (D3) gelir.",
+      "note": "API anahtarları şimdilik .env dosyanda tutulur. Tema ve dil aşağıda.",
       "theme": "Tema",
       "language": "Dil"
+    },
+    "status": {
+      "queued": "Sırada",
+      "running": "Çalışıyor",
+      "done": "Bitti",
+      "failed": "Başarısız"
+    },
+    "errors": {
+      "backendDown": "Voxa sunucusuna ulaşılamıyor. `voxa serve` ile başlat, sonra yeniden dene.",
+      "retry": "Yeniden dene",
+      "loading": "Yükleniyor…"
+    },
+    "job": {
+      "back": "İşlere dön",
+      "progress": "İlerleme",
+      "logs": "Günlükler",
+      "result": "Sonuç",
+      "download": "Videoyu indir",
+      "downloadSrt": "Altyazıları indir",
+      "failed": "Bu iş başarısız oldu. Aşağıdaki günlüklere bak.",
+      "connecting": "İşe bağlanılıyor…",
+      "steps": [
+        "Ses çıkarma",
+        "Gürültü giderme",
+        "Yazıya çevirme",
+        "Cümleleri birleştir",
+        "Çeviri",
+        "Sentezleme",
+        "Birleştirme"
+      ]
     }
   }
 }

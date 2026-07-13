@@ -231,9 +231,39 @@
     "settings": {
       "title": "Settings",
       "subtitle": "API keys, defaults, and appearance.",
-      "note": "Settings live in your .env for now. A UI arrives with the backend integration (D3).",
+      "note": "API keys live in your .env for now. Theme and language are below.",
       "theme": "Theme",
       "language": "Language"
+    },
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "done": "Done",
+      "failed": "Failed"
+    },
+    "errors": {
+      "backendDown": "Can't reach the Voxa server. Start it with `voxa serve`, then retry.",
+      "retry": "Retry",
+      "loading": "Loading…"
+    },
+    "job": {
+      "back": "Back to jobs",
+      "progress": "Progress",
+      "logs": "Logs",
+      "result": "Result",
+      "download": "Download video",
+      "downloadSrt": "Download subtitles",
+      "failed": "This job failed. Check the logs below.",
+      "connecting": "Connecting to the job…",
+      "steps": [
+        "Extract audio",
+        "Denoise",
+        "Transcribe",
+        "Merge sentences",
+        "Translate",
+        "Synthesize",
+        "Assemble"
+      ]
     }
   }
 }

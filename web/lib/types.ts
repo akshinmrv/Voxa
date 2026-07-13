@@ -32,10 +32,21 @@ export type JobConfig = {
 
 export type JobStatus = "queued" | "running" | "done" | "failed";
 
-export type Job = {
+/** Mirrors voxa_server.Job.summary(). */
+export type JobSummary = {
   id: string;
   fileName: string;
   config: JobConfig;
   status: JobStatus;
-  createdAt: string;
+  step: number;
+  totalSteps: number;
+  hasVideo: boolean;
+  hasSrt: boolean;
+  error: string | null;
 };
+
+/** A single Server-Sent Event from GET /api/jobs/{id}/events. */
+export type JobEvent =
+  | { type: "status"; status: JobStatus; error?: string }
+  | { type: "step"; step: number; status: "running" | "done" }
+  | { type: "log"; line: string };

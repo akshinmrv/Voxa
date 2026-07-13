@@ -1,63 +1,60 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Play, WifiOff, KeyRound, CheckCircle2 } from "lucide-react";
-import type { JobConfig, VoxaOptions } from "@/lib/types";
-import { buildCommand } from "@/lib/api";
+import { Play, WifiOff, KeyRound, Loader2 } from "lucide-react";
+import type { JobConfig } from "@/lib/types";
+import { getOptions, uploadVideo, createJob } from "@/lib/api";
+import { useRouter } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TerminalBlock } from "@/components/patterns/terminal-block";
 import { UploadDropzone } from "./upload-dropzone";
+import { BackendError, Loading } from "./query-states";
 
 const KEY_TRANSLATORS = new Set(["openai", "anthropic"]);
 
-export function NewJobFlow({ options }: { options: VoxaOptions }) {
+export function NewJobFlow() {
   const t = useTranslations("App.newJob");
+  const router = useRouter();
+  const optionsQuery = useQuery({ queryKey: ["options"], queryFn: getOptions });
+
   const [file, setFile] = useState<File | null>(null);
-  const [submitted, setSubmitted] = useState(false);
-  const [config, setConfig] = useState<JobConfig>({
-    targetLang: options.languages[0]?.code ?? "en",
-    translator: options.translators[0]?.id ?? "google",
-    tts: options.ttsEngines[0]?.id ?? "edge",
-    whisperModel: "base",
+  const [sel, setSel] = useState<Partial<JobConfig>>({});
+
+  const submit = useMutation({
+    mutationFn: async (config: JobConfig) => {
+      if (!file) throw new Error("No file");
+      const { fileId } = await uploadVideo(file);
+      const { jobId } = await createJob(fileId, config);
+      return jobId;
+    },
+    onSuccess: (jobId) => router.push(`/app/jobs/${jobId}`),
   });
 
+  if (optionsQuery.isPending) return <Loading />;
+  if (optionsQuery.isError || !optionsQuery.data)
+    return <BackendError onRetry={() => optionsQuery.refetch()} />;
+
+  const options = optionsQuery.data;
   const set = <K extends keyof JobConfig>(key: K, value: JobConfig[K]) =>
-    setConfig((c) => ({ ...c, [key]: value }));
+    setSel((s) => ({ ...s, [key]: value }));
+
+  // Effective config: user selection, falling back to the first available option.
+  const config: JobConfig = {
+    targetLang: sel.targetLang ?? options.languages[0]?.code ?? "en",
+    translator: sel.translator ?? options.translators[0]?.id ?? "google",
+    tts: sel.tts ?? options.ttsEngines[0]?.id ?? "edge",
+    whisperModel: sel.whisperModel ?? "base",
+    voiceSample: sel.voiceSample,
+  };
 
   const selectedTts = options.ttsEngines.find((e) => e.id === config.tts);
-  const selectedTranslator = options.translators.find(
-    (e) => e.id === config.translator,
-  );
+  const selectedTranslator = options.translators.find((e) => e.id === config.translator);
   const needsVoiceSample = selectedTts?.requiresVoiceSample ?? false;
-
-  if (submitted && file) {
-    return (
-      <div className="max-w-2xl space-y-4">
-        <div className="flex items-start gap-3 rounded-md border border-success/25 bg-success/10 p-4">
-          <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
-          <div>
-            <p className="font-medium">{t("queuedTitle")}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{t("queuedBody")}</p>
-          </div>
-        </div>
-        <TerminalBlock command={buildCommand(file.name, config)} />
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setSubmitted(false);
-            setFile(null);
-          }}
-        >
-          {t("reset")}
-        </Button>
-      </div>
-    );
-  }
 
   return (
     <div className="grid max-w-4xl gap-6 lg:grid-cols-5">
@@ -132,11 +129,7 @@ export function NewJobFlow({ options }: { options: VoxaOptions }) {
           </Field>
 
           {needsVoiceSample && (
-            <Field
-              id="voiceSample"
-              label={t("voiceSample")}
-              hint={t("voiceSampleHint")}
-            >
+            <Field id="voiceSample" label={t("voiceSample")} hint={t("voiceSampleHint")}>
               <input
                 id="voiceSample"
                 type="text"
@@ -165,14 +158,20 @@ export function NewJobFlow({ options }: { options: VoxaOptions }) {
           <div className="pt-1">
             <Button
               className="w-full"
-              disabled={!file}
-              onClick={() => setSubmitted(true)}
+              disabled={!file || submit.isPending}
+              onClick={() => submit.mutate(config)}
             >
-              <Play /> {t("run")}
+              {submit.isPending ? <Loader2 className="animate-spin" /> : <Play />}
+              {t("run")}
             </Button>
             {!file && (
               <p className="mt-2 text-center text-xs text-muted-foreground">
                 {t("runHint")}
+              </p>
+            )}
+            {submit.isError && (
+              <p className="mt-2 text-center text-xs text-danger">
+                {(submit.error as Error).message}
               </p>
             )}
           </div>
