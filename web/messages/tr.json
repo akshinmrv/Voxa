@@ -166,6 +166,17 @@
       }
     ]
   },
+  "Author": {
+    "label": "Yazar",
+    "title": "Servoogle tarafından",
+    "body": "Voxa, Servoogle'ın açık kaynaklı bir projesidir — Akshin Miranov tarafından oluşturuldu ve sürdürülüyor. Pratik, kendi sunucunda barındırılabilir araçlar; bağımlılık yok, telemetri yok.",
+    "org": "Servoogle",
+    "orgTagline": "Açık kaynaklı geliştirici araçları",
+    "authorName": "Akshin Miranov",
+    "authorRole": "Yaratıcı ve sürdürücü",
+    "viewRepo": "Depoyu görüntüle",
+    "viewProfile": "GitHub profili"
+  },
   "Footer": {
     "tagline": "Herhangi bir videoyu dublajlayın, senkronu koruyun.",
     "license": "MIT Lisansı",

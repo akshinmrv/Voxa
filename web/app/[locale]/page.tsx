@@ -10,6 +10,7 @@ import { Models } from "@/components/landing/models";
 import { Installation } from "@/components/landing/installation";
 import { QuickStart } from "@/components/landing/quick-start";
 import { Faq } from "@/components/landing/faq";
+import { Author } from "@/components/landing/author";
 import { LandingFooter } from "@/components/landing/landing-footer";
 
 export default async function LandingPage({
@@ -41,6 +42,7 @@ export default async function LandingPage({
         <Installation />
         <QuickStart />
         <Faq />
+        <Author />
       </main>
       <LandingFooter />
     </>

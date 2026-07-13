@@ -166,6 +166,17 @@
       }
     ]
   },
+  "Author": {
+    "label": "Author",
+    "title": "Built by Servoogle",
+    "body": "Voxa is an open-source project by Servoogle, created and maintained by Akshin Miranov — practical, self-hostable tools with no lock-in and no telemetry.",
+    "org": "Servoogle",
+    "orgTagline": "Open-source developer tools",
+    "authorName": "Akshin Miranov",
+    "authorRole": "Creator & maintainer",
+    "viewRepo": "View the repository",
+    "viewProfile": "GitHub profile"
+  },
   "Footer": {
     "tagline": "Dub any video, keep it in sync.",
     "license": "MIT License",
