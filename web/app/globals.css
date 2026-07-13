@@ -1,0 +1,244 @@
+@import "tailwindcss";
+
+/* next-themes uses the `class` strategy; make `dark:` variants follow `.dark`. */
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Voxa design tokens (DESIGN_SYSTEM.md §8).
+  Dark is the DEFAULT (`:root`) — Voxa is dark-first / OLED. Light is opt-in (`.light`).
+  Naming follows the shadcn/ui semantic set so any shadcn primitive drops in and
+  inherits the Voxa theme, plus extra Voxa tokens (brand / surface / success / warning).
+  Brand accent = Signal Cyan (#38BDF8) exposed as `--primary` and `--brand`.
+*/
+:root {
+  --radius: 10px;
+
+  /* Base neutrals — OLED dark */
+  --background: #0a0a0b; /* --bg: deepest OLED black */
+  --foreground: #fafafa; /* primary text */
+  --card: #111113; /* surface-1: cards, panels */
+  --card-foreground: #fafafa;
+  --popover: #111113;
+  --popover-foreground: #fafafa;
+
+  /* Brand accent — Signal Cyan */
+  --primary: #38bdf8;
+  --primary-foreground: #06131c; /* dark ink on cyan (AA on #38BDF8) */
+  --brand: #38bdf8;
+  --brand-foreground: #06131c;
+
+  /* Secondary / muted / hover surfaces */
+  --secondary: #18181b; /* surface-2 */
+  --secondary-foreground: #fafafa;
+  --muted: #18181b;
+  --muted-foreground: #a1a1aa; /* fg-muted */
+  --accent: #18181b; /* shadcn "accent" = subtle hover surface (NOT brand) */
+  --accent-foreground: #fafafa;
+  --fg-subtle: #71717a; /* tertiary text, placeholder */
+
+  /* Elevated surfaces (exposed for utilities: bg-surface-1 / bg-surface-2) */
+  --surface-1: #111113;
+  --surface-2: #18181b;
+
+  /* Semantic — functional colors, kept separate from brand */
+  --success: #22c55e;
+  --success-foreground: #04140a;
+  --warning: #f59e0b;
+  --warning-foreground: #1a1204;
+  --danger: #ef4444;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --info: #38bdf8;
+
+  /* Lines & focus */
+  --border: #26262b;
+  --input: #26262b;
+  --ring: #38bdf8;
+}
+
+.light {
+  --background: #ffffff;
+  --foreground: #0a0a0b;
+  --card: #ffffff;
+  --card-foreground: #0a0a0b;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0b;
+
+  --primary: #0284c7; /* darker cyan for contrast as a fill on light bg */
+  --primary-foreground: #ffffff;
+  --brand: #0284c7;
+  --brand-foreground: #ffffff;
+
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #52525b;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --fg-subtle: #71717a;
+
+  --surface-1: #fafafa;
+  --surface-2: #f4f4f5;
+
+  --success: #16a34a;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+  --danger: #dc2626;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --info: #0284c7;
+
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #0ea5e9;
+}
+
+/* Map tokens into Tailwind's theme (inline = utilities reference the live vars). */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Voxa extras */
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  /* Radius (DESIGN_SYSTEM.md §8.4): sm buttons/inputs/badges, md cards, lg modals */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Consistent, visible focus ring across every interactive element (a11y §15). */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--brand) 32%, transparent);
+  }
+  /* Tabular figures for data (WER, durations, token counts) — DESIGN_SYSTEM.md §8.2 */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Typography roles (DESIGN_SYSTEM.md §8.2). Utilities still win over these. */
+@layer components {
+  .type-display {
+    font-size: clamp(2.5rem, 4vw + 1rem, 3.5rem);
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-weight: 700;
+  }
+  .type-h1 {
+    font-size: 2rem;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+  .type-h2 {
+    font-size: 1.5rem;
+    line-height: 1.25;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+  }
+  .type-h3 {
+    font-size: 1.25rem;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+  .type-body {
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  .type-small {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+  .type-label {
+    font-size: 0.75rem;
+    line-height: 1;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .type-code {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+}
+
+/*
+  Waveform motif (DESIGN_SYSTEM.md §7.2, §16) — Voxa's brand signature.
+  Bars scale vertically to feel "alive" during synthesis. Static under reduced-motion.
+*/
+@keyframes voxa-wave {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.voxa-wave-bar {
+  transform-origin: center;
+  animation: voxa-wave 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .voxa-wave-bar {
+    animation: none;
+    transform: scaleY(0.6);
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
