@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { setRequestLocale } from "next-intl/server";
 import { AppSidebar } from "@/components/app/app-sidebar";
 import { AppTopbar } from "@/components/app/app-topbar";
 import { QueryProvider } from "@/components/query-provider";
+
+// The operator console runs locally; keep it out of search indexes on any public deploy.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 export default async function AppLayout({
   children,
