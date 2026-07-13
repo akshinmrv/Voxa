@@ -275,6 +275,16 @@
         "Sintez",
         "Montaj"
       ]
+    },
+    "localOnly": {
+      "title": "Operator konsolu öz maşınında işləyir",
+      "body": "Voxa-nın dublyaj UI-si lokal alətdir — bu saytda heç nə yüklənmir və emal olunmur. Voxa-nı quraşdır, lokal serveri başlat, sonra çap olunan localhost URL-ni aç:",
+      "installLabel": "install",
+      "install": "pip install \"voxa[serve]\"",
+      "serveLabel": "run",
+      "serve": "voxa serve",
+      "backHome": "Ana səhifəyə qayıt",
+      "viewGithub": "GitHub-da bax"
     }
   }
 }

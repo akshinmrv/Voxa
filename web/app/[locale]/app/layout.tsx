@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { setRequestLocale } from "next-intl/server";
+import { IS_PUBLIC } from "@/lib/site";
 import { AppSidebar } from "@/components/app/app-sidebar";
 import { AppTopbar } from "@/components/app/app-topbar";
 import { QueryProvider } from "@/components/query-provider";
+import { LocalOnlyNotice } from "@/components/app/local-only-notice";
 
 // The operator console runs locally; keep it out of search indexes on any public deploy.
 export const metadata: Metadata = {
@@ -18,6 +20,11 @@ export default async function AppLayout({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+
+  // Public deploy: the operator app is local-only — show the "run locally" notice.
+  if (IS_PUBLIC) {
+    return <LocalOnlyNotice />;
+  }
 
   return (
     <QueryProvider>

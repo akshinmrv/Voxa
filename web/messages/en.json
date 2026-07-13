@@ -275,6 +275,16 @@
         "Synthesize",
         "Assemble"
       ]
+    },
+    "localOnly": {
+      "title": "The operator console runs on your machine",
+      "body": "Voxa's dubbing UI is a local tool — nothing is uploaded or processed on this website. Install Voxa and start the local server, then open the printed localhost URL:",
+      "installLabel": "install",
+      "install": "pip install \"voxa[serve]\"",
+      "serveLabel": "run",
+      "serve": "voxa serve",
+      "backHome": "Back to home",
+      "viewGithub": "View on GitHub"
     }
   }
 }

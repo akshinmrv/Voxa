@@ -275,6 +275,16 @@
         "Sentezleme",
         "Birleştirme"
       ]
+    },
+    "localOnly": {
+      "title": "Operatör konsolu kendi makinende çalışır",
+      "body": "Voxa'nın dublaj arayüzü yerel bir araçtır — bu web sitesinde hiçbir şey yüklenmez veya işlenmez. Voxa'yı kur, yerel sunucuyu başlat, sonra yazdırılan localhost URL'sini aç:",
+      "installLabel": "install",
+      "install": "pip install \"voxa[serve]\"",
+      "serveLabel": "run",
+      "serve": "voxa serve",
+      "backHome": "Ana sayfaya dön",
+      "viewGithub": "GitHub'da görüntüle"
     }
   }
 }

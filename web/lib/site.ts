@@ -33,3 +33,10 @@ export const SITE = {
 
 /** Absolute URL for a locale's landing page. */
 export const localeUrl = (locale: string) => `${SITE.url}/${locale}`;
+
+/**
+ * Build target. On a public deploy (NEXT_PUBLIC_TARGET=public) the operator app
+ * is replaced by a "run locally" notice — dubbing only ever runs on the user's
+ * own machine. The default (local) ships the full app.
+ */
+export const IS_PUBLIC = process.env.NEXT_PUBLIC_TARGET === "public";
