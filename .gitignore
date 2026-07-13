@@ -54,3 +54,10 @@ skills-lock.json
 
 # `voxa serve` runtime workspace — uploads and per-job output, never committed.
 .voxa_serve/
+
+# Local dubbing test artifacts (source video, per-language outputs, work dirs).
+# The *.mp4 rule above already covers test1.mp4 and *_dubbed_*.mp4.
+*_work/
+
+# ...but the landing's demo clips ARE committed, so re-include them.
+!web/public/demo/*.mp4

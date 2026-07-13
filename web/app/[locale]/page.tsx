@@ -1,6 +1,7 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { landingJsonLd } from "@/lib/structured-data";
-import { DEMO_VIDEO, DEMO_POSTER } from "@/lib/site";
+import { SITE } from "@/lib/site";
+import { PRIMARY_DEMO } from "@/lib/demos";
 import { JsonLd } from "@/components/seo/json-ld";
 import { LandingHeader } from "@/components/landing/landing-header";
 import { Hero } from "@/components/landing/hero";
@@ -30,10 +31,10 @@ export default async function LandingPage({
     locale,
     description: meta("description"),
     faq: faq.raw("items") as { q: string; a: string }[],
-    demo: DEMO_VIDEO
+    demo: PRIMARY_DEMO
       ? {
-          url: DEMO_VIDEO,
-          poster: DEMO_POSTER,
+          url: `${SITE.url}${PRIMARY_DEMO.src}`,
+          poster: "",
           name: `${demoT("title")} — Voxa`,
           description: demoT("subtitle"),
         }

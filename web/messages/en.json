@@ -24,9 +24,15 @@
   "Demo": {
     "label": "Demo",
     "title": "See it in action",
-    "subtitle": "Original audio, then the Voxa dub — locked to the speaker.",
-    "captionsNote": "Captions included for accessibility.",
-    "placeholder": "Demo video coming soon."
+    "subtitle": "The same clip, dubbed into three languages — each locked to the speaker.",
+    "captionsNote": "One source video, dubbed by Voxa. Pick a language.",
+    "placeholder": "Demo video coming soon.",
+    "langs": {
+      "original": "Original",
+      "tr": "Turkish",
+      "az": "Azerbaijani",
+      "fr": "French"
+    }
   },
   "Why": {
     "label": "Why Voxa",

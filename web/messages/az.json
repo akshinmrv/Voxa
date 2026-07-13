@@ -24,9 +24,15 @@
   "Demo": {
     "label": "Demo",
     "title": "İş başında gör",
-    "subtitle": "Əvvəlcə orijinal səs, sonra Voxa dublyajı — danışana kilidli.",
-    "captionsNote": "Əlçatanlıq üçün altyazı daxildir.",
-    "placeholder": "Demo video tezliklə."
+    "subtitle": "Eyni klip, üç dilə dublyaj — hər biri danışana kilidli.",
+    "captionsNote": "Bir mənbə video, Voxa ilə dublyaj. Dil seç.",
+    "placeholder": "Demo video tezliklə.",
+    "langs": {
+      "original": "Orijinal",
+      "tr": "Türkcə",
+      "az": "Azərbaycanca",
+      "fr": "Fransızca"
+    }
   },
   "Why": {
     "label": "Niyə Voxa",
