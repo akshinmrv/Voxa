@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Voxa Web
 
-## Getting Started
+The frontend for [Voxa](https://github.com/akshinmrv/Voxa) — one design system, two surfaces:
 
-First, run the development server:
+- **Landing** (`/[locale]`) — a public, static, trilingual (EN/AZ/TR) showcase, tuned for SEO and AI answer engines.
+- **Operator app** (`/[locale]/app`) — a local console for the `voxa serve` backend: upload a video, pick engines, watch the seven-step pipeline live (SSE), and download the result.
+
+Built with Next.js (App Router), React, Tailwind CSS, shadcn-style primitives, next-intl, next-themes, and React Query.
+
+## Develop
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd web
+npm install
+npm run dev          # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+For the operator app to work, run the backend alongside it:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pip install "voxa[serve]"
+voxa serve           # http://localhost:8000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment
 
-## Learn More
+Copy `.env.example` to `.env.local` and adjust. Key variables:
 
-To learn more about Next.js, take a look at the following resources:
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_TARGET` | `local` | `local` ships the full app; `public` replaces `/app` with a "run locally" notice |
+| `NEXT_PUBLIC_SITE_URL` | placeholder | Canonical URL for SEO (canonical, hreflang, OpenGraph, sitemap, JSON-LD) |
+| `NEXT_PUBLIC_VOXA_API` | `http://localhost:8000` | Base URL of the `voxa serve` backend |
+| `NEXT_PUBLIC_DEMO_VIDEO` / `_POSTER` | empty | Optional demo clip for the landing |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Build & deploy
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run build        # local build (full app)
 
-## Deploy on Vercel
+# Public landing for a domain:
+NEXT_PUBLIC_TARGET=public NEXT_PUBLIC_SITE_URL=https://your-domain npm run build
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Deploy the public build to any Next-compatible host (Vercel, Cloudflare Pages, Netlify). The landing pages are statically prerendered; the operator app is intended to run locally only.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scripts
+
+- `npm run dev` — dev server
+- `npm run build` — production build
+- `npm run start` — serve the production build
+- `npm run lint` — ESLint

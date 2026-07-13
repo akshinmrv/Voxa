@@ -258,6 +258,26 @@ voxa video.mp4 --target_lang tr --tts openai \
      --openai-tts-base-url http://localhost:8004/v1
 ```
 
+## Veb interfeys (`voxa serve`)
+
+Voxa [`web/`](web/) qovluğunda opsional veb frontend və `voxa serve` arxasında lokal operator
+backend təqdim edir — bir dizayn sistemi, iki səth:
+
+- **Landing** — publik, üçdilli (EN/AZ/TR) təqdimat saytı, statik olaraq deploy oluna bilər.
+- **Operator app** — lokal konsol: video yüklə, mühərrik seç, yeddi-addımlı pipeline-ı canlı
+  izlə (SSE) və nəticəni yüklə. Heç nə serverə yüklənmir — öz maşınında işləyir.
+
+```bash
+# Backend: REST + SSE
+pip install ".[serve]"
+voxa serve                              # http://127.0.0.1:8000
+
+# Frontend (ayrı terminal)
+cd web && npm install && npm run dev    # http://localhost:3000  →  /en/app
+```
+
+Development, mühit dəyişənləri və deploy üçün: [`web/README.md`](web/README.md).
+
 ## Layihə strukturu
 
 ```

@@ -256,6 +256,26 @@ voxa video.mp4 --target_lang tr --tts openai \
      --openai-tts-base-url http://localhost:8004/v1
 ```
 
+## Web arayüzü (`voxa serve`)
+
+Voxa, [`web/`](web/) klasöründe isteğe bağlı bir web önyüzü ve `voxa serve` arkasında yerel bir
+operatör arka ucu sunar — tek tasarım sistemi, iki yüzey:
+
+- **Landing** — herkese açık, üç dilli (EN/AZ/TR) tanıtım sitesi, statik olarak dağıtılabilir.
+- **Operatör uygulaması** — yerel konsol: video yükle, motor seç, yedi adımlı hattı canlı izle
+  (SSE) ve sonucu indir. Hiçbir şey sunucuya yüklenmez — kendi makinende çalışır.
+
+```bash
+# Arka uç: REST + SSE
+pip install ".[serve]"
+voxa serve                              # http://127.0.0.1:8000
+
+# Önyüz (ayrı terminal)
+cd web && npm install && npm run dev    # http://localhost:3000  →  /en/app
+```
+
+Geliştirme, ortam değişkenleri ve dağıtım için: [`web/README.md`](web/README.md).
+
 ## Proje yapısı
 
 ```

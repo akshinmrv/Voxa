@@ -278,11 +278,34 @@ voxa video.mp4 --target_lang tr --tts openai \
      --openai-tts-base-url http://localhost:8004/v1
 ```
 
+## Web UI (`voxa serve`)
+
+Voxa ships an optional web frontend in [`web/`](web/) and a local operator backend behind
+`voxa serve` — one design system, two surfaces:
+
+- **Landing** — a public, trilingual (EN/AZ/TR) showcase, deployable as a static site.
+- **Operator app** — a local console: upload a video, pick engines, watch the seven-step
+  pipeline live (Server-Sent Events), and download the result. Nothing is uploaded to a
+  server — it runs on your own machine.
+
+```bash
+# Backend: REST + SSE, drives the same pipeline per job
+pip install ".[serve]"
+voxa serve                              # http://127.0.0.1:8000
+
+# Frontend (separate terminal)
+cd web && npm install && npm run dev    # http://localhost:3000  →  /en/app
+```
+
+See [`web/README.md`](web/README.md) for development, environment variables, and deployment.
+
 ## Project Structure
 
 ```
 Voxa/
 ├── voxa.py                     # The entire tool: pipeline, engines, registries, CLI
+├── voxa_server.py              # `voxa serve` operator backend (FastAPI; optional [serve] extra)
+├── web/                        # Web frontend: public landing + local operator app
 ├── pyproject.toml              # Packaging, extras, ruff and pytest configuration
 ├── requirements.txt            # Core dependencies (optional engines live in extras)
 │

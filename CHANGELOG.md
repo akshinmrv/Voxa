@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Web frontend (`web/`).** A trilingual (EN/AZ/TR) public landing plus a local operator
+  app, built with Next.js, Tailwind and next-intl. The landing is tuned for search and AI
+  answer engines (hreflang, OpenGraph, JSON-LD, sitemap, robots, `llms.txt`); the operator
+  app runs against `voxa serve`. A `public` build target swaps the app for a "run locally"
+  notice so the landing can be deployed on its own.
+- **`voxa serve`.** An optional FastAPI operator backend (behind the `[serve]` extra) that
+  drives the pipeline per job and streams the seven-step progress over Server-Sent Events:
+  `GET /api/options`, `POST /api/upload`, `POST /api/jobs`, `GET /api/jobs/{id}/events`, and
+  result downloads. The core dubbing pipeline is unchanged — `serve` is a thin dispatch in
+  the CLI.
+- **CI** now also lints and builds the web frontend.
+
 ## [1.0.0] — 2026-07-10
 
 First public release. Voxa was developed privately for some time before being opened; the
