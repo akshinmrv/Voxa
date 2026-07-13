@@ -179,5 +179,61 @@
     "themeLabel": "Temanı dəyiş",
     "copy": "Kopyala",
     "copied": "Kopyalandı"
+  },
+  "App": {
+    "nav": {
+      "newJob": "Yeni iş",
+      "jobs": "İşlər",
+      "models": "Modellər",
+      "settings": "Ayarlar",
+      "docs": "Sənədlər",
+      "backToSite": "Sayta qayıt"
+    },
+    "newJob": {
+      "title": "Yeni iş",
+      "subtitle": "Video yüklə, mühərrikləri seç və dublyaja başla.",
+      "uploadTitle": "Video buraxın və ya klikləyib seçin",
+      "uploadHint": "MP4, MOV, MKV və ya WebM",
+      "selectedFile": "Seçilmiş fayl",
+      "change": "Dəyiş",
+      "remove": "Sil",
+      "configTitle": "Konfiqurasiya",
+      "targetLang": "Hədəf dil",
+      "translator": "Tərcüməçi",
+      "tts": "Nitq mühərriki",
+      "whisperModel": "Whisper modeli",
+      "voiceSample": "Səs nümunəsi",
+      "voiceSampleHint": "XTTS səsi bu referans klipdən klonlayır.",
+      "offlineBadge": "Offline",
+      "keyBadge": "API açarı lazımdır",
+      "run": "Dublyaja başla",
+      "runHint": "Aktivləşdirmək üçün video seçin.",
+      "queuedTitle": "İş növbəyə alındı (demo)",
+      "queuedBody": "Operator backend hələ qoşulmayıb — Voxa-nın işlədəcəyi əmr budur:",
+      "reset": "Başqasını başlat"
+    },
+    "jobs": {
+      "title": "İşlər",
+      "subtitle": "Dublyaj tarixçəniz.",
+      "emptyTitle": "Hələ iş yoxdur",
+      "emptyBody": "Burada görmək üçün yeni iş başladın.",
+      "emptyCta": "Yeni iş"
+    },
+    "models": {
+      "title": "Modellər",
+      "subtitle": "Quraşdırmanızda mövcud mühərriklər.",
+      "transcription": "Transkripsiya",
+      "translation": "Tərcümə",
+      "tts": "Mətn-nitq",
+      "offline": "Offline",
+      "voiceClone": "Səs klonlama"
+    },
+    "settings": {
+      "title": "Ayarlar",
+      "subtitle": "API açarları, defolt dəyərlər və görünüş.",
+      "note": "Ayarlar hazırda .env-də saxlanılır. UI backend inteqrasiyası (D3) ilə gələcək.",
+      "theme": "Tema",
+      "language": "Dil"
+    }
   }
 }

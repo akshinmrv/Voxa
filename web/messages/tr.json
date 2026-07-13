@@ -179,5 +179,61 @@
     "themeLabel": "Temayı değiştir",
     "copy": "Kopyala",
     "copied": "Kopyalandı"
+  },
+  "App": {
+    "nav": {
+      "newJob": "Yeni iş",
+      "jobs": "İşler",
+      "models": "Modeller",
+      "settings": "Ayarlar",
+      "docs": "Belgeler",
+      "backToSite": "Siteye dön"
+    },
+    "newJob": {
+      "title": "Yeni iş",
+      "subtitle": "Bir video yükle, motorlarını seç ve dublaja başla.",
+      "uploadTitle": "Bir video bırak veya tıklayıp seç",
+      "uploadHint": "MP4, MOV, MKV veya WebM",
+      "selectedFile": "Seçilen dosya",
+      "change": "Değiştir",
+      "remove": "Kaldır",
+      "configTitle": "Yapılandırma",
+      "targetLang": "Hedef dil",
+      "translator": "Çevirmen",
+      "tts": "Konuşma motoru",
+      "whisperModel": "Whisper modeli",
+      "voiceSample": "Ses örneği",
+      "voiceSampleHint": "XTTS sesi bu referans klipten klonlar.",
+      "offlineBadge": "Çevrimdışı",
+      "keyBadge": "API anahtarı gerekir",
+      "run": "Dublaja başla",
+      "runHint": "Etkinleştirmek için bir video seç.",
+      "queuedTitle": "İş sıraya alındı (demo)",
+      "queuedBody": "Operatör arka ucu henüz bağlı değil — Voxa'nın çalıştıracağı komut bu:",
+      "reset": "Bir tane daha başlat"
+    },
+    "jobs": {
+      "title": "İşler",
+      "subtitle": "Dublaj geçmişin.",
+      "emptyTitle": "Henüz iş yok",
+      "emptyBody": "Burada görmek için yeni bir iş başlat.",
+      "emptyCta": "Yeni iş"
+    },
+    "models": {
+      "title": "Modeller",
+      "subtitle": "Kurulumunda mevcut motorlar.",
+      "transcription": "Yazıya çevirme",
+      "translation": "Çeviri",
+      "tts": "Metinden konuşmaya",
+      "offline": "Çevrimdışı",
+      "voiceClone": "Ses klonlama"
+    },
+    "settings": {
+      "title": "Ayarlar",
+      "subtitle": "API anahtarları, varsayılanlar ve görünüm.",
+      "note": "Ayarlar şimdilik .env dosyanda tutulur. Arayüz, arka uç entegrasyonuyla (D3) gelir.",
+      "theme": "Tema",
+      "language": "Dil"
+    }
   }
 }

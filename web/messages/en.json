@@ -179,5 +179,61 @@
     "themeLabel": "Toggle theme",
     "copy": "Copy",
     "copied": "Copied"
+  },
+  "App": {
+    "nav": {
+      "newJob": "New job",
+      "jobs": "Jobs",
+      "models": "Models",
+      "settings": "Settings",
+      "docs": "Docs",
+      "backToSite": "Back to site"
+    },
+    "newJob": {
+      "title": "New job",
+      "subtitle": "Upload a video, choose your engines, and start dubbing.",
+      "uploadTitle": "Drop a video or click to browse",
+      "uploadHint": "MP4, MOV, MKV, or WebM",
+      "selectedFile": "Selected file",
+      "change": "Change",
+      "remove": "Remove",
+      "configTitle": "Configuration",
+      "targetLang": "Target language",
+      "translator": "Translator",
+      "tts": "Speech engine",
+      "whisperModel": "Whisper model",
+      "voiceSample": "Voice sample",
+      "voiceSampleHint": "XTTS clones the voice from this reference clip.",
+      "offlineBadge": "Offline",
+      "keyBadge": "Needs API key",
+      "run": "Start dubbing",
+      "runHint": "Select a video to enable.",
+      "queuedTitle": "Job queued (demo)",
+      "queuedBody": "The operator backend isn't wired yet — this is the command Voxa would run:",
+      "reset": "Start another"
+    },
+    "jobs": {
+      "title": "Jobs",
+      "subtitle": "Your dubbing history.",
+      "emptyTitle": "No jobs yet",
+      "emptyBody": "Start a new job to see it here.",
+      "emptyCta": "New job"
+    },
+    "models": {
+      "title": "Models",
+      "subtitle": "The engines available to your install.",
+      "transcription": "Transcription",
+      "translation": "Translation",
+      "tts": "Text-to-speech",
+      "offline": "Offline",
+      "voiceClone": "Voice cloning"
+    },
+    "settings": {
+      "title": "Settings",
+      "subtitle": "API keys, defaults, and appearance.",
+      "note": "Settings live in your .env for now. A UI arrives with the backend integration (D3).",
+      "theme": "Theme",
+      "language": "Language"
+    }
   }
 }
