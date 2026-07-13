@@ -6,6 +6,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { routing } from "@/i18n/routing";
 import { SITE, localeUrl } from "@/lib/site";
 import { ThemeProvider } from "@/components/theme-provider";
+import { SkipLink } from "@/components/skip-link";
 import "../globals.css";
 
 // latin-ext covers Azerbaijani (ə) and Turkish (ş ğ ı) glyphs.
@@ -109,6 +110,7 @@ export default async function LocaleLayout({
             enableSystem={false}
             disableTransitionOnChange
           >
+            <SkipLink />
             {children}
           </ThemeProvider>
         </NextIntlClientProvider>

@@ -32,7 +32,9 @@ export default async function AppLayout({
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <AppTopbar />
-          <main className="flex-1 px-5 py-8 md:px-8">{children}</main>
+          <main id="main-content" className="flex-1 px-5 py-8 md:px-8">
+            {children}
+          </main>
         </div>
       </div>
     </QueryProvider>

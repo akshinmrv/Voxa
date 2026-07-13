@@ -9,17 +9,35 @@ export function landingJsonLd({
   locale,
   description,
   faq,
+  demo,
 }: {
   locale: string;
   description: string;
   faq: { q: string; a: string }[];
+  demo?: { url: string; poster: string; name: string; description: string } | null;
 }) {
   const authorId = `${SITE.url}/#author`;
   const orgId = `${SITE.url}/#servoogle`;
 
+  const videoNode = demo?.url
+    ? [
+        {
+          "@type": "VideoObject",
+          "@id": `${SITE.url}/#demo`,
+          name: demo.name,
+          description: demo.description,
+          contentUrl: demo.url,
+          thumbnailUrl: demo.poster || `${SITE.url}/opengraph-image`,
+          uploadDate: new Date().toISOString(),
+          publisher: { "@id": orgId },
+        },
+      ]
+    : [];
+
   return {
     "@context": "https://schema.org",
     "@graph": [
+      ...videoNode,
       {
         "@type": "Organization",
         "@id": orgId,

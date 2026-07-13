@@ -4,6 +4,7 @@
     "description": "Açıq mənbəli AI video dublyaj. Whisper transkripsiya, kontekst-məlumatlı LLM tərcümə, dörd TTS mühərriki və danışana kilidli yerləşdirmə. MIT lisenziyalı. Öz maşınınızda işləyir."
   },
   "Nav": {
+    "demo": "Demo",
     "features": "İmkanlar",
     "howItWorks": "Necə işləyir",
     "models": "Modellər",
@@ -19,6 +20,13 @@
     "ctaSecondary": "GitHub-da bax",
     "terminalLabel": "bash",
     "command": "voxa talk.mp4 --target_lang ru"
+  },
+  "Demo": {
+    "label": "Demo",
+    "title": "İş başında gör",
+    "subtitle": "Əvvəlcə orijinal səs, sonra Voxa dublyajı — danışana kilidli.",
+    "captionsNote": "Əlçatanlıq üçün altyazı daxildir.",
+    "placeholder": "Demo video tezliklə."
   },
   "Why": {
     "label": "Niyə Voxa",
@@ -189,7 +197,8 @@
     "languageLabel": "Dil",
     "themeLabel": "Temanı dəyiş",
     "copy": "Kopyala",
-    "copied": "Kopyalandı"
+    "copied": "Kopyalandı",
+    "skipToContent": "Məzmuna keç"
   },
   "App": {
     "nav": {

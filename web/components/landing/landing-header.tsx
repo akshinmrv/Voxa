@@ -12,6 +12,7 @@ export function LandingHeader() {
   const t = useTranslations("Nav");
 
   const navItems = [
+    { href: "#demo", label: t("demo") },
     { href: "#features", label: t("features") },
     { href: "#how-it-works", label: t("howItWorks") },
     { href: "#models", label: t("models") },

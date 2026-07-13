@@ -4,6 +4,7 @@
     "description": "Open-source AI video dubbing. Whisper transcription, context-aware LLM translation, four TTS engines, and placement locked to the speaker. MIT-licensed. Runs on your machine."
   },
   "Nav": {
+    "demo": "Demo",
     "features": "Features",
     "howItWorks": "How it works",
     "models": "Models",
@@ -19,6 +20,13 @@
     "ctaSecondary": "View on GitHub",
     "terminalLabel": "bash",
     "command": "voxa talk.mp4 --target_lang ru"
+  },
+  "Demo": {
+    "label": "Demo",
+    "title": "See it in action",
+    "subtitle": "Original audio, then the Voxa dub — locked to the speaker.",
+    "captionsNote": "Captions included for accessibility.",
+    "placeholder": "Demo video coming soon."
   },
   "Why": {
     "label": "Why Voxa",
@@ -189,7 +197,8 @@
     "languageLabel": "Language",
     "themeLabel": "Toggle theme",
     "copy": "Copy",
-    "copied": "Copied"
+    "copied": "Copied",
+    "skipToContent": "Skip to content"
   },
   "App": {
     "nav": {

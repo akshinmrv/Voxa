@@ -40,3 +40,11 @@ export const localeUrl = (locale: string) => `${SITE.url}/${locale}`;
  * own machine. The default (local) ships the full app.
  */
 export const IS_PUBLIC = process.env.NEXT_PUBLIC_TARGET === "public";
+
+/**
+ * Optional demo assets. Set NEXT_PUBLIC_DEMO_VIDEO to a before/after dub clip
+ * (a /public path or a hosted URL) to light up the Demo section and its
+ * VideoObject structured data; without it the section shows a placeholder.
+ */
+export const DEMO_VIDEO = process.env.NEXT_PUBLIC_DEMO_VIDEO ?? "";
+export const DEMO_POSTER = process.env.NEXT_PUBLIC_DEMO_POSTER ?? "";

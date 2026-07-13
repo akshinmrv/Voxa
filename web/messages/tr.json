@@ -4,6 +4,7 @@
     "description": "Açık kaynaklı yapay zekâ video dublajı. Whisper yazıya çevirme, bağlam duyarlı LLM çeviri, dört TTS motoru ve konuşmacıya kilitli yerleştirme. MIT lisanslı. Kendi makinenizde çalışır."
   },
   "Nav": {
+    "demo": "Demo",
     "features": "Özellikler",
     "howItWorks": "Nasıl çalışır",
     "models": "Modeller",
@@ -19,6 +20,13 @@
     "ctaSecondary": "GitHub'da görüntüle",
     "terminalLabel": "bash",
     "command": "voxa talk.mp4 --target_lang ru"
+  },
+  "Demo": {
+    "label": "Demo",
+    "title": "İş başında gör",
+    "subtitle": "Önce orijinal ses, sonra Voxa dublajı — konuşmacıya kilitli.",
+    "captionsNote": "Erişilebilirlik için altyazı dahildir.",
+    "placeholder": "Demo video yakında."
   },
   "Why": {
     "label": "Neden Voxa",
@@ -189,7 +197,8 @@
     "languageLabel": "Dil",
     "themeLabel": "Temayı değiştir",
     "copy": "Kopyala",
-    "copied": "Kopyalandı"
+    "copied": "Kopyalandı",
+    "skipToContent": "İçeriğe atla"
   },
   "App": {
     "nav": {

@@ -15,7 +15,10 @@ export function LocalOnlyNotice() {
   const t = useTranslations("App.localOnly");
 
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center px-6 py-24 text-center">
+    <main
+      id="main-content"
+      className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center px-6 py-24 text-center"
+    >
       <Waveform bars={12} className="h-10" />
       <h1 className="type-h1 mt-8">{t("title")}</h1>
       <p className="type-body mt-4 text-muted-foreground">{t("body")}</p>
