@@ -34,6 +34,12 @@
       "fr": "Fransızca"
     }
   },
+  "Voices": {
+    "label": "Səslər",
+    "title": "OpenAI səslərini dinlə",
+    "subtitle": "Altı OpenAI mətn-nitq səsi (tts-1-hd). Birini seç və oynat.",
+    "sample": "“Voxa dubs your videos into another language and keeps them in sync with the speaker.”"
+  },
   "Why": {
     "label": "Niyə Voxa",
     "title": "Dublyaj heç vaxt danışandan geri qalmır.",
@@ -227,6 +233,8 @@
       "targetLang": "Hədəf dil",
       "translator": "Tərcüməçi",
       "tts": "Nitq mühərriki",
+      "openaiModel": "OpenAI TTS modeli",
+      "openaiVoice": "Səs",
       "whisperModel": "Whisper modeli",
       "voiceSample": "Səs nümunəsi",
       "voiceSampleHint": "XTTS səsi bu referans klipdən klonlayır.",

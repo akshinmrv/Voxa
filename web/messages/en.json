@@ -34,6 +34,12 @@
       "fr": "French"
     }
   },
+  "Voices": {
+    "label": "Voices",
+    "title": "Hear the OpenAI voices",
+    "subtitle": "Six OpenAI text-to-speech voices (tts-1-hd). Pick one and press play.",
+    "sample": "“Voxa dubs your videos into another language and keeps them in sync with the speaker.”"
+  },
   "Why": {
     "label": "Why Voxa",
     "title": "The dub never falls behind the speaker.",
@@ -227,6 +233,8 @@
       "targetLang": "Target language",
       "translator": "Translator",
       "tts": "Speech engine",
+      "openaiModel": "OpenAI TTS model",
+      "openaiVoice": "Voice",
       "whisperModel": "Whisper model",
       "voiceSample": "Voice sample",
       "voiceSampleHint": "XTTS clones the voice from this reference clip.",

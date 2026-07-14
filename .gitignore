@@ -59,5 +59,6 @@ skills-lock.json
 # The *.mp4 rule above already covers test1.mp4 and *_dubbed_*.mp4.
 *_work/
 
-# ...but the landing's demo clips ARE committed, so re-include them.
+# ...but the landing's demo/showcase media ARE committed, so re-include them.
 !web/public/demo/*.mp4
+!web/public/tts-samples/*.mp3

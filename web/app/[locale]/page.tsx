@@ -10,6 +10,7 @@ import { Why } from "@/components/landing/why";
 import { Features } from "@/components/landing/features";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { Models } from "@/components/landing/models";
+import { Voices } from "@/components/landing/voices";
 import { Installation } from "@/components/landing/installation";
 import { QuickStart } from "@/components/landing/quick-start";
 import { Faq } from "@/components/landing/faq";
@@ -52,6 +53,7 @@ export default async function LandingPage({
         <Features />
         <HowItWorks />
         <Models />
+        <Voices />
         <Installation />
         <QuickStart />
         <Faq />

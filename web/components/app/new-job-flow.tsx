@@ -50,6 +50,8 @@ export function NewJobFlow() {
     tts: sel.tts ?? options.ttsEngines[0]?.id ?? "edge",
     whisperModel: sel.whisperModel ?? "base",
     voiceSample: sel.voiceSample,
+    openaiTtsModel: sel.openaiTtsModel ?? options.openaiTtsModels[0]?.id ?? "gpt-4o-mini-tts",
+    openaiVoice: sel.openaiVoice ?? options.openaiVoices[0]?.id ?? "alloy",
   };
 
   const selectedTts = options.ttsEngines.find((e) => e.id === config.tts);
@@ -127,6 +129,38 @@ export function NewJobFlow() {
               </div>
             )}
           </Field>
+
+          {config.tts === "openai" && (
+            <>
+              <Field id="openaiTtsModel" label={t("openaiModel")}>
+                <Select
+                  id="openaiTtsModel"
+                  value={config.openaiTtsModel}
+                  onChange={(e) => set("openaiTtsModel", e.target.value)}
+                >
+                  {options.openaiTtsModels.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
+              <Field id="openaiVoice" label={t("openaiVoice")}>
+                <Select
+                  id="openaiVoice"
+                  value={config.openaiVoice}
+                  onChange={(e) => set("openaiVoice", e.target.value)}
+                >
+                  {options.openaiVoices.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </>
+          )}
 
           {needsVoiceSample && (
             <Field id="voiceSample" label={t("voiceSample")} hint={t("voiceSampleHint")}>

@@ -43,6 +43,13 @@ import voxa
 
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large", "turbo"]
 
+# OpenAI TTS model/voice choices offered when the OpenAI engine is selected.
+OPENAI_TTS_MODELS = ["gpt-4o-mini-tts", "tts-1", "tts-1-hd"]
+OPENAI_VOICES = [
+    "alloy", "ash", "ballad", "coral", "echo", "fable",
+    "nova", "onyx", "sage", "shimmer", "verse",
+]
+
 # A curated shortlist for the dropdown; the CLI itself accepts any language code.
 COMMON_LANGUAGES = [
     ("ru", "Russian"), ("tr", "Turkish"), ("az", "Azerbaijani"), ("en", "English"),
@@ -85,6 +92,8 @@ def build_options() -> dict:
         "translators": translators,
         "ttsEngines": tts_engines,
         "whisperModels": [{"id": m, "label": m} for m in WHISPER_MODELS],
+        "openaiTtsModels": [{"id": m, "label": m} for m in OPENAI_TTS_MODELS],
+        "openaiVoices": [{"id": v, "label": v} for v in OPENAI_VOICES],
     }
 
 
@@ -117,6 +126,8 @@ class JobConfigModel(BaseModel):
     tts: str
     whisperModel: str = "base"
     voiceSample: Optional[str] = None
+    openaiTtsModel: Optional[str] = None
+    openaiVoice: Optional[str] = None
 
 
 class CreateJobModel(BaseModel):
@@ -179,6 +190,11 @@ async def _run_job(job: Job) -> None:
         ]
         if cfg.tts == "xtts" and cfg.voiceSample:
             cmd += ["--voice-sample", cfg.voiceSample]
+        if cfg.tts == "openai":
+            if cfg.openaiTtsModel:
+                cmd += ["--openai-tts-model", cfg.openaiTtsModel]
+            if cfg.openaiVoice:
+                cmd += ["--openai-voice", cfg.openaiVoice]
 
         # Force UTF-8 in the child so its emoji log lines encode to the pipe on any
         # console codepage (Windows defaults to a legacy ANSI codepage otherwise).

@@ -20,6 +20,8 @@ export type VoxaOptions = {
   translators: EngineOption[];
   ttsEngines: EngineOption[];
   whisperModels: WhisperModel[];
+  openaiTtsModels: WhisperModel[];
+  openaiVoices: WhisperModel[];
 };
 
 export type JobConfig = {
@@ -28,6 +30,8 @@ export type JobConfig = {
   tts: string;
   whisperModel: string;
   voiceSample?: string;
+  openaiTtsModel?: string;
+  openaiVoice?: string;
 };
 
 export type JobStatus = "queued" | "running" | "done" | "failed";

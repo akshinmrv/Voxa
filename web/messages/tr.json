@@ -34,6 +34,12 @@
       "fr": "Fransızca"
     }
   },
+  "Voices": {
+    "label": "Sesler",
+    "title": "OpenAI seslerini dinle",
+    "subtitle": "Altı OpenAI metinden konuşmaya sesi (tts-1-hd). Birini seç ve oynat.",
+    "sample": "“Voxa dubs your videos into another language and keeps them in sync with the speaker.”"
+  },
   "Why": {
     "label": "Neden Voxa",
     "title": "Dublaj asla konuşmacının gerisinde kalmaz.",
@@ -227,6 +233,8 @@
       "targetLang": "Hedef dil",
       "translator": "Çevirmen",
       "tts": "Konuşma motoru",
+      "openaiModel": "OpenAI TTS modeli",
+      "openaiVoice": "Ses",
       "whisperModel": "Whisper modeli",
       "voiceSample": "Ses örneği",
       "voiceSampleHint": "XTTS sesi bu referans klipten klonlar.",
