@@ -15,6 +15,8 @@ dosyalık bir CLI aracıdır — ve tavizsiz bir özelliği vardır: dublaj konu
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Stars](https://img.shields.io/github/stars/akshinmrv/Voxa?style=flat)](https://github.com/akshinmrv/Voxa/stargazers)
 
+🌐 **[voxa-servoogle.vercel.app](https://voxa-servoogle.vercel.app)** — demo dublajlar, ses örnekleri ve belgeler
+
 </div>
 
 ---
@@ -187,7 +189,8 @@ git clone https://github.com/akshinmrv/Voxa
 cd Voxa
 python3 -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 
-# Yalnızca CPU torch tekerleği kurulumu belirgin şekilde küçültür
+# Yalnızca CPU torch tekerleği kurulumu belirgin şekilde küçültür.
+# NVIDIA GPU'nuz mu var? Yerine CUDA tekerleğini kurun — aşağıda "4. GPU hızlandırma".
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 
 pip install .
@@ -212,6 +215,42 @@ pip install .
 > kurar. **XTTS-v2 model ağırlıkları ticari değildir** (CPML) ve Coqui Inc. artık ticari lisans
 > satacak durumda değil. Ticari ses klonlama için `--openai-tts-base-url` ile MIT lisanslı bir
 > motor kullanın.
+
+**4. GPU hızlandırma** — isteğe bağlı, yalnızca NVIDIA.
+
+Voxa CUDA'yı kendisi algılar; açmak için bir bayrak yoktur. Neyi hızlandırır:
+
+| Aşama | GPU'da |
+|---|---|
+| Whisper yazıya çevirme (her iki backend) | ✅ CUDA, fp16 |
+| XTTS ses klonlama | ✅ CUDA |
+| Kalite kapısı (WER puanlama) | ✅ CUDA |
+| Çeviri — Google / OpenAI / Anthropic | ➖ ağ bağımlı |
+| Çeviri — Ollama | ➖ Ollama GPU'yu kendisi kullanır |
+| Konuşma — Edge / OpenAI | ➖ bulut |
+| Konuşma — Piper | ➖ CPU (ONNX) |
+
+Adım 2'deki CPU tekerleği yerine PyTorch'un **CUDA** sürümünü kurun:
+
+```bash
+# Sürücünüzün desteklediği CUDA sürümünü seçin — https://pytorch.org/get-started/locally/
+pip install torch --index-url https://download.pytorch.org/whl/cu124
+```
+
+Doğrulayın:
+
+```bash
+python -c "import torch; print(torch.cuda.is_available())"   # → True
+```
+
+GPU kullanıldığında çalışma günlüğü yazıya çevirme adımında `⚙️  Using device: CUDA` yazar
+(aksi hâlde `CPU`). Whisper modeline göre yaklaşık VRAM: `tiny`/`base` ≈ 1 GB, `small` ≈ 2 GB,
+`medium` ≈ 5 GB, `turbo` ≈ 6 GB, `large` ≈ 10 GB; XTTS bunun üstüne yaklaşık 4 GB ister.
+
+> [!NOTE]
+> `--whisper-backend faster` (CTranslate2) de GPU'da çalışır, ancak NVIDIA cuBLAS ve cuDNN
+> kütüphanelerini gerektirir: `pip install nvidia-cublas-cu12 nvidia-cudnn-cu12`.
+> Voxa **yalnızca CUDA**'yı kontrol eder — Apple Silicon (MPS) ve AMD GPU'lar CPU'ya düşer.
 
 ## Yapılandırma
 

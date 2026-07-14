@@ -57,6 +57,7 @@ serve = ["fastapi", "uvicorn[standard]", "python-multipart"]
 dev = ["pytest", "ruff"]
 
 [project.urls]
+Website = "https://voxa-servoogle.vercel.app"
 Homepage = "https://github.com/akshinmrv/Voxa"
 Repository = "https://github.com/akshinmrv/Voxa"
 Issues = "https://github.com/akshinmrv/Voxa/issues"

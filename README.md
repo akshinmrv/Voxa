@@ -16,6 +16,8 @@ the speaker.
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Stars](https://img.shields.io/github/stars/akshinmrv/Voxa?style=flat)](https://github.com/akshinmrv/Voxa/stargazers)
 
+🌐 **[voxa-servoogle.vercel.app](https://voxa-servoogle.vercel.app)** — demo dubs, voice samples, and docs
+
 </div>
 
 ---
@@ -197,7 +199,8 @@ git clone https://github.com/akshinmrv/Voxa
 cd Voxa
 python3 -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 
-# The CPU-only torch wheel keeps the install considerably smaller
+# The CPU-only torch wheel keeps the install considerably smaller.
+# Have an NVIDIA GPU? Install the CUDA wheel instead — see "4. GPU acceleration" below.
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 
 pip install .
@@ -222,6 +225,42 @@ pip install .
 > community fork. The **XTTS-v2 model weights are non-commercial** (CPML), and Coqui Inc. no
 > longer exists to sell a commercial licence. For commercial voice cloning, drive an
 > MIT-licensed engine through `--openai-tts-base-url`.
+
+**4. GPU acceleration** — optional, NVIDIA only.
+
+Voxa detects CUDA on its own; there is no flag to turn it on. What it speeds up:
+
+| Stage | On GPU |
+|---|---|
+| Whisper transcription (both backends) | ✅ CUDA, fp16 |
+| XTTS voice cloning | ✅ CUDA |
+| Quality gate (WER scoring) | ✅ CUDA |
+| Translation — Google / OpenAI / Anthropic | ➖ network-bound |
+| Translation — Ollama | ➖ Ollama uses your GPU on its own |
+| Speech — Edge / OpenAI | ➖ cloud |
+| Speech — Piper | ➖ CPU (ONNX) |
+
+Install the **CUDA** build of PyTorch instead of the CPU wheel from step 2:
+
+```bash
+# Match the CUDA version your driver supports — https://pytorch.org/get-started/locally/
+pip install torch --index-url https://download.pytorch.org/whl/cu124
+```
+
+Check it took:
+
+```bash
+python -c "import torch; print(torch.cuda.is_available())"   # → True
+```
+
+When the GPU is in use, the run log prints `⚙️  Using device: CUDA` at the transcription step
+(it prints `CPU` otherwise). Rough VRAM per Whisper model: `tiny`/`base` ≈ 1 GB, `small` ≈ 2 GB,
+`medium` ≈ 5 GB, `turbo` ≈ 6 GB, `large` ≈ 10 GB; XTTS wants roughly 4 GB more.
+
+> [!NOTE]
+> `--whisper-backend faster` (CTranslate2) runs on the GPU too, but needs NVIDIA's cuBLAS and
+> cuDNN libraries: `pip install nvidia-cublas-cu12 nvidia-cudnn-cu12`.
+> Voxa checks for **CUDA only** — Apple Silicon (MPS) and AMD GPUs fall back to CPU.
 
 ## Configuration
 
