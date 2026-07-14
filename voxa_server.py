@@ -374,6 +374,8 @@ def run_from_cli(argv: List[str]) -> int:
     )
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8000, help="Bind port (default: 8000)")
+    parser.add_argument("--env-file", default=".env",
+                        help="Load API keys from this .env file (default: .env)")
     args = parser.parse_args(argv)
 
     # Emoji in our banners/logs must survive a legacy console codepage (e.g. cp1254).
@@ -383,6 +385,15 @@ def run_from_cli(argv: List[str]) -> int:
         except (AttributeError, ValueError):
             pass
 
+    # Load API keys into the environment so each job subprocess inherits them —
+    # jobs run in an isolated cwd (.voxa_serve/jobs/...) where a relative .env
+    # would not be found.
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(args.env_file)
+    except ImportError:
+        pass
+
     try:
         import uvicorn
     except ImportError:
@@ -391,7 +402,9 @@ def run_from_cli(argv: List[str]) -> int:
         return 1
 
     WORKSPACE.mkdir(parents=True, exist_ok=True)
+    detected = [k for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY") if os.environ.get(k)]
     print(f"🌐 Voxa operator server → http://{args.host}:{args.port}")
+    print(f"🔑 API keys detected: {', '.join(detected) if detected else 'none'}")
     print("   Open the web UI (see web/) and point it at this address.")
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     return 0
