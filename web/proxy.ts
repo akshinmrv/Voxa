@@ -5,9 +5,11 @@ import { routing } from "./i18n/routing";
 // Next.js 16 renamed "middleware" to "proxy"; next-intl's handler is unchanged.
 const intlMiddleware = createMiddleware(routing);
 
-// Local dev is used to operate the app, so the bare root goes straight to it.
-// Public deploys keep the marketing landing at the root.
-const IS_PUBLIC = process.env.NEXT_PUBLIC_TARGET === "public";
+// Running the frontend locally (`next dev`) is for operating the app, so the
+// bare root goes straight to it. Production builds (Vercel) keep the marketing
+// landing at the root. NODE_ENV is the one env var Next reliably inlines into
+// the Edge middleware bundle (NEXT_PUBLIC_* is not), so gate on it.
+const REDIRECT_ROOT_TO_APP = process.env.NODE_ENV === "development";
 
 function pickLocale(request: NextRequest): string {
   const locales = routing.locales as readonly string[];
@@ -20,7 +22,7 @@ function pickLocale(request: NextRequest): string {
 export default function proxy(request: NextRequest) {
   // Only the bare "/" is redirected, so "/<locale>" still reaches the landing
   // (e.g. the app's "Back to site" link keeps working).
-  if (!IS_PUBLIC && request.nextUrl.pathname === "/") {
+  if (REDIRECT_ROOT_TO_APP && request.nextUrl.pathname === "/") {
     return NextResponse.redirect(
       new URL(`/${pickLocale(request)}/app`, request.url),
     );
