@@ -41,6 +41,8 @@ Thumbs.db
 # Private working documents — kept on the maintainer's machine, never published.
 # (Internal audits, phase planning, session continuity notes, commercial strategy.)
 context.md
+SESSION_CONTEXT.md
+DESIGN_SYSTEM.md
 ROADMAP.md
 PROJECT_AUDIT.md
 OPEN_SOURCE_AUDIT_AND_ROADMAP_AZ.md
