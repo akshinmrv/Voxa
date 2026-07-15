@@ -18,6 +18,12 @@ the speaker.
 
 🌐 **[voxa-servoogle.vercel.app](https://voxa-servoogle.vercel.app)** — demo dubs, voice samples, and docs
 
+<br>
+
+<img src="docs/assets/app-en.png" alt="Voxa operator app (voxa serve) — a finished dubbing job" width="820">
+
+<sub>The local operator app (<code>voxa serve</code>) — upload a video, watch the 7-step pipeline, download the dub.</sub>
+
 </div>
 
 ---

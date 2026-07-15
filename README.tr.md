@@ -17,6 +17,12 @@ dosyalık bir CLI aracıdır — ve tavizsiz bir özelliği vardır: dublaj konu
 
 🌐 **[voxa-servoogle.vercel.app](https://voxa-servoogle.vercel.app)** — demo dublajlar, ses örnekleri ve belgeler
 
+<br>
+
+<img src="docs/assets/app-tr.png" alt="Voxa operatör uygulaması (voxa serve) — tamamlanmış bir dublaj işi" width="820">
+
+<sub>Yerel operatör uygulaması (<code>voxa serve</code>) — video yükle, 7 adımlı hattı izle, dublajı indir.</sub>
+
 </div>
 
 ---

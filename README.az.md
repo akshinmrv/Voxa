@@ -17,6 +17,12 @@ fayllıq CLI alətidir — və bir güzəştsiz xüsusiyyəti var: dublyaj danı
 
 🌐 **[voxa-servoogle.vercel.app](https://voxa-servoogle.vercel.app)** — demo dublyajlar, səs nümunələri və sənədlər
 
+<br>
+
+<img src="docs/assets/app-az.png" alt="Voxa operator tətbiqi (voxa serve) — tamamlanmış dublyaj işi" width="820">
+
+<sub>Lokal operator tətbiqi (<code>voxa serve</code>) — video yüklə, 7-addımlı gedişatı izlə, dublyajı endir.</sub>
+
 </div>
 
 ---
