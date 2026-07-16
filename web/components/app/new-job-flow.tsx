@@ -5,7 +5,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Play, WifiOff, KeyRound, Loader2 } from "lucide-react";
 import type { JobConfig } from "@/lib/types";
-import { getOptions, uploadVideo, createJob } from "@/lib/api";
+import { getOptions, getSettings, uploadVideo, createJob } from "@/lib/api";
 import { useRouter } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
@@ -21,6 +21,7 @@ export function NewJobFlow() {
   const t = useTranslations("App.newJob");
   const router = useRouter();
   const optionsQuery = useQuery({ queryKey: ["options"], queryFn: getOptions });
+  const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings });
 
   const [file, setFile] = useState<File | null>(null);
   const [sel, setSel] = useState<Partial<JobConfig>>({});
@@ -40,14 +41,15 @@ export function NewJobFlow() {
     return <BackendError onRetry={() => optionsQuery.refetch()} />;
 
   const options = optionsQuery.data;
+  const settings = settingsQuery.data;
   const set = <K extends keyof JobConfig>(key: K, value: JobConfig[K]) =>
     setSel((s) => ({ ...s, [key]: value }));
 
-  // Effective config: user selection, falling back to the first available option.
+  // Effective config: user selection, then the saved default, then the first option.
   const config: JobConfig = {
     targetLang: sel.targetLang ?? options.languages[0]?.code ?? "en",
-    translator: sel.translator ?? options.translators[0]?.id ?? "google",
-    tts: sel.tts ?? options.ttsEngines[0]?.id ?? "edge",
+    translator: sel.translator ?? settings?.defaultTranslator ?? options.translators[0]?.id ?? "google",
+    tts: sel.tts ?? settings?.defaultTts ?? options.ttsEngines[0]?.id ?? "edge",
     whisperModel: sel.whisperModel ?? "base",
     voiceSample: sel.voiceSample,
     openaiTtsModel: sel.openaiTtsModel ?? options.openaiTtsModels[0]?.id ?? "gpt-4o-mini-tts",

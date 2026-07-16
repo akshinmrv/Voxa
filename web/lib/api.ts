@@ -1,5 +1,13 @@
 import { API_BASE } from "./config";
-import type { JobConfig, JobSummary, VoxaOptions } from "./types";
+import type {
+  JobConfig,
+  JobSummary,
+  ProviderKeyStatus,
+  ProviderTestResult,
+  SettingsPatch,
+  VoxaOptions,
+  VoxaSettings,
+} from "./types";
 
 /**
  * Client for the `voxa serve` backend. Every call hits the local API at
@@ -51,6 +59,53 @@ export async function getJob(id: string): Promise<JobSummary> {
 
 export async function listJobs(): Promise<{ jobs: JobSummary[] }> {
   return asJson(await fetch(`${API_BASE}/api/jobs`));
+}
+
+// ── Settings & API keys (P0) ────────────────────────────────────────────────
+
+export async function getSettings(): Promise<VoxaSettings> {
+  return asJson(await fetch(`${API_BASE}/api/settings`));
+}
+
+export async function updateSettings(patch: SettingsPatch): Promise<VoxaSettings> {
+  return asJson(
+    await fetch(`${API_BASE}/api/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }),
+  );
+}
+
+export async function resetSettings(): Promise<VoxaSettings> {
+  return asJson(await fetch(`${API_BASE}/api/settings/reset`, { method: "POST" }));
+}
+
+export async function getKeys(): Promise<{ keys: ProviderKeyStatus[] }> {
+  return asJson(await fetch(`${API_BASE}/api/keys`));
+}
+
+export async function putKey(
+  provider: string,
+  value: string,
+): Promise<{ keys: ProviderKeyStatus[] }> {
+  return asJson(
+    await fetch(`${API_BASE}/api/keys/${provider}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value }),
+    }),
+  );
+}
+
+export async function deleteKey(provider: string): Promise<{ keys: ProviderKeyStatus[] }> {
+  return asJson(await fetch(`${API_BASE}/api/keys/${provider}`, { method: "DELETE" }));
+}
+
+export async function testProvider(provider: string): Promise<ProviderTestResult> {
+  return asJson(
+    await fetch(`${API_BASE}/api/providers/${provider}/test`, { method: "POST" }),
+  );
 }
 
 export const jobEventsUrl = (id: string) => `${API_BASE}/api/jobs/${id}/events`;

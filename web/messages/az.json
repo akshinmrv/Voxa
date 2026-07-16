@@ -264,10 +264,44 @@
     },
     "settings": {
       "title": "Ayarlar",
-      "subtitle": "API açarları, defolt dəyərlər və görünüş.",
-      "note": "API açarları hazırda .env-də saxlanılır. Tema və dil aşağıdadır.",
-      "theme": "Tema",
-      "language": "Dil"
+      "subtitle": "Provider-lər, API açarları və görünüş.",
+      "providers": {
+        "title": "Provider-lər",
+        "desc": "İş ayrıca dəyər göstərməyəndə istifadə olunan defolt mühərriklər.",
+        "translator": "Defolt tərcüməçi",
+        "tts": "Defolt səs mühərriki",
+        "save": "Dəyişiklikləri saxla",
+        "saved": "Saxlanıldı"
+      },
+      "keys": {
+        "title": "API provider-lər",
+        "desc": "Tərcümə üçün OpenAI və ya Anthropic istifadə etmək üçün açar əlavə et. Açarlar lokal .env faylında saxlanılır və bu maşından heç vaxt çıxmır.",
+        "notSet": "Təyin edilməyib",
+        "keyLabel": "API açarı",
+        "keyPlaceholderSet": "Saxlanılıb — dəyişmək üçün yeni açar daxil et",
+        "keyPlaceholderEmpty": "API açarını yapışdır",
+        "show": "Açarı göstər",
+        "hide": "Açarı gizlət",
+        "saveKey": "Açarı saxla",
+        "deleteKey": "Sil",
+        "modelLabel": "Defolt model",
+        "saveModel": "Saxla",
+        "test": "Bağlantını yoxla",
+        "testing": "Yoxlanılır…",
+        "testOk": "Qoşuldu",
+        "testFail": "Bağlantı alınmadı"
+      },
+      "appearance": {
+        "title": "Görünüş",
+        "theme": "Tema",
+        "language": "Dil"
+      },
+      "danger": {
+        "title": "Təhlükə zonası",
+        "desc": "Bütün ayarları defolt dəyərlərə sıfırla. API açarlarına təsir etmir.",
+        "reset": "Ayarları sıfırla",
+        "confirm": "Bütün ayarları defolt dəyərlərə sıfırlamaq?"
+      }
     },
     "status": {
       "queued": "Növbədə",

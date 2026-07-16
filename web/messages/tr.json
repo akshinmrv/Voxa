@@ -264,10 +264,44 @@
     },
     "settings": {
       "title": "Ayarlar",
-      "subtitle": "API anahtarları, varsayılanlar ve görünüm.",
-      "note": "API anahtarları şimdilik .env dosyanda tutulur. Tema ve dil aşağıda.",
-      "theme": "Tema",
-      "language": "Dil"
+      "subtitle": "Sağlayıcılar, API anahtarları ve görünüm.",
+      "providers": {
+        "title": "Sağlayıcılar",
+        "desc": "Bir iş bunları geçersiz kılmadığında kullanılan varsayılan motorlar.",
+        "translator": "Varsayılan çevirmen",
+        "tts": "Varsayılan konuşma motoru",
+        "save": "Değişiklikleri kaydet",
+        "saved": "Kaydedildi"
+      },
+      "keys": {
+        "title": "API sağlayıcıları",
+        "desc": "Çeviri için OpenAI veya Anthropic kullanmak üzere bir anahtar ekle. Anahtarlar yerel .env dosyanda saklanır ve bu makineden asla çıkmaz.",
+        "notSet": "Ayarlanmadı",
+        "keyLabel": "API anahtarı",
+        "keyPlaceholderSet": "Kaydedildi — değiştirmek için yeni anahtar gir",
+        "keyPlaceholderEmpty": "API anahtarını yapıştır",
+        "show": "Anahtarı göster",
+        "hide": "Anahtarı gizle",
+        "saveKey": "Anahtarı kaydet",
+        "deleteKey": "Kaldır",
+        "modelLabel": "Varsayılan model",
+        "saveModel": "Kaydet",
+        "test": "Bağlantıyı test et",
+        "testing": "Test ediliyor…",
+        "testOk": "Bağlandı",
+        "testFail": "Bağlantı başarısız"
+      },
+      "appearance": {
+        "title": "Görünüm",
+        "theme": "Tema",
+        "language": "Dil"
+      },
+      "danger": {
+        "title": "Tehlike bölgesi",
+        "desc": "Tüm ayarları varsayılanlarına sıfırla. API anahtarların etkilenmez.",
+        "reset": "Ayarları sıfırla",
+        "confirm": "Tüm ayarlar varsayılanlarına sıfırlansın mı?"
+      }
     },
     "status": {
       "queued": "Sırada",

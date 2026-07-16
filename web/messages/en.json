@@ -264,10 +264,44 @@
     },
     "settings": {
       "title": "Settings",
-      "subtitle": "API keys, defaults, and appearance.",
-      "note": "API keys live in your .env for now. Theme and language are below.",
-      "theme": "Theme",
-      "language": "Language"
+      "subtitle": "Providers, API keys, and appearance.",
+      "providers": {
+        "title": "Providers",
+        "desc": "Default engines used when a job doesn't override them.",
+        "translator": "Default translator",
+        "tts": "Default speech engine",
+        "save": "Save changes",
+        "saved": "Saved"
+      },
+      "keys": {
+        "title": "API providers",
+        "desc": "Add a key to use OpenAI or Anthropic for translation. Keys are stored in your local .env and never leave this machine.",
+        "notSet": "Not set",
+        "keyLabel": "API key",
+        "keyPlaceholderSet": "Saved — enter a new key to replace",
+        "keyPlaceholderEmpty": "Paste your API key",
+        "show": "Show key",
+        "hide": "Hide key",
+        "saveKey": "Save key",
+        "deleteKey": "Remove",
+        "modelLabel": "Default model",
+        "saveModel": "Save",
+        "test": "Test connection",
+        "testing": "Testing…",
+        "testOk": "Connected",
+        "testFail": "Connection failed"
+      },
+      "appearance": {
+        "title": "Appearance",
+        "theme": "Theme",
+        "language": "Language"
+      },
+      "danger": {
+        "title": "Danger zone",
+        "desc": "Reset all settings to their defaults. Your API keys are not affected.",
+        "reset": "Reset settings",
+        "confirm": "Reset all settings to their defaults?"
+      }
     },
     "status": {
       "queued": "Queued",

@@ -23,12 +23,13 @@ import os
 import re
 import shutil
 import sys
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
@@ -80,7 +81,9 @@ def build_options() -> dict:
     for pid in sorted(voxa.LLM_PROVIDERS):
         meta = _TRANSLATOR_META.get(pid, {"label": pid.capitalize(),
                                           "description": "Context-aware LLM, needs API key"})
-        translators.append({"id": pid, **meta})
+        # defaultModel lets the settings UI show the engine's built-in model as a placeholder.
+        translators.append({"id": pid, **meta,
+                            "defaultModel": voxa.LLM_PROVIDERS[pid]["default_model"]})
 
     tts_engines = []
     for tid in sorted(voxa.TTS_PROVIDERS):
@@ -188,6 +191,8 @@ async def _run_job(job: Job) -> None:
             "--whisper_model", cfg.whisperModel,
             "--output-dir", str(job.work_dir),
         ]
+        # Pin the translation model to the operator's saved per-provider choice (P1).
+        cmd += provider_model_args(cfg.translator, read_settings())
         if cfg.tts == "xtts" and cfg.voiceSample:
             cmd += ["--voice-sample", cfg.voiceSample]
         if cfg.tts == "openai":
@@ -243,6 +248,200 @@ async def _run_job(job: Job) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Settings & API keys (P0 — Foundation)
+#
+# The operator UI persists two kinds of config, deliberately kept apart:
+#   • non-secret settings  → .voxa_serve/settings.json  (safe to keep/version)
+#   • API keys (secrets)   → the .env file              (git-ignored, never echoed)
+#
+# The core `voxa.py` engine is untouched: it already reads keys from the
+# environment and defaults from a --config JSON, so this layer only writes the
+# files it already knows how to read. See AI_PROVIDER_AND_SPEECH_CONTROL_STRATEGY_AZ.md.
+# --------------------------------------------------------------------------- #
+
+SETTINGS_FILE = WORKSPACE / "settings.json"
+SETTINGS_VERSION = 1
+
+# .env path the settings layer reads/writes; set from --env-file at startup.
+ENV_FILE = ".env"
+
+# Only requests from the loopback interface may read or change settings/keys.
+_LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
+def default_settings() -> dict:
+    """The out-of-the-box settings object. Nested groups (translation/speech/advanced)
+    are placeholders that later phases (P2/P3/P4) populate; None means "use the engine's
+    built-in default"."""
+    return {
+        "version": SETTINGS_VERSION,
+        "defaultTranslator": "google",
+        "defaultTts": "edge",
+        # Per-LLM-provider default translation model (None = the engine's built-in default).
+        "providers": {pid: {"model": None} for pid in voxa.LLM_PROVIDERS},
+        "translation": {"prompt": None},
+        "speech": {"instructions": None, "presets": []},
+        "advanced": {"speechRate": None},
+    }
+
+
+def _merge_settings(base: dict, patch: dict) -> dict:
+    """Shallow merge with one level of nesting for the known group objects. A None value
+    in the patch is ignored (partial update), so callers only send what changed."""
+    out = dict(base)
+    for key, value in patch.items():
+        if value is None:
+            continue
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            nested = dict(out[key])
+            nested.update(value)
+            out[key] = nested
+        else:
+            out[key] = value
+    return out
+
+
+def read_settings() -> dict:
+    """Current settings, always shaped like default_settings() (missing keys are filled,
+    so an older on-disk file stays forward-compatible). Invalid/missing file → defaults."""
+    base = default_settings()
+    try:
+        if SETTINGS_FILE.exists():
+            data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                base = _merge_settings(base, data)
+    except Exception:
+        pass
+    base["version"] = SETTINGS_VERSION
+    return base
+
+
+def write_settings(patch: dict) -> dict:
+    """Merge a partial patch into the current settings and persist atomically."""
+    updated = _merge_settings(read_settings(), patch)
+    updated["version"] = SETTINGS_VERSION
+    SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = SETTINGS_FILE.with_name(SETTINGS_FILE.name + ".tmp")
+    tmp.write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(SETTINGS_FILE)
+    return updated
+
+
+def reset_settings() -> dict:
+    """Delete the settings file so defaults take over again (Danger Zone → Reset)."""
+    try:
+        SETTINGS_FILE.unlink()
+    except FileNotFoundError:
+        pass
+    return read_settings()
+
+
+def valid_translators() -> Set[str]:
+    return {"google", "ollama"} | set(voxa.LLM_PROVIDERS)
+
+
+# ── API-key storage in .env (secrets never leave the machine) ────────────────
+
+def _mask(value: str) -> str:
+    """Show only the last 4 chars; the full key is never returned to the browser."""
+    v = (value or "").strip()
+    return ("••••" + v[-4:]) if len(v) > 4 else "••••"
+
+
+def _key_lines_without(env_key: str) -> List[str]:
+    path = Path(ENV_FILE)
+    if not path.exists():
+        return []
+    return [ln for ln in path.read_text(encoding="utf-8").splitlines()
+            if not ln.strip().replace(" ", "").startswith(f"{env_key}=")]
+
+
+def set_env_key(env_key: str, value: str) -> None:
+    """Upsert KEY=value in the .env file (preserving other lines) and the live process
+    environment, so already-inherited job subprocesses and new ones both see it."""
+    value = (value or "").strip()
+    lines = _key_lines_without(env_key)
+    lines.append(f"{env_key}={value}")
+    Path(ENV_FILE).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.environ[env_key] = value
+
+
+def delete_env_key(env_key: str) -> None:
+    """Remove KEY=... from the .env file and the live environment."""
+    lines = _key_lines_without(env_key)
+    path = Path(ENV_FILE)
+    path.write_text(("\n".join(lines) + "\n") if lines else "", encoding="utf-8")
+    os.environ.pop(env_key, None)
+
+
+def read_key_status() -> List[dict]:
+    """Masked status for every provider that needs a key. 'hasKey' reflects the live
+    environment (what a job would actually use), never the raw value."""
+    out = []
+    for pid, info in voxa.LLM_PROVIDERS.items():
+        env_key = info["env_key"]
+        value = os.environ.get(env_key, "")
+        out.append({
+            "provider": pid,
+            "envKey": env_key,
+            "hasKey": bool(value),
+            "masked": _mask(value) if value else None,
+        })
+    return out
+
+
+def require_local(request: Request) -> None:
+    """Reject any non-loopback caller. Defense in depth: the server binds 127.0.0.1 by
+    default, but this still holds if it is ever started with --host 0.0.0.0."""
+    host = request.client.host if request.client else ""
+    if host not in _LOCAL_HOSTS:
+        raise HTTPException(status_code=403, detail="Settings are available on localhost only.")
+
+
+class SettingsPatch(BaseModel):
+    defaultTranslator: Optional[str] = None
+    defaultTts: Optional[str] = None
+    providers: Optional[dict] = None
+    translation: Optional[dict] = None
+    speech: Optional[dict] = None
+    advanced: Optional[dict] = None
+
+
+class KeyBody(BaseModel):
+    value: str
+
+
+def provider_model_args(translator: str, settings: dict) -> List[str]:
+    """Extra CLI args pinning the translation model for an LLM provider, from settings.
+    Returns [] for non-LLM translators (google/ollama) or when no model is configured."""
+    if translator not in voxa.LLM_PROVIDERS:
+        return []
+    model = ((settings.get("providers") or {}).get(translator) or {}).get("model")
+    return [f"--{translator}_model", str(model)] if model else []
+
+
+def test_provider(pid: str) -> dict:
+    """Connection test for one LLM provider: a cheap, no-token models.list() call that
+    only checks the key is valid and the endpoint is reachable. Never raises."""
+    info = voxa.LLM_PROVIDERS.get(pid)
+    if not info:
+        return {"ok": False, "error": f"Unknown provider: {pid}"}
+    if not os.environ.get(info["env_key"]):
+        return {"ok": False, "error": "No API key set."}
+    try:
+        key = os.environ[info["env_key"]]
+        client = (voxa.get_anthropic_client(key) if pid == "anthropic"
+                  else voxa.get_openai_client(key))
+        if client is None:
+            return {"ok": False, "error": "Client unavailable (provider package missing?)."}
+        started = time.perf_counter()
+        client.models.list()
+        return {"ok": True, "latencyMs": int((time.perf_counter() - started) * 1000)}
+    except Exception as exc:  # noqa: BLE001 — surface any auth/network error to the UI
+        return {"ok": False, "error": str(exc)[:300]}
+
+
+# --------------------------------------------------------------------------- #
 # App
 # --------------------------------------------------------------------------- #
 
@@ -266,6 +465,61 @@ async def health() -> dict:
 @app.get("/api/options")
 async def options() -> dict:
     return build_options()
+
+
+@app.get("/api/settings")
+async def get_settings() -> dict:
+    return read_settings()
+
+
+@app.put("/api/settings")
+async def put_settings(patch: SettingsPatch, _: None = Depends(require_local)) -> dict:
+    data = patch.model_dump(exclude_none=True)
+    if "defaultTranslator" in data and data["defaultTranslator"] not in valid_translators():
+        raise HTTPException(status_code=422,
+                            detail=f"Unknown translator: {data['defaultTranslator']}")
+    if "defaultTts" in data and data["defaultTts"] not in set(voxa.TTS_PROVIDERS):
+        raise HTTPException(status_code=422, detail=f"Unknown TTS engine: {data['defaultTts']}")
+    if "providers" in data:
+        for pid in data["providers"]:
+            if pid not in voxa.LLM_PROVIDERS:
+                raise HTTPException(status_code=422, detail=f"Unknown provider: {pid}")
+    return write_settings(data)
+
+
+@app.post("/api/settings/reset")
+async def post_settings_reset(_: None = Depends(require_local)) -> dict:
+    return reset_settings()
+
+
+@app.get("/api/keys")
+async def get_keys(_: None = Depends(require_local)) -> dict:
+    return {"keys": read_key_status()}
+
+
+@app.put("/api/keys/{provider}")
+async def put_key(provider: str, body: KeyBody, _: None = Depends(require_local)) -> dict:
+    info = voxa.LLM_PROVIDERS.get(provider)
+    if not info:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
+    if not body.value.strip():
+        raise HTTPException(status_code=422, detail="Key value is empty.")
+    set_env_key(info["env_key"], body.value)
+    return {"keys": read_key_status()}
+
+
+@app.delete("/api/keys/{provider}")
+async def delete_key(provider: str, _: None = Depends(require_local)) -> dict:
+    info = voxa.LLM_PROVIDERS.get(provider)
+    if not info:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
+    delete_env_key(info["env_key"])
+    return {"keys": read_key_status()}
+
+
+@app.post("/api/providers/{provider}/test")
+async def post_provider_test(provider: str, _: None = Depends(require_local)) -> dict:
+    return test_provider(provider)
 
 
 @app.post("/api/upload")
@@ -377,6 +631,10 @@ def run_from_cli(argv: List[str]) -> int:
     parser.add_argument("--env-file", default=".env",
                         help="Load API keys from this .env file (default: .env)")
     args = parser.parse_args(argv)
+
+    # The settings layer reads/writes keys in this same .env file.
+    global ENV_FILE
+    ENV_FILE = args.env_file
 
     # Emoji in our banners/logs must survive a legacy console codepage (e.g. cp1254).
     for stream in (sys.stdout, sys.stderr):
