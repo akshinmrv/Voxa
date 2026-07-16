@@ -300,6 +300,17 @@
         "reset": "Reset to default",
         "saved": "Saved"
       },
+      "speech": {
+        "title": "Speech style",
+        "desc": "How the dubbed voice should sound with OpenAI TTS. Combine presets, add your own direction, or both.",
+        "presetsLabel": "Presets",
+        "textLabel": "Your own direction",
+        "placeholder": "e.g. Like a nature documentary narrator. Confident, never rushed.",
+        "guard": "Timing is always enforced: Voxa appends a locked instruction for steady, natural pacing with no added pauses. Style changes how the voice sounds — never how long a line takes, so the dub stays in sync.",
+        "save": "Save style",
+        "reset": "Reset to default",
+        "saved": "Saved"
+      },
       "appearance": {
         "title": "Appearance",
         "theme": "Theme",

@@ -292,3 +292,58 @@ def test_translation_prompt_roundtrip_over_http(client):
 def test_translation_prompt_too_long_rejected(client):
     r = client.put("/api/settings", json={"translation": {"prompt": "x" * 4001}})
     assert r.status_code == 422
+
+
+# ── P3: speech style ─────────────────────────────────────
+def test_compile_speech_style_presets_and_free_text():
+    settings = {"speech": {"presets": ["warm", "documentary"], "instructions": "brand voice"}}
+    out = srv.compile_speech_style(settings)
+    assert "warm and reassuring" in out
+    assert "documentary-narrator" in out
+    assert out.endswith("brand voice")
+
+
+def test_compile_speech_style_ignores_unknown_presets():
+    assert srv.compile_speech_style({"speech": {"presets": ["nope"]}}) == ""
+
+
+def test_compile_speech_style_empty():
+    assert srv.compile_speech_style({}) == ""
+    assert srv.compile_speech_style({"speech": {"presets": [], "instructions": "  "}}) == ""
+
+
+def test_speech_style_args_only_for_openai_tts():
+    settings = {"speech": {"presets": ["warm"], "instructions": ""}}
+    assert srv.speech_style_args("openai", settings) == \
+        ["--openai-tts-instructions", "warm and reassuring"]
+    assert srv.speech_style_args("edge", settings) == []
+    assert srv.speech_style_args("piper", settings) == []
+
+
+def test_speech_style_args_empty_style_passes_nothing():
+    # No style → no flag → voxa falls back to the guard-only default.
+    assert srv.speech_style_args("openai", {"speech": {"presets": []}}) == []
+
+
+def test_speech_settings_roundtrip_over_http(client):
+    r = client.put("/api/settings",
+                   json={"speech": {"presets": ["warm"], "instructions": "friendly"}})
+    assert r.status_code == 200
+    speech = client.get("/api/settings").json()["speech"]
+    assert speech["presets"] == ["warm"]
+    assert speech["instructions"] == "friendly"
+
+
+def test_speech_unknown_preset_rejected(client):
+    r = client.put("/api/settings", json={"speech": {"presets": ["bogus"]}})
+    assert r.status_code == 422
+
+
+def test_speech_instructions_too_long_rejected(client):
+    r = client.put("/api/settings", json={"speech": {"instructions": "x" * 2001}})
+    assert r.status_code == 422
+
+
+def test_build_options_exposes_speech_presets():
+    presets = {p["id"] for p in srv.build_options()["speechPresets"]}
+    assert {"warm", "documentary", "energetic"} <= presets

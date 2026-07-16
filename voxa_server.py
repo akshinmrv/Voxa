@@ -65,6 +65,23 @@ _TRANSLATOR_META = {
     "anthropic": {"label": "Anthropic", "description": "Context-aware, needs API key"},
 }
 
+# Composable speech-style presets for OpenAI TTS (P3). Each compiles to a short phrase;
+# they are style only — voxa itself appends the locked timing guard, so no preset here can
+# affect pacing, duration or dub sync.
+SPEECH_STYLE_PRESETS = {
+    "warm": "warm and reassuring",
+    "confident": "confident and assured",
+    "calm": "calm and composed",
+    "excited": "excited and upbeat",
+    "documentary": "measured, authoritative documentary-narrator tone",
+    "professional": "polished and professional",
+    "energetic": "energetic and lively",
+    "sad": "subdued and sombre",
+    "friendly": "friendly and approachable",
+    "natural": "natural and conversational",
+    "narration": "clear narration voice",
+}
+
 _TTS_META = {
     "edge": {"label": "Edge", "description": "Cloud, many natural voices"},
     "openai": {"label": "OpenAI", "description": "Cloud or self-hosted endpoint"},
@@ -97,6 +114,8 @@ def build_options() -> dict:
         "whisperModels": [{"id": m, "label": m} for m in WHISPER_MODELS],
         "openaiTtsModels": [{"id": m, "label": m} for m in OPENAI_TTS_MODELS],
         "openaiVoices": [{"id": v, "label": v} for v in OPENAI_VOICES],
+        "speechPresets": [{"id": k, "label": k.capitalize()}
+                          for k in SPEECH_STYLE_PRESETS],
     }
 
 
@@ -195,6 +214,7 @@ async def _run_job(job: Job) -> None:
         current_settings = read_settings()
         cmd += provider_model_args(cfg.translator, current_settings)
         cmd += translation_prompt_args(cfg.translator, current_settings)
+        cmd += speech_style_args(cfg.tts, current_settings)
         if cfg.tts == "xtts" and cfg.voiceSample:
             cmd += ["--voice-sample", cfg.voiceSample]
         if cfg.tts == "openai":
@@ -431,6 +451,27 @@ def translation_prompt_args(translator: str, settings: dict) -> List[str]:
     return ["--translation-prompt", prompt] if prompt else []
 
 
+def compile_speech_style(settings: dict) -> str:
+    """Flatten the saved speech style (preset ids + free text) into one style phrase.
+    Style only: voxa appends the locked timing guard, which this can never remove."""
+    speech = settings.get("speech") or {}
+    parts = [SPEECH_STYLE_PRESETS[p] for p in (speech.get("presets") or [])
+             if p in SPEECH_STYLE_PRESETS]
+    free = (speech.get("instructions") or "").strip()
+    if free:
+        parts.append(free)
+    return "; ".join(parts).strip()
+
+
+def speech_style_args(tts: str, settings: dict) -> List[str]:
+    """CLI args carrying the operator's speech style (P3) to an OpenAI TTS job. Other
+    engines don't take instructions, so returns [] for them."""
+    if tts != "openai":
+        return []
+    style = compile_speech_style(settings)
+    return ["--openai-tts-instructions", style] if style else []
+
+
 def test_provider(pid: str) -> dict:
     """Connection test for one LLM provider: a cheap, no-token models.list() call that
     only checks the key is valid and the endpoint is reachable. Never raises."""
@@ -500,6 +541,20 @@ async def put_settings(patch: SettingsPatch, _: None = Depends(require_local)) -
         if prompt is not None and len(str(prompt)) > 4000:
             raise HTTPException(status_code=422,
                                 detail="Translation style guidance is too long (max 4000 chars).")
+    if "speech" in data:
+        speech = data["speech"] or {}
+        presets = speech.get("presets")
+        if presets is not None:
+            if not isinstance(presets, list):
+                raise HTTPException(status_code=422, detail="speech.presets must be a list.")
+            for pid in presets:
+                if pid not in SPEECH_STYLE_PRESETS:
+                    raise HTTPException(status_code=422,
+                                        detail=f"Unknown speech preset: {pid}")
+        instr = speech.get("instructions")
+        if instr is not None and len(str(instr)) > 2000:
+            raise HTTPException(status_code=422,
+                                detail="Speech style text is too long (max 2000 chars).")
     return write_settings(data)
 
 

@@ -300,6 +300,17 @@
         "reset": "Varsayılana döndür",
         "saved": "Kaydedildi"
       },
+      "speech": {
+        "title": "Konuşma stili",
+        "desc": "OpenAI TTS ile dublaj sesinin nasıl duyulacağı. Hazır stilleri birleştir, kendi yönlendirmeni ekle veya ikisini birden.",
+        "presetsLabel": "Hazır stiller",
+        "textLabel": "Kendi yönlendirmen",
+        "placeholder": "örn. Bir doğa belgeseli anlatıcısı gibi. Kendinden emin, asla aceleci değil.",
+        "guard": "Zamanlama her zaman korunur: Voxa, sabit ve doğal tempo ile ek duraklama olmaması için kilitli bir talimat ekler. Stil sesin NASIL duyulduğunu değiştirir — bir satırın ne kadar sürdüğünü değil, böylece dublaj senkronda kalır.",
+        "save": "Stili kaydet",
+        "reset": "Varsayılana döndür",
+        "saved": "Kaydedildi"
+      },
       "appearance": {
         "title": "Görünüm",
         "theme": "Tema",

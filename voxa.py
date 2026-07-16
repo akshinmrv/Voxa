@@ -641,6 +641,48 @@ def infer_delivery_llm(texts: List[str], client, *,
     return _parse_delivery_json(raw, n)
 
 
+# ── Speech style: operator layer + LOCKED timing guard ──
+#
+# Emotion must change HOW a line sounds, never how long it takes. The guard below is
+# appended to every request and always comes last, so the model weights it most: an
+# expressive style can't turn into slow, pause-heavy delivery that anchored placement
+# would then have to trim (see _place_speech_block). It is exactly the historical default
+# instruction, so with no operator style the request is unchanged.
+DEFAULT_TTS_TIMING_GUARD = (
+    "Speak naturally and clearly at a steady, even pace that matches the natural rhythm "
+    "of speech. Do not slow down or add pauses."
+)
+
+# Style phrases that fight the guard by asking for slower / pause-heavy delivery.
+_PACING_CONFLICT_RE = re.compile(
+    r"\b(slow|slowly|slower|pause|pauses|linger|lingering|drawn[- ]out|leisurely|"
+    r"unhurried|drag it out|drag out|take your time)\b",
+    re.IGNORECASE,
+)
+
+
+def _as_sentence(part: str) -> str:
+    """Terminate a fragment so composed instructions read as separate sentences instead of
+    running together (the guard has to land as its own clear directive)."""
+    p = (part or "").strip()
+    return (p if p[-1] in ".!?" else p + ".") if p else ""
+
+
+def _build_tts_instructions(style: str = "", hint: str = "",
+                            guard: str = DEFAULT_TTS_TIMING_GUARD) -> str:
+    """Compose one line's TTS `instructions`: operator style, then the per-line delivery
+    hint, then the locked timing guard LAST. With no style and no hint this is exactly the
+    guard — i.e. byte-identical to the previous default instruction."""
+    parts = (_as_sentence(style), _as_sentence(hint), (guard or "").strip())
+    return " ".join(p for p in parts if p).strip()
+
+
+def _detect_pacing_conflicts(style: str) -> List[str]:
+    """Phrases in an operator style that ask for slower or pause-heavy delivery. The guard
+    still wins; surfacing these explains why such a style won't fully take effect."""
+    return sorted({m.group(0).lower() for m in _PACING_CONFLICT_RE.finditer(style or "")})
+
+
 async def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
                              lang_code: str, concat_list: list, temp_files: list,
                              work_dir: Path, enable_stretch: bool,
@@ -671,7 +713,7 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
     def _render(i, text, final_file, target_duration):
         raw_file = work_dir / f"otts_raw_{i}.wav"
         hint = _delivery_hint(i, deliveries, subs[i].text)
-        seg_instr = " ".join(x for x in (instructions, hint) if x).strip()
+        seg_instr = _build_tts_instructions(instructions, hint)
         kwargs = {"model": model, "voice": voice, "input": text, "response_format": "wav"}
         if seg_instr:
             kwargs["instructions"] = seg_instr
@@ -2303,6 +2345,14 @@ async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
     where = base_url or "api.openai.com"
     logger.info(f"🎙️  OpenAI TTS: {args.openai_tts_model} / voice '{args.openai_voice}' "
                 f"@ {where}")
+    style = args.openai_tts_instructions or ""
+    if style:
+        logger.info(f"🎭 Speech style: {style}")
+    conflicts = _detect_pacing_conflicts(style)
+    if conflicts:
+        logger.warning(f"⚠️  Speech style asks for slower delivery ({', '.join(conflicts)}). "
+                       f"The timing guard still applies, so the dub stays anchored to the "
+                       f"source — that part of the style will not take effect.")
     concat_list, temp_files = [], []
     await generate_openai_tts(
         subs, client, args.openai_voice, args.openai_tts_model,
@@ -2690,11 +2740,11 @@ Examples:
                              "OpenAI (e.g. http://localhost:8004/v1 for Chatterbox-TTS-Server "
                              "or LocalAI). No API key is required. Translation still uses "
                              "OpenAI unless you change --translator")
-    parser.add_argument("--openai-tts-instructions",
-                        default="Speak naturally and clearly at a steady, even pace that "
-                                "matches the natural rhythm of speech. Do not slow down or "
-                                "add pauses.",
-                        help="Delivery instructions for gpt-4o-mini-tts")
+    parser.add_argument("--openai-tts-instructions", default="",
+                        help="Speech style for gpt-4o-mini-tts (e.g. 'warm and reassuring; "
+                             "documentary tone'). Voxa always appends a locked timing guard "
+                             "(steady pace, no added pauses), so an expressive style changes "
+                             "delivery without breaking dub sync.")
     parser.add_argument("--voice-sample", type=str, default=None,
                         help="Path to reference WAV for XTTS voice cloning (optional, "
                              "auto-extracted from source video if not provided)")

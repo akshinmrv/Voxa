@@ -17,6 +17,9 @@ export type EngineOption = {
 
 export type WhisperModel = { id: string; label: string };
 
+/** A composable speech-style preset (OpenAI TTS). Style only — timing stays locked. */
+export type SpeechPreset = { id: string; label: string };
+
 export type VoxaOptions = {
   languages: LanguageOption[];
   translators: EngineOption[];
@@ -24,6 +27,7 @@ export type VoxaOptions = {
   whisperModels: WhisperModel[];
   openaiTtsModels: WhisperModel[];
   openaiVoices: WhisperModel[];
+  speechPresets: SpeechPreset[];
 };
 
 export type JobConfig = {

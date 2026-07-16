@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Check, Loader2, RotateCcw } from "lucide-react";
+import { Check, Loader2, Lock, RotateCcw } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   getOptions,
   getSettings,
@@ -35,6 +36,9 @@ export function SettingsView() {
   const [draft, setDraft] = useState<SettingsPatch>({});
   // Translation style guidance: null = "in sync with saved", else an unsaved edit.
   const [promptDraft, setPromptDraft] = useState<string | null>(null);
+  // Speech style: preset ids + free text, same null-means-in-sync convention.
+  const [presetsDraft, setPresetsDraft] = useState<string[] | null>(null);
+  const [speechTextDraft, setSpeechTextDraft] = useState<string | null>(null);
 
   const save = useMutation({
     mutationFn: (patch: SettingsPatch) => updateSettings(patch),
@@ -49,6 +53,15 @@ export function SettingsView() {
     onSuccess: (data) => {
       qc.setQueryData(["settings"], data);
       setPromptDraft(null);
+    },
+  });
+
+  const saveSpeech = useMutation({
+    mutationFn: (patch: SettingsPatch) => updateSettings(patch),
+    onSuccess: (data) => {
+      qc.setQueryData(["settings"], data);
+      setPresetsDraft(null);
+      setSpeechTextDraft(null);
     },
   });
 
@@ -80,6 +93,21 @@ export function SettingsView() {
   const savedPrompt = settings.translation?.prompt ?? "";
   const promptValue = promptDraft ?? savedPrompt;
   const promptDirty = promptDraft !== null && promptDraft !== savedPrompt;
+
+  const savedPresets = settings.speech?.presets ?? [];
+  const savedSpeechText = settings.speech?.instructions ?? "";
+  const presetsValue = presetsDraft ?? savedPresets;
+  const speechTextValue = speechTextDraft ?? savedSpeechText;
+  const speechDirty =
+    (presetsDraft !== null && presetsDraft.join() !== savedPresets.join()) ||
+    (speechTextDraft !== null && speechTextDraft !== savedSpeechText);
+  const hasSpeechStyle = savedPresets.length > 0 || savedSpeechText.length > 0;
+  const togglePreset = (id: string) =>
+    setPresetsDraft(
+      presetsValue.includes(id)
+        ? presetsValue.filter((p) => p !== id)
+        : [...presetsValue, id],
+    );
 
   return (
     <Shell>
@@ -201,6 +229,88 @@ export function SettingsView() {
             )}
             {savePrompt.isError && (
               <span className="text-sm text-danger">{(savePrompt.error as Error).message}</span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Speech style ---------------------------------------------------- */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("speech.title")}</CardTitle>
+          <CardDescription>{t("speech.desc")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Field id="speechPresets" label={t("speech.presetsLabel")}>
+            <div className="flex flex-wrap gap-2">
+              {options.speechPresets.map((p) => {
+                const on = presetsValue.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => togglePreset(p.id)}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                      on
+                        ? "border-primary/40 bg-primary/15 text-primary"
+                        : "border-border bg-surface-1 text-muted-foreground hover:border-primary/40",
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+
+          <Field id="speechText" label={t("speech.textLabel")}>
+            <Textarea
+              id="speechText"
+              rows={3}
+              value={speechTextValue}
+              placeholder={t("speech.placeholder")}
+              onChange={(e) => setSpeechTextDraft(e.target.value)}
+            />
+          </Field>
+
+          <div className="flex gap-3 rounded-sm border border-border bg-surface-1 p-3">
+            <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">{t("speech.guard")}</p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button
+              disabled={!speechDirty || saveSpeech.isPending}
+              onClick={() =>
+                saveSpeech.mutate({
+                  speech: {
+                    presets: presetsValue,
+                    instructions: speechTextValue.trim() || null,
+                  },
+                })
+              }
+            >
+              {saveSpeech.isPending ? <Loader2 className="animate-spin" /> : null}
+              {t("speech.save")}
+            </Button>
+            {hasSpeechStyle && (
+              <Button
+                variant="outline"
+                disabled={saveSpeech.isPending}
+                onClick={() => saveSpeech.mutate({ speech: { presets: [], instructions: null } })}
+              >
+                {t("speech.reset")}
+              </Button>
+            )}
+            {saveSpeech.isSuccess && !speechDirty && (
+              <span className="inline-flex items-center gap-1.5 text-sm text-success">
+                <Check className="size-4" /> {t("speech.saved")}
+              </span>
+            )}
+            {saveSpeech.isError && (
+              <span className="text-sm text-danger">{(saveSpeech.error as Error).message}</span>
             )}
           </div>
         </CardContent>

@@ -1145,3 +1145,47 @@ def test_batch_prompt_style_sits_before_json_instruction():
     # weights most heavily), or a chatty style could override "respond ONLY with JSON".
     p = voxa._build_batch_system_prompt("French", 2, budget_note="", style="be dramatic")
     assert p.index(_MARKER) < p.index("Respond ONLY with a JSON object")
+
+
+# ── Speech style: operator layer + locked timing guard (P3) ──
+def test_tts_instructions_default_is_exactly_the_guard():
+    # No style, no hint → the historical default instruction, unchanged.
+    assert voxa._build_tts_instructions() == voxa.DEFAULT_TTS_TIMING_GUARD
+    assert voxa._build_tts_instructions("", "") == voxa.DEFAULT_TTS_TIMING_GUARD
+
+
+def test_tts_instructions_guard_is_always_present():
+    for style, hint in [("warm", ""), ("", "ask as a question"), ("warm", "urgent, clipped")]:
+        assert voxa.DEFAULT_TTS_TIMING_GUARD in voxa._build_tts_instructions(style, hint)
+
+
+def test_tts_instructions_guard_comes_last():
+    # Last = most weighted by the model, so an expressive style can't slow delivery down.
+    out = voxa._build_tts_instructions("dramatic and grand", "let it trail off")
+    assert out.endswith(voxa.DEFAULT_TTS_TIMING_GUARD)
+    assert out.index("dramatic and grand") < out.index("let it trail off")
+    assert out.index("let it trail off") < out.index(voxa.DEFAULT_TTS_TIMING_GUARD)
+
+
+def test_tts_instructions_ignores_blank_parts():
+    assert voxa._build_tts_instructions("   ", "  ") == voxa.DEFAULT_TTS_TIMING_GUARD
+    assert voxa._build_tts_instructions(None, None) == voxa.DEFAULT_TTS_TIMING_GUARD
+
+
+def test_tts_instructions_parts_are_separate_sentences():
+    # Fragments must not run together, or the guard stops reading as its own directive.
+    assert voxa._build_tts_instructions("warm", "urgent") == \
+        "warm. urgent. " + voxa.DEFAULT_TTS_TIMING_GUARD
+    # An already-terminated fragment isn't double-punctuated.
+    assert voxa._build_tts_instructions("Warm!", "Ask it?") == \
+        "Warm! Ask it? " + voxa.DEFAULT_TTS_TIMING_GUARD
+
+
+def test_pacing_conflicts_detected():
+    assert "slowly" in voxa._detect_pacing_conflicts("Speak slowly and softly")
+    assert "pauses" in voxa._detect_pacing_conflicts("Add long dramatic pauses")
+
+
+def test_pacing_conflicts_clean_style():
+    assert voxa._detect_pacing_conflicts("warm, confident, documentary tone") == []
+    assert voxa._detect_pacing_conflicts("") == []

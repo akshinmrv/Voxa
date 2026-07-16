@@ -300,6 +300,17 @@
         "reset": "Defolta qaytar",
         "saved": "Saxlanıldı"
       },
+      "speech": {
+        "title": "Nitq üslubu",
+        "desc": "OpenAI TTS ilə dublyaj səsi necə səslənməlidir. Presetləri birləşdir, öz təlimatını əlavə et və ya hər ikisi.",
+        "presetsLabel": "Presetlər",
+        "textLabel": "Öz təlimatın",
+        "placeholder": "məs. Təbiət sənədli filminin diktoru kimi. Əmin, amma tələsmədən.",
+        "guard": "Timing həmişə məcburdur: Voxa sabit, təbii temp və əlavə pauzasız danışıq üçün kilidli təlimat əlavə edir. Üslub səsin NECƏ səsləndiyini dəyişir — sətrin nə qədər çəkdiyini yox, ona görə dublyaj sinxron qalır.",
+        "save": "Üslubu saxla",
+        "reset": "Defolta qaytar",
+        "saved": "Saxlanıldı"
+      },
       "appearance": {
         "title": "Görünüş",
         "theme": "Tema",
