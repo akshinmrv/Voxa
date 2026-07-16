@@ -1356,21 +1356,60 @@ def _clean_line(text: str) -> str:
     return t.strip().strip('"').strip("'").strip()
 
 
-def _llm_translate_single(text: str, target_lang: str, model: str, chat_fn,
-                          api_key: Optional[str] = None) -> str:
-    """Translate one subtitle line via any provider chat adapter. Returns the source
-    text on failure so the caller's retry/fallback chain can take over."""
-    full_lang = LANG_MAP.get(target_lang.lower(), target_lang)
-    system_prompt = (
+# Translation prompt = a fixed "machinery" layer (output format, exact line count, and
+# timing/isochrony rules) that stays LOCKED, plus an optional operator "style" layer (tone,
+# register, domain, brand voice). The style guidance is layered ON TOP of the built-in prompt:
+# with no guidance the prompt is byte-identical to the original, so the default translation
+# behaviour never changes, and a custom style can never strip the format/timing requirements.
+def _translation_style_clause(style: str = "") -> str:
+    g = (style or "").strip()
+    if not g:
+        return ""
+    return ("Additional style direction from the operator — follow it for tone, register and "
+            "word choice, but never at the expense of meaning, timing, or the required output "
+            f"format: {g.rstrip('.')}.")
+
+
+def _with_clause(clause: str) -> str:
+    return f" {clause}" if clause else ""
+
+
+def _build_single_system_prompt(full_lang: str, style: str = "") -> str:
+    return (
         f"You are a professional subtitle translator and native-level localization expert "
         f"for {full_lang}. Translate the user's line into {full_lang} so it sounds completely "
         f"natural, fluent and idiomatic — as if originally written and spoken by a native "
         f"speaker. Preserve the exact meaning, tone, emotion and register (formal/informal) "
         f"of the source. Avoid literal, word-for-word or machine-like phrasing. Keep the length "
-        f"natural for spoken dubbing (similar speaking duration to the source). "
+        f"natural for spoken dubbing (similar speaking duration to the source)."
+        f"{_with_clause(_translation_style_clause(style))} "
         f"Do NOT add quotes, notes, explanations, transliteration or any extra text — "
         f"output ONLY the translated line."
     )
+
+
+def _build_batch_system_prompt(full_lang: str, count: int, budget_note: str = "",
+                               style: str = "") -> str:
+    return (
+        f"You are a professional subtitle translator and native-level localization expert "
+        f"for {full_lang}. You receive a contiguous block of subtitle lines from a single video "
+        f"and translate ALL of them into {full_lang}. Use the surrounding lines (and any provided "
+        f"'context' lines) to keep pronouns, gender, names, terminology, tone and style perfectly "
+        f"consistent and natural across the whole block. Each translation must sound like a native "
+        f"speaker wrote it and fit roughly the same speaking duration as the source (for dubbing)."
+        f"{budget_note}{_with_clause(_translation_style_clause(style))} "
+        f"Never merge, split, reorder, add or drop lines, and never translate the 'context' lines. "
+        f"Respond ONLY with a JSON object of the form {{\"translations\": [\"...\", \"...\"]}} "
+        f"containing EXACTLY {count} items, in the same order as the input 'lines'."
+    )
+
+
+def _llm_translate_single(text: str, target_lang: str, model: str, chat_fn,
+                          api_key: Optional[str] = None, style: str = "") -> str:
+    """Translate one subtitle line via any provider chat adapter. Returns the source
+    text on failure so the caller's retry/fallback chain can take over."""
+    full_lang = LANG_MAP.get(target_lang.lower(), target_lang)
+    system_prompt = _build_single_system_prompt(full_lang, style)
     try:
         result = chat_fn(system_prompt, text, model, False, api_key)
     except Exception as e:
@@ -1414,7 +1453,8 @@ def _parse_batch_translations(raw: str, expected: int) -> Optional[List[str]]:
 def _llm_translate_chunk(chunk: List[str], full_lang: str, target_lang: str, model: str,
                          chat_fn, api_key: Optional[str],
                          context_pairs: List[Tuple[str, str]],
-                         chunk_max_chars: Optional[List[int]] = None) -> List[str]:
+                         chunk_max_chars: Optional[List[int]] = None,
+                         style: str = "") -> List[str]:
     """Translate one contiguous chunk of subtitle lines in a single API call, with mutual
     context. When chunk_max_chars is given, each translation is length-budgeted so it stays
     speakable within the source segment's time (isochrony). Falls back to per-line."""
@@ -1428,18 +1468,7 @@ def _llm_translate_chunk(chunk: List[str], full_lang: str, target_lang: str, mod
             "shorter, more natural phrasing — but NEVER drop information or meaning. Still "
             "produce exactly one translation per input line, in order."
         )
-    system_prompt = (
-        f"You are a professional subtitle translator and native-level localization expert "
-        f"for {full_lang}. You receive a contiguous block of subtitle lines from a single video "
-        f"and translate ALL of them into {full_lang}. Use the surrounding lines (and any provided "
-        f"'context' lines) to keep pronouns, gender, names, terminology, tone and style perfectly "
-        f"consistent and natural across the whole block. Each translation must sound like a native "
-        f"speaker wrote it and fit roughly the same speaking duration as the source (for dubbing)."
-        f"{budget_note} "
-        f"Never merge, split, reorder, add or drop lines, and never translate the 'context' lines. "
-        f"Respond ONLY with a JSON object of the form {{\"translations\": [\"...\", \"...\"]}} "
-        f"containing EXACTLY {len(chunk)} items, in the same order as the input 'lines'."
-    )
+    system_prompt = _build_batch_system_prompt(full_lang, len(chunk), budget_note, style)
     if chunk_max_chars:
         lines = [{"text": t, "max_chars": c} for t, c in zip(chunk, chunk_max_chars)]
     else:
@@ -1453,7 +1482,8 @@ def _llm_translate_chunk(chunk: List[str], full_lang: str, target_lang: str, mod
         raw = chat_fn(system_prompt, user, model, True, api_key)
     except Exception as e:
         _LOG.warning(f"LLM batch error: {e} — falling back to per-line for this chunk")
-        return [_llm_translate_single(t, target_lang, model, chat_fn, api_key) for t in chunk]
+        return [_llm_translate_single(t, target_lang, model, chat_fn, api_key, style)
+                for t in chunk]
 
     parsed = _parse_batch_translations(raw, len(chunk))
     if parsed is not None:
@@ -1466,7 +1496,8 @@ def _llm_translate_chunk(chunk: List[str], full_lang: str, target_lang: str, mod
 def _llm_translate_batch(texts: List[str], target_lang: str, model: str, chat_fn,
                          api_key: Optional[str] = None,
                          batch_size: int = DEFAULT_LLM_BATCH_SIZE,
-                         max_chars: Optional[List[int]] = None) -> List[str]:
+                         max_chars: Optional[List[int]] = None,
+                         style: str = "") -> List[str]:
     """Translate a full list of subtitle lines using context-aware chunked LLM calls.
     Output length and order always match the input; falls back to the source on failure.
     `max_chars` (parallel to texts) length-budgets each line for dub isochrony."""
@@ -1488,9 +1519,10 @@ def _llm_translate_batch(texts: List[str], target_lang: str, model: str, chat_fn
             context_pairs = list(zip(ctx_src, ctx_tr))
 
         translated = _llm_translate_chunk(chunk, full_lang, target_lang, model,
-                                          chat_fn, api_key, context_pairs, chunk_max_chars)
+                                          chat_fn, api_key, context_pairs, chunk_max_chars,
+                                          style)
         if len(translated) != len(chunk):   # final alignment safety net
-            translated = [_llm_translate_single(t, target_lang, model, chat_fn, api_key)
+            translated = [_llm_translate_single(t, target_lang, model, chat_fn, api_key, style)
                           for t in chunk]
         results.extend(translated)
 
@@ -1507,22 +1539,23 @@ def _duration_to_max_chars(seconds: float, cps: float = DEFAULT_SPEECH_RATE_CPS)
 
 
 def translate_llm(text: str, target_lang: str, provider: str, model: Optional[str] = None,
-                  api_key: Optional[str] = None) -> str:
+                  api_key: Optional[str] = None, style: str = "") -> str:
     """Single-line translation via the named LLM provider from LLM_PROVIDERS."""
     p = LLM_PROVIDERS[provider]
     return _llm_translate_single(text, target_lang, model or p["default_model"],
-                                 p["chat"], api_key)
+                                 p["chat"], api_key, style)
 
 
 def translate_llm_batch(texts: List[str], target_lang: str, provider: str,
                         model: Optional[str] = None, api_key: Optional[str] = None,
                         batch_size: int = DEFAULT_LLM_BATCH_SIZE,
-                        max_chars: Optional[List[int]] = None) -> List[str]:
+                        max_chars: Optional[List[int]] = None, style: str = "") -> List[str]:
     """Context-aware batch translation via the named LLM provider from LLM_PROVIDERS.
-    `max_chars` length-budgets each line for dub timing (SY3)."""
+    `max_chars` length-budgets each line for dub timing (SY3); `style` adds optional operator
+    tone/register guidance on top of the locked prompt."""
     p = LLM_PROVIDERS[provider]
     return _llm_translate_batch(texts, target_lang, model or p["default_model"],
-                                p["chat"], api_key, batch_size, max_chars)
+                                p["chat"], api_key, batch_size, max_chars, style)
 
 
 def merge_segments_into_sentences(segments: List[Dict], max_duration: float = 10.0) -> List[Dict]:
@@ -2416,7 +2449,8 @@ async def process_video(video_path: str, args, logger: Logger):
                                                 args.speech_rate) for seg in indexed]
             translated_texts = translate_llm_batch(
                 texts, args.target_lang, args.translator, model=llm_model,
-                api_key=llm_api_key, batch_size=args.llm_batch_size, max_chars=max_chars
+                api_key=llm_api_key, batch_size=args.llm_batch_size, max_chars=max_chars,
+                style=getattr(args, "translation_prompt", None) or ""
             )
             translated_segments = [
                 {'text': tt or seg['text'].strip(), 'start': seg['start'], 'end': seg['end']}
@@ -2631,6 +2665,11 @@ Examples:
                              f"LLM translations for dub timing "
                              f"(default: {DEFAULT_SPEECH_RATE_CPS}). "
                              f"Higher = longer translations (faster delivery).")
+    parser.add_argument("--translation-prompt", default=None,
+                        help="Extra translation style/persona guidance layered on top of the "
+                             "built-in LLM prompt (tone, register, domain, brand voice). The "
+                             "output format, line count and timing/isochrony rules always stay "
+                             "enforced. LLM translators only (openai/anthropic).")
     parser.add_argument("--parallel", action="store_true",
                         help="Translate segments in parallel threads (google/ollama only — "
                              "LLM translators already batch whole blocks in one call)")

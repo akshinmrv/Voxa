@@ -264,3 +264,31 @@ def test_provider_test_endpoint_no_key(client):
     r = client.post("/api/providers/openai/test")
     assert r.status_code == 200
     assert r.json()["ok"] is False  # no key configured in the tmp env
+
+
+# ── P2: translation style guidance ───────────────────────
+def test_translation_prompt_args_when_set():
+    settings = {"translation": {"prompt": "formal, medical register"}}
+    assert srv.translation_prompt_args("openai", settings) == \
+        ["--translation-prompt", "formal, medical register"]
+
+
+def test_translation_prompt_args_empty():
+    assert srv.translation_prompt_args("openai", {"translation": {"prompt": None}}) == []
+    assert srv.translation_prompt_args("openai", {"translation": {"prompt": "  "}}) == []
+
+
+def test_translation_prompt_args_ignored_for_non_llm():
+    settings = {"translation": {"prompt": "x"}}
+    assert srv.translation_prompt_args("google", settings) == []
+
+
+def test_translation_prompt_roundtrip_over_http(client):
+    r = client.put("/api/settings", json={"translation": {"prompt": "warm and concise"}})
+    assert r.status_code == 200
+    assert client.get("/api/settings").json()["translation"]["prompt"] == "warm and concise"
+
+
+def test_translation_prompt_too_long_rejected(client):
+    r = client.put("/api/settings", json={"translation": {"prompt": "x" * 4001}})
+    assert r.status_code == 422

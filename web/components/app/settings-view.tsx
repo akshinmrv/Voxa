@@ -18,6 +18,7 @@ import { ProviderCard } from "@/components/app/provider-card";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -32,12 +33,22 @@ export function SettingsView() {
 
   // Draft overrides layered over the saved settings (cleared once a save lands).
   const [draft, setDraft] = useState<SettingsPatch>({});
+  // Translation style guidance: null = "in sync with saved", else an unsaved edit.
+  const [promptDraft, setPromptDraft] = useState<string | null>(null);
 
   const save = useMutation({
     mutationFn: (patch: SettingsPatch) => updateSettings(patch),
     onSuccess: (data) => {
       qc.setQueryData(["settings"], data);
       setDraft({});
+    },
+  });
+
+  const savePrompt = useMutation({
+    mutationFn: (patch: SettingsPatch) => updateSettings(patch),
+    onSuccess: (data) => {
+      qc.setQueryData(["settings"], data);
+      setPromptDraft(null);
     },
   });
 
@@ -65,6 +76,10 @@ export function SettingsView() {
   const dirty =
     (draft.defaultTranslator !== undefined && draft.defaultTranslator !== settings.defaultTranslator) ||
     (draft.defaultTts !== undefined && draft.defaultTts !== settings.defaultTts);
+
+  const savedPrompt = settings.translation?.prompt ?? "";
+  const promptValue = promptDraft ?? savedPrompt;
+  const promptDirty = promptDraft !== null && promptDraft !== savedPrompt;
 
   return (
     <Shell>
@@ -145,6 +160,51 @@ export function SettingsView() {
           })}
         </div>
       </section>
+
+      {/* Translation style ----------------------------------------------- */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("translation.title")}</CardTitle>
+          <CardDescription>{t("translation.desc")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea
+            rows={5}
+            value={promptValue}
+            placeholder={t("translation.placeholder")}
+            onChange={(e) => setPromptDraft(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">{t("translation.hint")}</p>
+          <div className="flex items-center gap-3">
+            <Button
+              disabled={!promptDirty || savePrompt.isPending}
+              onClick={() =>
+                savePrompt.mutate({ translation: { prompt: promptValue.trim() || null } })
+              }
+            >
+              {savePrompt.isPending ? <Loader2 className="animate-spin" /> : null}
+              {t("translation.save")}
+            </Button>
+            {savedPrompt && (
+              <Button
+                variant="outline"
+                disabled={savePrompt.isPending}
+                onClick={() => savePrompt.mutate({ translation: { prompt: null } })}
+              >
+                {t("translation.reset")}
+              </Button>
+            )}
+            {savePrompt.isSuccess && !promptDirty && (
+              <span className="inline-flex items-center gap-1.5 text-sm text-success">
+                <Check className="size-4" /> {t("translation.saved")}
+              </span>
+            )}
+            {savePrompt.isError && (
+              <span className="text-sm text-danger">{(savePrompt.error as Error).message}</span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Appearance ------------------------------------------------------ */}
       <Card>

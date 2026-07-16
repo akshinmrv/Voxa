@@ -291,6 +291,15 @@
         "testOk": "Connected",
         "testFail": "Connection failed"
       },
+      "translation": {
+        "title": "Translation style",
+        "desc": "Extra guidance for LLM translators (OpenAI, Anthropic), layered on top of the built-in prompt. The output format, line count and timing rules always stay enforced.",
+        "placeholder": "e.g. Formal register for a medical audience. Keep terminology precise. Brand voice: warm and concise.",
+        "hint": "Applies to OpenAI/Anthropic translation only. Leave empty for the default behaviour.",
+        "save": "Save style",
+        "reset": "Reset to default",
+        "saved": "Saved"
+      },
       "appearance": {
         "title": "Appearance",
         "theme": "Theme",

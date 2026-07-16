@@ -291,6 +291,15 @@
         "testOk": "Qoşuldu",
         "testFail": "Bağlantı alınmadı"
       },
+      "translation": {
+        "title": "Tərcümə üslubu",
+        "desc": "LLM tərcüməçilər (OpenAI, Anthropic) üçün built-in prompt-un üstünə əlavə təlimat. Output formatı, sətir sayı və timing qaydaları həmişə məcbur qalır.",
+        "placeholder": "məs. Tibbi auditoriya üçün rəsmi üslub. Terminologiyanı dəqiq saxla. Brend səsi: isti və yığcam.",
+        "hint": "Yalnız OpenAI/Anthropic tərcüməsinə tətbiq olunur. Defolt davranış üçün boş burax.",
+        "save": "Üslubu saxla",
+        "reset": "Defolta qaytar",
+        "saved": "Saxlanıldı"
+      },
       "appearance": {
         "title": "Görünüş",
         "theme": "Tema",

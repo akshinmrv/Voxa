@@ -291,6 +291,15 @@
         "testOk": "Bağlandı",
         "testFail": "Bağlantı başarısız"
       },
+      "translation": {
+        "title": "Çeviri stili",
+        "desc": "LLM çevirmenler (OpenAI, Anthropic) için yerleşik prompt'un üzerine eklenen ek yönlendirme. Çıktı formatı, satır sayısı ve zamanlama kuralları her zaman korunur.",
+        "placeholder": "örn. Tıbbi bir kitle için resmi kayıt. Terminolojiyi kesin tut. Marka sesi: sıcak ve öz.",
+        "hint": "Yalnızca OpenAI/Anthropic çevirisine uygulanır. Varsayılan davranış için boş bırak.",
+        "save": "Stili kaydet",
+        "reset": "Varsayılana döndür",
+        "saved": "Kaydedildi"
+      },
       "appearance": {
         "title": "Görünüm",
         "theme": "Tema",

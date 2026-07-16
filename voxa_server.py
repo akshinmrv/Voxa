@@ -191,8 +191,10 @@ async def _run_job(job: Job) -> None:
             "--whisper_model", cfg.whisperModel,
             "--output-dir", str(job.work_dir),
         ]
-        # Pin the translation model to the operator's saved per-provider choice (P1).
-        cmd += provider_model_args(cfg.translator, read_settings())
+        # Apply the operator's saved per-provider model (P1) and translation style (P2).
+        current_settings = read_settings()
+        cmd += provider_model_args(cfg.translator, current_settings)
+        cmd += translation_prompt_args(cfg.translator, current_settings)
         if cfg.tts == "xtts" and cfg.voiceSample:
             cmd += ["--voice-sample", cfg.voiceSample]
         if cfg.tts == "openai":
@@ -420,6 +422,15 @@ def provider_model_args(translator: str, settings: dict) -> List[str]:
     return [f"--{translator}_model", str(model)] if model else []
 
 
+def translation_prompt_args(translator: str, settings: dict) -> List[str]:
+    """CLI args passing the operator's saved translation style guidance (P2) to an LLM job.
+    Non-LLM translators (google/ollama) ignore prompts, so returns [] for them."""
+    if translator not in voxa.LLM_PROVIDERS:
+        return []
+    prompt = ((settings.get("translation") or {}).get("prompt") or "").strip()
+    return ["--translation-prompt", prompt] if prompt else []
+
+
 def test_provider(pid: str) -> dict:
     """Connection test for one LLM provider: a cheap, no-token models.list() call that
     only checks the key is valid and the endpoint is reachable. Never raises."""
@@ -484,6 +495,11 @@ async def put_settings(patch: SettingsPatch, _: None = Depends(require_local)) -
         for pid in data["providers"]:
             if pid not in voxa.LLM_PROVIDERS:
                 raise HTTPException(status_code=422, detail=f"Unknown provider: {pid}")
+    if "translation" in data:
+        prompt = (data["translation"] or {}).get("prompt")
+        if prompt is not None and len(str(prompt)) > 4000:
+            raise HTTPException(status_code=422,
+                                detail="Translation style guidance is too long (max 4000 chars).")
     return write_settings(data)
 
 

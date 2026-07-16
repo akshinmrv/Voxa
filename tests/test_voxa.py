@@ -1093,3 +1093,55 @@ def test_purge_synthesis_artifacts_keeps_source_and_translation(tmp_path):
     assert removed == len(drop)
     assert all((tmp_path / n).exists() for n in keep)         # source/translation survive
     assert not any((tmp_path / n).exists() for n in drop)     # synthesis cleared
+
+
+# ── Translation prompt: locked machinery + optional operator style (P2) ──
+_MARKER = "Additional style direction from the operator"
+
+
+def test_style_clause_empty_is_blank():
+    assert voxa._translation_style_clause("") == ""
+    assert voxa._translation_style_clause("   ") == ""
+    assert voxa._translation_style_clause(None) == ""
+    # With no style, the injected fragment is empty → the default prompt is unchanged.
+    assert voxa._with_clause(voxa._translation_style_clause("")) == ""
+
+
+def test_style_clause_nonempty_guards_timing_and_format():
+    clause = voxa._translation_style_clause("warm, documentary tone")
+    assert "warm, documentary tone" in clause
+    assert "timing" in clause and "format" in clause  # the locked-invariants reminder
+
+
+def test_single_prompt_default_has_no_style_marker():
+    p = voxa._build_single_system_prompt("Turkish")
+    assert _MARKER not in p
+    assert p.endswith("output ONLY the translated line.")
+    assert "native-level localization expert for Turkish" in p
+
+
+def test_batch_prompt_default_has_no_style_marker():
+    p = voxa._build_batch_system_prompt("Turkish", 3, budget_note="")
+    assert _MARKER not in p
+    assert "Respond ONLY with a JSON object" in p
+    assert "EXACTLY 3 items" in p
+
+
+def test_single_prompt_injects_style_but_keeps_machinery():
+    p = voxa._build_single_system_prompt("Turkish", "formal, medical register")
+    assert _MARKER in p and "formal, medical register" in p
+    assert p.endswith("output ONLY the translated line.")  # format instruction stays last
+
+
+def test_batch_prompt_injects_style_but_keeps_machinery():
+    p = voxa._build_batch_system_prompt("Turkish", 5, budget_note="", style="playful")
+    assert _MARKER in p and "playful" in p
+    assert "Respond ONLY with a JSON object" in p          # output format preserved
+    assert "EXACTLY 5 items" in p                          # exact count preserved
+
+
+def test_batch_prompt_style_sits_before_json_instruction():
+    # The style guidance must not come after the JSON-format instruction (which the model
+    # weights most heavily), or a chatty style could override "respond ONLY with JSON".
+    p = voxa._build_batch_system_prompt("French", 2, budget_note="", style="be dramatic")
+    assert p.index(_MARKER) < p.index("Respond ONLY with a JSON object")
