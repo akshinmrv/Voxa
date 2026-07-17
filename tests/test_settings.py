@@ -347,3 +347,33 @@ def test_speech_instructions_too_long_rejected(client):
 def test_build_options_exposes_speech_presets():
     presets = {p["id"] for p in srv.build_options()["speechPresets"]}
     assert {"warm", "documentary", "energetic"} <= presets
+
+
+# ── Content-keyed work dir: reuse transcription across dubs (bug fix) ──
+def test_same_content_key_same_work_dir():
+    a = srv._video_work_dir("abc123def456ghijklmnop")
+    b = srv._video_work_dir("abc123def456ghijklmnop")
+    assert a == b  # same video → same dir → engine reuses its cached transcription
+
+
+def test_different_content_key_different_work_dir():
+    assert srv._video_work_dir("aaaa1111bbbb2222") != srv._video_work_dir("cccc3333dddd4444")
+
+
+def test_work_dir_lives_under_jobs_dir():
+    assert srv._video_work_dir("deadbeefdeadbeef").parent == srv.JOBS_DIR
+
+
+def test_unknown_content_key_still_gives_a_dir():
+    # After a restart the hash may be missing; a random dir is fine (no crash, no reuse).
+    d = srv._video_work_dir(None)
+    assert d.parent == srv.JOBS_DIR and len(d.name) == 16
+
+
+def test_identical_bytes_hash_to_same_key():
+    # The property the fix relies on: re-uploading the same video yields the same key.
+    import hashlib
+    data = b"fake video bytes" * 1000
+    k1 = hashlib.sha256(data).hexdigest()
+    k2 = hashlib.sha256(data).hexdigest()
+    assert srv._video_work_dir(k1) == srv._video_work_dir(k2)

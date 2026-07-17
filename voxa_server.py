@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -186,7 +187,18 @@ class Job:
 
 
 UPLOADS: Dict[str, Path] = {}
+# fileId → sha256 of the uploaded bytes, so a re-upload of the same video maps to the same
+# work dir and its cached transcription is reused instead of being redone.
+UPLOAD_HASHES: Dict[str, str] = {}
 JOBS: Dict[str, Job] = {}
+
+
+def _video_work_dir(content_key: Optional[str]) -> Path:
+    """Work dir for a source video, keyed by CONTENT. Re-dubbing the same video (to a new
+    language or model) then reuses the cached audio/transcription via the engine's resume
+    logic — the language-independent stages skip, only translation/synthesis rerun. Falls
+    back to a random dir when the content hash is unknown (e.g. after a server restart)."""
+    return JOBS_DIR / (content_key or uuid.uuid4().hex)[:16]
 
 
 async def _emit(job: Job, event: dict) -> None:
@@ -599,11 +611,14 @@ async def upload(file: UploadFile = File(...)) -> dict:
     file_id = uuid.uuid4().hex
     dest = UPLOAD_DIR / f"{file_id}_{_safe_name(file.filename or 'video.mp4')}"
     size = 0
+    hasher = hashlib.sha256()
     with dest.open("wb") as out:
         while chunk := await file.read(1024 * 1024):
             size += len(chunk)
             out.write(chunk)
+            hasher.update(chunk)
     UPLOADS[file_id] = dest
+    UPLOAD_HASHES[file_id] = hasher.hexdigest()
     return {"fileId": file_id, "fileName": file.filename, "size": size}
 
 
@@ -614,10 +629,15 @@ async def create_job(body: CreateJobModel) -> dict:
         raise HTTPException(status_code=404, detail="Uploaded file not found")
 
     job_id = uuid.uuid4().hex[:12]
-    work_dir = JOBS_DIR / job_id
+    # Content-keyed work dir: a second dub of the same video reuses its cached transcription.
+    # The single job lock serialises runs and outputs are language-suffixed, so jobs sharing
+    # a dir never collide.
+    work_dir = _video_work_dir(UPLOAD_HASHES.get(body.fileId))
     work_dir.mkdir(parents=True, exist_ok=True)
     file_name = _safe_name(Path(src.name).name.split("_", 1)[-1])
-    shutil.copy2(src, work_dir / file_name)
+    dest_video = work_dir / file_name
+    if not dest_video.exists() or dest_video.stat().st_size != src.stat().st_size:
+        shutil.copy2(src, dest_video)
 
     job = Job(id=job_id, file_name=file_name, config=body.config, work_dir=work_dir)
     JOBS[job_id] = job
