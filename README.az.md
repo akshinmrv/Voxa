@@ -94,29 +94,30 @@ API açarı tələb olunmur. Default parametrlər olduğu kimi işləyir.
 
 ### Hansı dil üçün hansı mühərrik?
 
-`--quality-gate --gate-model base` ilə ölçülüb (ASR round-trip söz xəta nisbəti; az olan
-yaxşıdır). Bulud mühərriki həmişə qalib gəlmir:
+Universal cavab yoxdur, və bulud mühərriki həmişə qalib gəlmir — dili həqiqətən əhatə edən səs,
+onu yalnız təxmin edən daha böyük modeli adətən üstələyir. Məhz buna görə Voxa hökm yox,
+**ölçmə** təqdim edir.
 
-| Dil | Mühərrik | WER | Nəticə |
-|---|---|---|---|
-| İngilis | OpenAI TTS | **0.02** | Əla |
-| Azərbaycan (`az`) | Edge, doğma `az-AZ` səsi | **0.41** | Bunu seçin |
-| Azərbaycan (`az`) | OpenAI TTS | 0.81 | Yad aksent |
+`--quality-gate` hər sintez olunmuş klipi ikinci ASR modeli ilə geri transkripsiya edir və söz
+xəta nisbəti ilə ballandırır — beləliklə mühərrikləri **öz** materialında yoxlaya bilərsən:
+
+```bash
+voxa clip.mp4 --target_lang az --tts edge --quality-gate --gate-model base
+```
+
+[`docs/BENCHMARK.md`](docs/BENCHMARK.md) təkrarlana bilən skript, altı dil üzrə nümunə ölçmə və
+— eyni dərəcədə vacib — belə bir rəqəmin nə deyə bilmədiyinin hüdudlarını verir.
 
 > [!TIP]
-> Dilin Edge-də doğma neyron səsi varsa, onu seçin. Az-resurslu dil üçün `--gate-model base`
-> işlədin — `tiny` modeli eyni azərbaycanca səsi 0.41 əvəzinə 0.74 balladı.
+> Dilin Edge-də doğma neyron səsi varsa, əvvəlcə onu sına. Az-resurslu dil üçün `--gate-model
+> base` və ya daha böyüyünü işlət: `tiny` modeli tamamilə yaxşı səsi səhv oxuyur və layiq
+> olduğundan pis bal verir.
 
 > [!IMPORTANT]
 > **WER rəqəmi yalnız hansı klipdən gəldiyi ilə birlikdə məna daşıyır.** Eyni mühərrik və dil
-> fərqli mənbə materialında çox fərqli bal ala bilər — demo klipi üzərində ikinci ölçmə
-> azərbaycan dilini yuxarıdakı rəqəmdən xeyli yuxarı göstərdi. Mühərrik seçməzdən əvvəl öz
-> materialını ölç: [`docs/BENCHMARK.md`](docs/BENCHMARK.md) təkrarlana bilən skript və altı dil
-> üzrə nümunə ölçmə verir.
->
-> ```bash
-> python scripts/benchmark.py --video oz_klipin.mp4 --langs az tr --engines edge
-> ```
+> fərqli mənbə materialında çox fərqli bal alır — qısa klipdə bir xüsusi isim ortalamanı
+> kəskin dəyişə bilər. İstənilən dərc olunmuş rəqəmi, bizimki də daxil, sıralama kimi yox, öz
+> ölçmən üçün başlanğıc nöqtəsi kimi qəbul et.
 
 ## Dəstəklənən modellər
 

@@ -94,29 +94,31 @@ API anahtarı gerekmez. Varsayılanlar kutudan çıktığı gibi çalışır.
 
 ### Hangi dil için hangi motor?
 
-`--quality-gate --gate-model base` ile ölçüldü (ASR turu kelime hata oranı; düşük olan
-iyidir). Bulut motoru her zaman kazanmaz:
+Evrensel bir cevap yok ve bulut motoru her zaman kazanmaz — bir dili gerçekten kapsayan bir
+ses, onu yalnızca yaklaşık üreten daha büyük bir modeli genellikle geçer. İşte bu yüzden Voxa
+bir hüküm değil, **ölçüm** sunar.
 
-| Dil | Motor | WER | Sonuç |
-|---|---|---|---|
-| İngilizce | OpenAI TTS | **0.02** | Mükemmel |
-| Azerice (`az`) | Edge, yerel `az-AZ` sesi | **0.41** | Bunu kullanın |
-| Azerice (`az`) | OpenAI TTS | 0.81 | Yabancı aksan |
+`--quality-gate` sentezlenen her klibi ikinci bir ASR modeliyle geri yazıya çevirir ve kelime
+hata oranıyla puanlar; böylece motorları **kendi** içeriğinde sınayabilirsin:
+
+```bash
+voxa clip.mp4 --target_lang az --tts edge --quality-gate --gate-model base
+```
+
+[`docs/BENCHMARK.md`](docs/BENCHMARK.md) yeniden üretilebilir bir betik, altı dillik örnek bir
+ölçüm ve — en az onun kadar önemli — böyle bir rakamın neyi söyleyemeyeceğinin sınırlarını
+içerir.
 
 > [!TIP]
-> Bir dilin Edge'de özel yerel nöral sesi varsa onu tercih edin. Düşük kaynaklı bir dil için
-> `--gate-model base` kullanın — `tiny` modeli aynı sesi 0.41 yerine 0.74 puanladı.
+> Bir dilin Edge'de özel yerel nöral sesi varsa önce onu dene. Düşük kaynaklı bir dil için
+> `--gate-model base` veya daha büyüğünü kullan: `tiny` modeli gayet iyi bir sesi yanlış okur
+> ve hak ettiğinden kötü puan verir.
 
 > [!IMPORTANT]
 > **Bir WER rakamı yalnızca geldiği klip ile birlikte anlam taşır.** Aynı motor ve dil, farklı
-> kaynak materyalde çok farklı puan alabilir — demo klip üzerinde yapılan ikinci ölçüm Azericeyi
-> yukarıdaki rakamın epey üstünde gösterdi. Motor seçmeden önce kendi içeriğinizi ölçün:
-> [`docs/BENCHMARK.md`](docs/BENCHMARK.md) yeniden üretilebilir bir betik ve altı dillik örnek
-> bir ölçüm içerir.
->
-> ```bash
-> python scripts/benchmark.py --video kendi_klibin.mp4 --langs az tr --engines edge
-> ```
+> kaynak materyalde çok farklı puan alır — kısa bir klipte tek bir özel isim ortalamayı ciddi
+> biçimde kaydırabilir. Yayımlanmış her rakamı, bizimki dahil, bir sıralama olarak değil kendi
+> ölçümün için başlangıç noktası olarak gör.
 
 ## Desteklenen modeller
 

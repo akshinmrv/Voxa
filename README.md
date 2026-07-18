@@ -95,30 +95,30 @@ No API key is required. The defaults work out of the box.
 
 ### Which engine for which language?
 
-Measured with `--quality-gate --gate-model base` (ASR round-trip word error rate; lower is
-better). The cloud engine does not always win:
+There is no universal answer, and the cloud engine does not always win — a voice that
+genuinely covers a language usually beats a larger model that only approximates it. Which is
+why Voxa ships the measurement rather than a verdict.
 
-| Language | Engine | WER | Verdict |
-|---|---|---|---|
-| English | OpenAI TTS | **0.02** | Excellent |
-| Azerbaijani (`az`) | Edge, native `az-AZ` voice | **0.41** | Use this |
-| Azerbaijani (`az`) | OpenAI TTS | 0.81 | Foreign accent |
+`--quality-gate` transcribes every synthesized clip back with a second ASR model and scores it
+by word error rate, so you can check the engines against **your** content:
+
+```bash
+voxa clip.mp4 --target_lang az --tts edge --quality-gate --gate-model base
+```
+
+[`docs/BENCHMARK.md`](docs/BENCHMARK.md) has a reproducible script, a worked run across six
+languages, and — just as important — the limits of what a number like this can tell you.
 
 > [!TIP]
-> If a language has a dedicated native neural voice in Edge, prefer it. For a low-resource
-> language use `--gate-model base` — the `tiny` gate model scored the same Azerbaijani audio
-> 0.74 instead of 0.41.
+> If a language has a dedicated native neural voice in Edge, try it first. For a low-resource
+> language use `--gate-model base` or larger: a `tiny` gate model misreads a perfectly good
+> voice and reports a worse score than it deserves.
 
 > [!IMPORTANT]
 > **A WER figure only means something next to the clip it came from.** The same engine and
-> language can score very differently on different source material — a second run on the demo
-> clip put Azerbaijani well above the number above. Measure your own content before choosing
-> an engine: [`docs/BENCHMARK.md`](docs/BENCHMARK.md) has a reproducible script and a worked
-> example across six languages.
->
-> ```bash
-> python scripts/benchmark.py --video your_clip.mp4 --langs az tr --engines edge
-> ```
+> language score very differently on different source material — one proper noun in a short
+> clip can move the average enormously. Treat any published number, including ours, as a
+> starting point for your own measurement rather than a ranking.
 
 ## Supported Models
 
