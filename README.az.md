@@ -107,6 +107,17 @@ yaxşıdır). Bulud mühərriki həmişə qalib gəlmir:
 > Dilin Edge-də doğma neyron səsi varsa, onu seçin. Az-resurslu dil üçün `--gate-model base`
 > işlədin — `tiny` modeli eyni azərbaycanca səsi 0.41 əvəzinə 0.74 balladı.
 
+> [!IMPORTANT]
+> **WER rəqəmi yalnız hansı klipdən gəldiyi ilə birlikdə məna daşıyır.** Eyni mühərrik və dil
+> fərqli mənbə materialında çox fərqli bal ala bilər — demo klipi üzərində ikinci ölçmə
+> azərbaycan dilini yuxarıdakı rəqəmdən xeyli yuxarı göstərdi. Mühərrik seçməzdən əvvəl öz
+> materialını ölç: [`docs/BENCHMARK.md`](docs/BENCHMARK.md) təkrarlana bilən skript və altı dil
+> üzrə nümunə ölçmə verir.
+>
+> ```bash
+> python scripts/benchmark.py --video oz_klipin.mp4 --langs az tr --engines edge
+> ```
+
 ## Dəstəklənən modellər
 
 | Mərhələ | Modellər |

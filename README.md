@@ -109,6 +109,17 @@ better). The cloud engine does not always win:
 > language use `--gate-model base` — the `tiny` gate model scored the same Azerbaijani audio
 > 0.74 instead of 0.41.
 
+> [!IMPORTANT]
+> **A WER figure only means something next to the clip it came from.** The same engine and
+> language can score very differently on different source material — a second run on the demo
+> clip put Azerbaijani well above the number above. Measure your own content before choosing
+> an engine: [`docs/BENCHMARK.md`](docs/BENCHMARK.md) has a reproducible script and a worked
+> example across six languages.
+>
+> ```bash
+> python scripts/benchmark.py --video your_clip.mp4 --langs az tr --engines edge
+> ```
+
 ## Supported Models
 
 | Stage | Models |

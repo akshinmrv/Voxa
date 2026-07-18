@@ -107,6 +107,17 @@ iyidir). Bulut motoru her zaman kazanmaz:
 > Bir dilin Edge'de özel yerel nöral sesi varsa onu tercih edin. Düşük kaynaklı bir dil için
 > `--gate-model base` kullanın — `tiny` modeli aynı sesi 0.41 yerine 0.74 puanladı.
 
+> [!IMPORTANT]
+> **Bir WER rakamı yalnızca geldiği klip ile birlikte anlam taşır.** Aynı motor ve dil, farklı
+> kaynak materyalde çok farklı puan alabilir — demo klip üzerinde yapılan ikinci ölçüm Azericeyi
+> yukarıdaki rakamın epey üstünde gösterdi. Motor seçmeden önce kendi içeriğinizi ölçün:
+> [`docs/BENCHMARK.md`](docs/BENCHMARK.md) yeniden üretilebilir bir betik ve altı dillik örnek
+> bir ölçüm içerir.
+>
+> ```bash
+> python scripts/benchmark.py --video kendi_klibin.mp4 --langs az tr --engines edge
+> ```
+
 ## Desteklenen modeller
 
 | Aşama | Modeller |
