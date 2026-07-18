@@ -240,6 +240,28 @@ pip install .
 > abandoned package). The command it installs is **`voxa`** — that is what every example below
 > uses. Running the script directly, `python voxa.py …`, is equivalent.
 
+<details>
+<summary>Docker — no Python, torch or ffmpeg on the host</summary>
+
+```bash
+docker run --rm -v "$PWD:/data" ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
+```
+
+The dub lands next to the input on your host. The defaults need no API key; pass one through
+with `-e OPENAI_API_KEY=...` if you switch engines. Keep the downloaded Whisper models between
+runs by mounting the cache:
+
+```bash
+docker run --rm -v "$PWD:/data" -v voxa-cache:/cache \
+    ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
+```
+
+The image is ~3.7 GB, almost all of it the CPU build of torch. `voxa serve` runs in the
+container too (`serve --host 0.0.0.0`), but its settings endpoints are restricted to loopback
+callers and a port-mapped request does not qualify — run the console natively for those.
+
+</details>
+
 **3. Optional engines** — install only what you use.
 
 | Command | Enables |

@@ -232,6 +232,27 @@ pip install .
 > aittir). Kurduğu komut ise **`voxa`**'dır — aşağıdaki tüm örnekler bunu kullanır. Betiği
 > doğrudan çalıştırmak, `python voxa.py …`, aynı işi görür.
 
+<details>
+<summary>Docker — host'ta Python, torch ve ffmpeg olmadan</summary>
+
+```bash
+docker run --rm -v "$PWD:/data" ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
+```
+
+Dublaj, host'ta girdinin yanında oluşur. Varsayılanlar API anahtarı gerektirmez; başka bir
+motora geçerseniz `-e OPENAI_API_KEY=...` ile aktarın. İndirilen Whisper modellerini
+korumak için önbelleği bağlayın:
+
+```bash
+docker run --rm -v "$PWD:/data" -v voxa-cache:/cache     ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
+```
+
+İmaj ~3,7 GB'dır, neredeyse tamamı torch'un CPU derlemesidir. `voxa serve` konteynerde de
+çalışır (`serve --host 0.0.0.0`), ancak ayar uç noktaları yalnızca loopback çağrılarına
+açıktır — port eşlemeli bir istek buna uymaz, bu yüzden konsolu yerel olarak çalıştırın.
+
+</details>
+
 **3. İsteğe bağlı motorlar** — yalnızca kullandığınızı kurun.
 
 | Komut | Neyi etkinleştirir |

@@ -1,0 +1,36 @@
+# Keep the build context small: the image needs the engine and its metadata, nothing else.
+.git
+.github
+.venv
+venv
+__pycache__
+*.py[cod]
+*.egg-info
+build
+dist
+
+# The web frontend is a separate, optional surface — it is not part of the CLI image.
+web
+
+# Docs, tests and examples do not affect the installed package.
+docs
+examples
+tests
+scripts
+
+# Local runtime artifacts and media.
+.voxa_serve
+*_work
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.wav
+*.mp3
+*.srt
+voxa.log
+
+# Secrets must never reach a layer.
+.env
+*.key
+*.pem

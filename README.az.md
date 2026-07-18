@@ -232,6 +232,27 @@ pip install .
 > məxsusdur). Quraşdırdığı əmr isə **`voxa`**-dır — aşağıdakı bütün nümunələr onu işlədir.
 > Skripti birbaşa işlətmək, `python voxa.py …`, eyni işi görür.
 
+<details>
+<summary>Docker — host-da Python, torch və ffmpeg olmadan</summary>
+
+```bash
+docker run --rm -v "$PWD:/data" ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
+```
+
+Dublyaj host-da girişin yanında yaranır. Defolt parametrlər API açarı tələb etmir; başqa
+mühərrikə keçsəniz `-e OPENAI_API_KEY=...` ilə ötürün. Yüklənmiş Whisper modellərini
+saxlamaq üçün keşi mount edin:
+
+```bash
+docker run --rm -v "$PWD:/data" -v voxa-cache:/cache     ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
+```
+
+Image ~3.7 GB-dır, demək olar hamısı torch-un CPU buildidir. `voxa serve` də konteynerdə
+işləyir (`serve --host 0.0.0.0`), amma onun settings endpoint-ləri yalnız loopback
+çağırışlarına açıqdır — port-mapped sorğu buna uyğun gəlmir, ona görə konsolu nativ işlədin.
+
+</details>
+
 **3. Opsional mühərriklər** — yalnız istifadə etdiyinizi quraşdırın.
 
 | Əmr | Nəyi açır |
