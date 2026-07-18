@@ -311,6 +311,19 @@
         "reset": "Reset to default",
         "saved": "Saved"
       },
+      "advanced": {
+        "title": "Advanced",
+        "desc": "Reliability and timing knobs for power users. The defaults are recommended.",
+        "fallbackLabel": "Fallback translator",
+        "fallbackHint": "If the main LLM translator fails on most lines (outage or bad key), those lines are retried with this one.",
+        "fallbackNone": "None",
+        "rateLabel": "Speaking rate (chars/sec)",
+        "rateHint": "How much translated text is budgeted per second. Default 15; range 8–30. Lower condenses more, higher rushes delivery.",
+        "save": "Save advanced",
+        "saved": "Saved",
+        "qualityGateLabel": "Quality gate (score & retry speech)",
+        "qualityGateHint": "Scores each synthesized line and re-renders a garbled one with neutral delivery. Slower, OpenAI TTS. Off by default."
+      },
       "appearance": {
         "title": "Appearance",
         "theme": "Theme",

@@ -19,6 +19,7 @@ import { ProviderCard } from "@/components/app/provider-card";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -39,6 +40,9 @@ export function SettingsView() {
   // Speech style: preset ids + free text, same null-means-in-sync convention.
   const [presetsDraft, setPresetsDraft] = useState<string[] | null>(null);
   const [speechTextDraft, setSpeechTextDraft] = useState<string | null>(null);
+  // Advanced: fallback translator + speaking rate (drafts; null = in sync with saved).
+  const [fallbackDraft, setFallbackDraft] = useState<string | null>(null);
+  const [rateDraft, setRateDraft] = useState<string | null>(null);
 
   const save = useMutation({
     mutationFn: (patch: SettingsPatch) => updateSettings(patch),
@@ -63,6 +67,20 @@ export function SettingsView() {
       setPresetsDraft(null);
       setSpeechTextDraft(null);
     },
+  });
+
+  const saveAdvanced = useMutation({
+    mutationFn: (patch: SettingsPatch) => updateSettings(patch),
+    onSuccess: (data) => {
+      qc.setQueryData(["settings"], data);
+      setFallbackDraft(null);
+      setRateDraft(null);
+    },
+  });
+
+  const toggleQualityGate = useMutation({
+    mutationFn: (patch: SettingsPatch) => updateSettings(patch),
+    onSuccess: (data) => qc.setQueryData(["settings"], data),
   });
 
   const reset = useMutation({
@@ -108,6 +126,15 @@ export function SettingsView() {
         ? presetsValue.filter((p) => p !== id)
         : [...presetsValue, id],
     );
+
+  const savedFallback = settings.translation?.fallback ?? "";
+  const savedRate = settings.advanced?.speechRate;
+  const fallbackValue = fallbackDraft ?? savedFallback;
+  const rateValue = rateDraft ?? (savedRate != null ? String(savedRate) : "");
+  const advancedDirty =
+    (fallbackDraft !== null && fallbackDraft !== savedFallback) ||
+    (rateDraft !== null && rateDraft !== (savedRate != null ? String(savedRate) : ""));
+  const qualityGate = settings.advanced?.qualityGate ?? false;
 
   return (
     <Shell>
@@ -313,6 +340,86 @@ export function SettingsView() {
               <span className="text-sm text-danger">{(saveSpeech.error as Error).message}</span>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Advanced -------------------------------------------------------- */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("advanced.title")}</CardTitle>
+          <CardDescription>{t("advanced.desc")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <Field id="fallback" label={t("advanced.fallbackLabel")} hint={t("advanced.fallbackHint")}>
+            <Select
+              id="fallback"
+              value={fallbackValue}
+              onChange={(e) => setFallbackDraft(e.target.value)}
+            >
+              <option value="">{t("advanced.fallbackNone")}</option>
+              {options.translators.map((tr) => (
+                <option key={tr.id} value={tr.id}>
+                  {tr.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field id="speechRate" label={t("advanced.rateLabel")} hint={t("advanced.rateHint")}>
+            <Input
+              id="speechRate"
+              type="number"
+              min={8}
+              max={30}
+              step={0.5}
+              placeholder="15"
+              value={rateValue}
+              onChange={(e) => setRateDraft(e.target.value)}
+            />
+          </Field>
+
+          <div className="flex items-center gap-3">
+            <Button
+              disabled={!advancedDirty || saveAdvanced.isPending}
+              onClick={() =>
+                saveAdvanced.mutate({
+                  translation: { fallback: fallbackValue || null },
+                  advanced: { speechRate: rateValue.trim() ? Number(rateValue) : null },
+                })
+              }
+            >
+              {saveAdvanced.isPending ? <Loader2 className="animate-spin" /> : null}
+              {t("advanced.save")}
+            </Button>
+            {saveAdvanced.isSuccess && !advancedDirty && (
+              <span className="inline-flex items-center gap-1.5 text-sm text-success">
+                <Check className="size-4" /> {t("advanced.saved")}
+              </span>
+            )}
+            {saveAdvanced.isError && (
+              <span className="text-sm text-danger">{(saveAdvanced.error as Error).message}</span>
+            )}
+          </div>
+
+          <label className="flex cursor-pointer items-start gap-3 border-t border-border pt-4">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-primary"
+              checked={qualityGate}
+              disabled={toggleQualityGate.isPending}
+              onChange={(e) =>
+                toggleQualityGate.mutate({ advanced: { qualityGate: e.target.checked } })
+              }
+            />
+            <span>
+              <span className="block text-sm font-medium text-foreground">
+                {t("advanced.qualityGateLabel")}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {t("advanced.qualityGateHint")}
+              </span>
+            </span>
+          </label>
         </CardContent>
       </Card>
 

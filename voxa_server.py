@@ -227,6 +227,8 @@ async def _run_job(job: Job) -> None:
         cmd += provider_model_args(cfg.translator, current_settings)
         cmd += translation_prompt_args(cfg.translator, current_settings)
         cmd += speech_style_args(cfg.tts, current_settings)
+        cmd += translation_fallback_args(current_settings)
+        cmd += advanced_timing_args(current_settings)
         if cfg.tts == "xtts" and cfg.voiceSample:
             cmd += ["--voice-sample", cfg.voiceSample]
         if cfg.tts == "openai":
@@ -313,10 +315,16 @@ def default_settings() -> dict:
         "defaultTts": "edge",
         # Per-LLM-provider default translation model (None = the engine's built-in default).
         "providers": {pid: {"model": None} for pid in voxa.LLM_PROVIDERS},
-        "translation": {"prompt": None},
+        "translation": {"prompt": None, "fallback": None},
         "speech": {"instructions": None, "presets": []},
-        "advanced": {"speechRate": None},
+        "advanced": {"speechRate": None, "qualityGate": False},
     }
+
+
+# Guardrail for the exposed speaking-rate knob (chars/sec). The engine default is 15; outside
+# this band, dub timing degrades (too low over-condenses, too high rushes delivery).
+SPEECH_RATE_MIN = 8.0
+SPEECH_RATE_MAX = 30.0
 
 
 def _merge_settings(base: dict, patch: dict) -> dict:
@@ -484,6 +492,27 @@ def speech_style_args(tts: str, settings: dict) -> List[str]:
     return ["--openai-tts-instructions", style] if style else []
 
 
+def translation_fallback_args(settings: dict) -> List[str]:
+    """CLI args carrying the operator's fallback translator (P4). The engine only uses it
+    when the primary LLM translator substantially fails, so it's safe to always pass."""
+    fb = (settings.get("translation") or {}).get("fallback")
+    return ["--fallback-translator", fb] if fb else []
+
+
+def advanced_timing_args(settings: dict) -> List[str]:
+    """CLI args for the exposed advanced knobs (P4): the speaking rate (clamped to the
+    guardrail band) and the quality gate, which also enables the neutral-retry of bad takes."""
+    adv = settings.get("advanced") or {}
+    args: List[str] = []
+    rate = adv.get("speechRate")
+    if rate is not None:
+        clamped = max(SPEECH_RATE_MIN, min(SPEECH_RATE_MAX, float(rate)))
+        args += ["--speech-rate", str(clamped)]
+    if adv.get("qualityGate"):
+        args += ["--quality-gate"]
+    return args
+
+
 def test_provider(pid: str) -> dict:
     """Connection test for one LLM provider: a cheap, no-token models.list() call that
     only checks the key is valid and the endpoint is reachable. Never raises."""
@@ -549,10 +578,25 @@ async def put_settings(patch: SettingsPatch, _: None = Depends(require_local)) -
             if pid not in voxa.LLM_PROVIDERS:
                 raise HTTPException(status_code=422, detail=f"Unknown provider: {pid}")
     if "translation" in data:
-        prompt = (data["translation"] or {}).get("prompt")
+        tr = data["translation"] or {}
+        prompt = tr.get("prompt")
         if prompt is not None and len(str(prompt)) > 4000:
             raise HTTPException(status_code=422,
                                 detail="Translation style guidance is too long (max 4000 chars).")
+        fb = tr.get("fallback")
+        if fb is not None and fb not in valid_translators():
+            raise HTTPException(status_code=422, detail=f"Unknown fallback translator: {fb}")
+    if "advanced" in data:
+        rate = (data["advanced"] or {}).get("speechRate")
+        if rate is not None:
+            try:
+                rate = float(rate)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422, detail="speechRate must be a number.")
+            if not (SPEECH_RATE_MIN <= rate <= SPEECH_RATE_MAX):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"speechRate must be between {SPEECH_RATE_MIN} and {SPEECH_RATE_MAX}.")
     if "speech" in data:
         speech = data["speech"] or {}
         presets = speech.get("presets")

@@ -7,9 +7,14 @@ runtime deps (whisper/torch/ffmpeg) are not required — voxa guards those impor
 
 Run:  pytest -q
 """
+import logging
+from types import SimpleNamespace
+
 import pytest
 
 import voxa
+
+_LOGGER = logging.getLogger("test")
 
 
 # ── OpenAI batch response parsing ────────────────────────
@@ -1189,3 +1194,39 @@ def test_pacing_conflicts_detected():
 def test_pacing_conflicts_clean_style():
     assert voxa._detect_pacing_conflicts("warm, confident, documentary tone") == []
     assert voxa._detect_pacing_conflicts("") == []
+
+
+# ── Translation provider fallback (P4) ──
+def _fb_args(fallback):
+    return SimpleNamespace(fallback_translator=fallback, translator="openai", target_lang="tr",
+                           ollama_model="llama3", llm_batch_size=25)
+
+
+def test_fallback_noop_without_config():
+    out = voxa._apply_translation_fallback(["a", "b"], ["a", "b"], _fb_args(None), _LOGGER)
+    assert out == ["a", "b"]
+
+
+def test_fallback_triggers_on_substantial_failure(monkeypatch):
+    monkeypatch.setattr(voxa, "translate_with_retry", lambda t, *a: "FB:" + t)
+    # All three came back as source (untranslated) → substantial failure → fallback.
+    out = voxa._apply_translation_fallback(["x", "y", "z"], ["x", "y", "z"],
+                                           _fb_args("google"), _LOGGER)
+    assert out == ["FB:x", "FB:y", "FB:z"]
+
+
+def test_fallback_skips_when_only_a_few_lines_failed(monkeypatch):
+    monkeypatch.setattr(voxa, "translate_with_retry",
+                        lambda *a: (_ for _ in ()).throw(AssertionError("should not run")))
+    # 1 of 4 untranslated (< half) → likely a proper noun, not an outage → no fallback.
+    out = voxa._apply_translation_fallback(["a", "b", "c", "d"], ["A", "B", "C", "d"],
+                                           _fb_args("google"), _LOGGER)
+    assert out == ["A", "B", "C", "d"]
+
+
+def test_fallback_survives_fallback_error(monkeypatch):
+    def boom(*a):
+        raise RuntimeError("fallback down too")
+    monkeypatch.setattr(voxa, "translate_with_retry", boom)
+    out = voxa._apply_translation_fallback(["x", "y"], ["x", "y"], _fb_args("google"), _LOGGER)
+    assert out == ["x", "y"]  # returns the originals rather than raising

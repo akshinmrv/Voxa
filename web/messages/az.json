@@ -311,6 +311,19 @@
         "reset": "Defolta qaytar",
         "saved": "Saxlanıldı"
       },
+      "advanced": {
+        "title": "Ətraflı",
+        "desc": "Təcrübəli istifadəçilər üçün etibarlılıq və timing ayarları. Defolt dəyərlər tövsiyə olunur.",
+        "fallbackLabel": "Ehtiyat tərcüməçi",
+        "fallbackHint": "Əsas LLM tərcüməçi sətirlərin çoxunda uğursuz olsa (kəsinti və ya səhv açar), həmin sətirlər bununla yenidən tərcümə olunur.",
+        "fallbackNone": "Yoxdur",
+        "rateLabel": "Danışıq sürəti (simvol/saniyə)",
+        "rateHint": "Saniyədə nə qədər tərcümə mətni büdcələnir. Defolt 15; aralıq 8–30. Aşağı daha çox sıxır, yuxarı tələsdirir.",
+        "save": "Ətraflını saxla",
+        "saved": "Saxlanıldı",
+        "qualityGateLabel": "Keyfiyyət nəzarəti (skorla və yenidən sintez et)",
+        "qualityGateHint": "Hər sintez olunmuş sətri skorlaşdırır və pozulmuşu neytral üslubla yenidən render edir. Daha yavaş, OpenAI TTS. Defolt söndürülü."
+      },
       "appearance": {
         "title": "Görünüş",
         "theme": "Tema",

@@ -731,9 +731,50 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
         return _fit_to_window(raw_file, final_file, target_duration, work_dir,
                               sample_rate, enable_stretch)
 
+    # A style or per-line emotion can occasionally garble one line. Only then is a neutral
+    # re-render worth an extra API call — with no added direction, a bad take isn't style-caused.
+    _retry_enabled = bool((instructions or "").strip() or emotion_detection)
+
+    def _regenerate(i, text, final_file, target_duration):
+        """Quality-gate retry: if a take scores badly, re-render it ONCE with neutral delivery
+        (the locked timing guard only — no operator style, no emotion hint), the usual cause of
+        a garbled instructable-TTS line. Keep whichever take scores better. --quality-gate only."""
+        if not (quality_gate and _retry_enabled and asr_model is not None
+                and _has_content(final_file, 1000)):
+            return None
+        best = score_speech(str(final_file), text, asr_model=asr_model, lang=lang_code)
+        if best["ok"]:
+            return best
+        cand_raw = work_dir / f"otts_rawcand_{i}.wav"
+        cand_fin = work_dir / f"otts_fincand_{i}.wav"
+        try:
+            kwargs = {"model": model, "voice": voice, "input": text, "response_format": "wav",
+                      "instructions": _build_tts_instructions("", "")}  # guard only
+            try:
+                resp = client.audio.speech.create(**kwargs)
+            except TypeError:
+                kwargs.pop("instructions", None)
+                resp = client.audio.speech.create(**kwargs)
+            cand_raw.write_bytes(resp.content)
+        except Exception as e:
+            _LOG.debug(f"neutral retry failed for segment {i}: {e}")
+            return best
+        if not _has_content(cand_raw, 1000) or not _fit_to_window(
+                cand_raw, cand_fin, target_duration, work_dir, sample_rate, enable_stretch):
+            _safe_unlink(cand_raw, cand_fin)
+            return best
+        cand = score_speech(str(cand_fin), text, asr_model=asr_model, lang=lang_code)
+        if _score_better(cand, best):
+            shutil.copyfile(str(cand_fin), str(final_file))
+            best = cand
+            _LOG.info(f"♻️  segment {i}: re-rendered neutral → "
+                      f"{'ok' if best['ok'] else 'best-effort'} (wer {best.get('wer', 'n/a')})")
+        _safe_unlink(cand_raw, cand_fin)
+        return best
+
     await synthesize_timeline(
         subs, engine="openai", prefix="otts", sample_rate=sample_rate, work_dir=work_dir,
-        concat_list=concat_list, temp_files=temp_files, render=_render,
+        concat_list=concat_list, temp_files=temp_files, render=_render, on_ready=_regenerate,
         text_of=lambda s: normalize_tts_text(s.text),
         desc="OpenAI TTS", unit="phrase",
         quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code)
@@ -1598,6 +1639,42 @@ def translate_llm_batch(texts: List[str], target_lang: str, provider: str,
     p = LLM_PROVIDERS[provider]
     return _llm_translate_batch(texts, target_lang, model or p["default_model"],
                                 p["chat"], api_key, batch_size, max_chars, style)
+
+
+def _apply_translation_fallback(texts: List[str], translated: List[str], args, logger) -> List[str]:
+    """If the primary LLM translator left most lines untranslated — an outage or an invalid
+    key makes _llm_translate_* echo the source — re-translate those lines with the configured
+    --fallback-translator. Only triggers on a substantial failure (≥ half the lines), so a few
+    legitimately-identical lines (proper nouns, numbers) don't set it off; re-translating those
+    would be harmless anyway. Returns the (possibly repaired) list, same length and order."""
+    fb = getattr(args, "fallback_translator", None)
+    if not fb or not texts:
+        return translated
+    failed = [i for i, (s, t) in enumerate(zip(texts, translated))
+              if not (t or "").strip() or (t or "").strip() == (s or "").strip()]
+    if len(failed) < max(1, (len(texts) + 1) // 2):
+        return translated
+    logger.warning(f"⚠️  {args.translator} left {len(failed)}/{len(texts)} lines untranslated "
+                   f"— falling back to {fb} for those lines")
+    fb_texts = [texts[i] for i in failed]
+    try:
+        if fb in LLM_PROVIDERS:
+            fb_out = translate_llm_batch(
+                fb_texts, args.target_lang, fb,
+                model=getattr(args, f"{fb}_model", None),
+                api_key=getattr(args, f"{fb}_api_key", None),
+                batch_size=args.llm_batch_size)
+        else:
+            fb_out = [translate_with_retry(t, args.target_lang, fb, args.ollama_model)
+                      for t in fb_texts]
+    except Exception as e:
+        logger.error(f"Fallback translator {fb} also failed: {e}")
+        return translated
+    repaired = list(translated)
+    for idx, val in zip(failed, fb_out):
+        if (val or "").strip():
+            repaired[idx] = val
+    return repaired
 
 
 def merge_segments_into_sentences(segments: List[Dict], max_duration: float = 10.0) -> List[Dict]:
@@ -2502,6 +2579,7 @@ async def process_video(video_path: str, args, logger: Logger):
                 api_key=llm_api_key, batch_size=args.llm_batch_size, max_chars=max_chars,
                 style=getattr(args, "translation_prompt", None) or ""
             )
+            translated_texts = _apply_translation_fallback(texts, translated_texts, args, logger)
             translated_segments = [
                 {'text': tt or seg['text'].strip(), 'start': seg['start'], 'end': seg['end']}
                 for seg, tt in zip(indexed, translated_texts)
@@ -2699,6 +2777,11 @@ Examples:
 
     parser.add_argument("--translator", choices=["google", "ollama"] + sorted(LLM_PROVIDERS),
                         default="google", help="Translation service (default: google)")
+    parser.add_argument("--fallback-translator", default=None,
+                        choices=["google", "ollama"] + sorted(LLM_PROVIDERS),
+                        help="If the primary LLM translator returns most lines untranslated "
+                             "(outage or invalid key), re-translate those lines with this one "
+                             "(default: none).")
     parser.add_argument("--ollama_model", default="llama3",
                         help="Ollama model for translation (default: llama3)")
     # Per-provider LLM flags (--openai_model/--openai_api_key, --anthropic_model/...).

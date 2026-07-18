@@ -73,9 +73,9 @@ export type VoxaSettings = {
   defaultTranslator: string;
   defaultTts: string;
   providers: Record<string, ProviderSettings>;
-  translation: { prompt: string | null };
+  translation: { prompt: string | null; fallback: string | null };
   speech: { instructions: string | null; presets: string[] };
-  advanced: { speechRate: number | null };
+  advanced: { speechRate: number | null; qualityGate: boolean };
 };
 
 /** Partial update sent to PUT /api/settings — only changed fields. */
@@ -83,9 +83,9 @@ export type SettingsPatch = {
   defaultTranslator?: string;
   defaultTts?: string;
   providers?: Record<string, ProviderSettings>;
-  translation?: { prompt?: string | null };
+  translation?: { prompt?: string | null; fallback?: string | null };
   speech?: { instructions?: string | null; presets?: string[] };
-  advanced?: { speechRate?: number | null };
+  advanced?: { speechRate?: number | null; qualityGate?: boolean };
 };
 
 /** Masked API-key status for one provider (the raw key never reaches the browser). */

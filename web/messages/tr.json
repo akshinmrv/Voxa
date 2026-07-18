@@ -311,6 +311,19 @@
         "reset": "Varsayılana döndür",
         "saved": "Kaydedildi"
       },
+      "advanced": {
+        "title": "Gelişmiş",
+        "desc": "İleri düzey kullanıcılar için güvenilirlik ve zamanlama ayarları. Varsayılanlar önerilir.",
+        "fallbackLabel": "Yedek çevirmen",
+        "fallbackHint": "Ana LLM çevirmen çoğu satırda başarısız olursa (kesinti veya hatalı anahtar), o satırlar bununla yeniden denenir.",
+        "fallbackNone": "Yok",
+        "rateLabel": "Konuşma hızı (karakter/saniye)",
+        "rateHint": "Saniyede ne kadar çeviri metni bütçelenir. Varsayılan 15; aralık 8–30. Düşük daha çok sıkıştırır, yüksek aceleye getirir.",
+        "save": "Gelişmişi kaydet",
+        "saved": "Kaydedildi",
+        "qualityGateLabel": "Kalite denetimi (puanla ve konuşmayı yeniden dene)",
+        "qualityGateHint": "Her sentezlenen satırı puanlar ve bozuk olanı nötr üslupla yeniden oluşturur. Daha yavaş, OpenAI TTS. Varsayılan kapalı."
+      },
       "appearance": {
         "title": "Görünüm",
         "theme": "Tema",

@@ -30,7 +30,7 @@ def test_defaults_when_no_file(store):
     assert s["version"] == srv.SETTINGS_VERSION
     assert s["defaultTranslator"] == "google"
     assert s["defaultTts"] == "edge"
-    assert s["translation"] == {"prompt": None}
+    assert s["translation"] == {"prompt": None, "fallback": None}
 
 
 def test_write_then_read_roundtrip(store):
@@ -61,7 +61,7 @@ def test_missing_keys_backfilled_from_defaults(store):
     (store / "settings.json").write_text('{"defaultTranslator": "openai"}', encoding="utf-8")
     s = srv.read_settings()
     assert s["defaultTts"] == "edge"
-    assert s["advanced"] == {"speechRate": None}
+    assert s["advanced"] == {"speechRate": None, "qualityGate": False}
 
 
 def test_invalid_file_falls_back_to_defaults(store):
@@ -377,3 +377,43 @@ def test_identical_bytes_hash_to_same_key():
     k1 = hashlib.sha256(data).hexdigest()
     k2 = hashlib.sha256(data).hexdigest()
     assert srv._video_work_dir(k1) == srv._video_work_dir(k2)
+
+
+# ── P4: translation fallback + advanced timing ───────────
+def test_translation_fallback_args():
+    assert srv.translation_fallback_args({"translation": {"fallback": "google"}}) == \
+        ["--fallback-translator", "google"]
+    assert srv.translation_fallback_args({"translation": {"fallback": None}}) == []
+    assert srv.translation_fallback_args({}) == []
+
+
+def test_advanced_timing_args_passes_and_clamps():
+    assert srv.advanced_timing_args({"advanced": {"speechRate": 16.0}}) == \
+        ["--speech-rate", "16.0"]
+    assert srv.advanced_timing_args({"advanced": {"speechRate": None}}) == []
+    # Defensive clamp even if a bad value slipped past validation.
+    assert srv.advanced_timing_args({"advanced": {"speechRate": 999}}) == \
+        ["--speech-rate", str(srv.SPEECH_RATE_MAX)]
+
+
+def test_advanced_timing_args_quality_gate():
+    assert srv.advanced_timing_args({"advanced": {"qualityGate": True}}) == ["--quality-gate"]
+    assert "--quality-gate" not in srv.advanced_timing_args({"advanced": {"qualityGate": False}})
+    both = srv.advanced_timing_args({"advanced": {"speechRate": 15, "qualityGate": True}})
+    assert both == ["--speech-rate", "15.0", "--quality-gate"]
+
+
+def test_fallback_roundtrip_and_validation(client):
+    assert client.put("/api/settings",
+                      json={"translation": {"fallback": "google"}}).status_code == 200
+    assert client.get("/api/settings").json()["translation"]["fallback"] == "google"
+    assert client.put("/api/settings",
+                      json={"translation": {"fallback": "nope"}}).status_code == 422
+
+
+def test_speech_rate_roundtrip_and_validation(client):
+    assert client.put("/api/settings", json={"advanced": {"speechRate": 17}}).status_code == 200
+    assert client.get("/api/settings").json()["advanced"]["speechRate"] == 17
+    assert client.put("/api/settings", json={"advanced": {"speechRate": 100}}).status_code == 422
+    assert client.put("/api/settings",
+                      json={"advanced": {"speechRate": "fast"}}).status_code == 422
