@@ -5,36 +5,29 @@
 **Dub any video into another language — and keep it in sync.**
 
 Voxa transcribes a video, translates it with context, speaks it in the target language, and
-mixes the result back over the original. It is a single-file CLI with four speech engines,
-four translation backends, and one non-negotiable property: the dub does not drift away from
-the speaker.
+mixes the result back over the original. The engine is one Python file with four speech
+engines, four translation backends, and one non-negotiable property: the dub does not drift
+away from the speaker.
 
 [![CI](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml/badge.svg)](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/akshinmrv/Voxa?display_name=tag&sort=semver)](https://github.com/akshinmrv/Voxa/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Stars](https://img.shields.io/github/stars/akshinmrv/Voxa?style=flat)](https://github.com/akshinmrv/Voxa/stargazers)
-
-🌐 **[voxa-servoogle.vercel.app](https://voxa-servoogle.vercel.app)** — demo dubs, voice samples, and docs
-
-<br>
-
-<img src="docs/assets/app-en.png" alt="Voxa operator app (voxa serve) — a finished dubbing job" width="820">
-
-<sub>The local operator app (<code>voxa serve</code>) — upload a video, watch the 7-step pipeline, download the dub.</sub>
 
 </div>
 
----
+```bash
+pipx install voxa-dub
+voxa talk.mp4 --target_lang ru        # → talk_dubbed_ru.mp4
+```
 
-## 🌍 Documentation
+<div align="center">
 
-Choose your language:
+🎧 **[Hear the demo dubs](https://voxa-servoogle.vercel.app)** — English → Turkish, Azerbaijani
+and French, produced with no API key
 
-- 🇬🇧 **English** — you are reading this
-- 🇦🇿 **Azərbaycan** → [README.az.md](README.az.md)
-- 🇹🇷 **Türkçe** → [README.tr.md](README.tr.md)
+</div>
 
 ---
 
@@ -167,25 +160,29 @@ and where each concern lives in the code.
 
 ## Demo
 
+One 15-second English clip, dubbed into three languages from a single transcription. Every
+dub below was produced with the **default engines and no API key**:
+
+```bash
+voxa clip.mp4 --target_lang tr        # then --target_lang az, --target_lang fr
+```
+
+| Target | Engines | Listen |
+|---|---|---|
+| 🎬 Original (English) | — | [play ▶](https://voxa-servoogle.vercel.app) · [`original.mp4`](web/public/demo/original.mp4) |
+| 🇹🇷 Turkish | `google` + `edge` | [play ▶](https://voxa-servoogle.vercel.app) · [`dub_tr.mp4`](web/public/demo/dub_tr.mp4) |
+| 🇦🇿 Azerbaijani | `google` + `edge` | [play ▶](https://voxa-servoogle.vercel.app) · [`dub_az.mp4`](web/public/demo/dub_az.mp4) |
+| 🇫🇷 French | `google` + `edge` | [play ▶](https://voxa-servoogle.vercel.app) · [`dub_fr.mp4`](web/public/demo/dub_fr.mp4) |
+
+The second and third languages reused the cached transcription, so only translation and speech
+were regenerated — the timeline is identical across all three.
+
 <!--
-  To play a video inline on GitHub, upload the file to a GitHub issue or release,
-  copy the resulting https://github.com/user-attachments/... URL, and paste it
-  between the markers below. Repository-relative paths do not render inline.
+  To play a video inline on GitHub rather than linking to it, upload the file to a GitHub
+  issue or release, copy the resulting https://github.com/user-attachments/... URL, and paste
+  it below. Repository-relative paths do not render inline on GitHub.
 -->
-
-| Target | Source | Engine | File |
-|---|---|---|---|
-| 🇹🇷 Turkish | English | *TBD* | `docs/assets/dubbed_tr.mp4` |
-| 🇦🇿 Azerbaijani | English | *TBD* | `docs/assets/dubbed_az.mp4` |
-| 🇫🇷 French | English | *TBD* | `docs/assets/dubbed_fr.mp4` |
-
-<!-- DEMO_TR --> <!-- paste the user-attachments URL for the Turkish demo here -->
-<!-- DEMO_AZ --> <!-- paste the user-attachments URL for the Azerbaijani demo here -->
-<!-- DEMO_FR --> <!-- paste the user-attachments URL for the French demo here -->
-
-> [!IMPORTANT]
-> Demo files belong in `docs/assets/`. Root-level `*.mp4` is gitignored — a video placed at
-> the repository root will never be committed.
+<!-- DEMO_TR --> <!-- DEMO_AZ --> <!-- DEMO_FR -->
 
 ## Installation
 
@@ -201,6 +198,19 @@ winget install Gyan.FFmpeg   # Windows
 **2. Voxa** — Python 3.9 or newer.
 
 ```bash
+pipx install voxa-dub          # recommended: isolated, puts `voxa` on your PATH
+```
+
+Or run it once without installing anything:
+
+```bash
+uvx voxa-dub talk.mp4 --target_lang ru
+```
+
+<details>
+<summary>From source (for development)</summary>
+
+```bash
 git clone https://github.com/akshinmrv/Voxa
 cd Voxa
 python3 -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
@@ -212,22 +222,24 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install .
 ```
 
+</details>
+
 > [!NOTE]
-> `pip install .` puts a **`voxa`** command on your PATH — that is what every example below
-> uses. If you'd rather not install it (or you only ran `pip install -r requirements.txt`),
-> run the script directly instead: `python voxa.py …`. The two are interchangeable.
+> The distribution is named **`voxa-dub`** (the `voxa` name on PyPI belongs to an unrelated,
+> abandoned package). The command it installs is **`voxa`** — that is what every example below
+> uses. Running the script directly, `python voxa.py …`, is equivalent.
 
 **3. Optional engines** — install only what you use.
 
 | Command | Enables |
 |---|---|
-| `pip install "voxa[faster]"` | `--whisper-backend faster` — 2–4× quicker, no torch |
-| `pip install "voxa[piper]"` | `--tts piper` — fully offline |
-| `pip install "voxa[anthropic]"` | `--translator anthropic` |
-| `pip install "voxa[xtts]"` | `--tts xtts` voice cloning |
+| `pipx install "voxa-dub[faster]"` | `--whisper-backend faster` — 2–4× quicker, no torch |
+| `pipx install "voxa-dub[piper]"` | `--tts piper` — fully offline |
+| `pipx install "voxa-dub[anthropic]"` | `--translator anthropic` |
+| `pipx install "voxa-dub[xtts]"` | `--tts xtts` voice cloning |
 
 > [!WARNING]
-> `voxa[xtts]` installs [`coqui-tts`](https://github.com/idiap/coqui-ai-TTS), the maintained
+> `voxa-dub[xtts]` installs [`coqui-tts`](https://github.com/idiap/coqui-ai-TTS), the maintained
 > community fork. The **XTTS-v2 model weights are non-commercial** (CPML), and Coqui Inc. no
 > longer exists to sell a commercial licence. For commercial voice cloning, drive an
 > MIT-licensed engine through `--openai-tts-base-url`.
@@ -323,26 +335,33 @@ voxa video.mp4 --target_lang tr --tts openai \
      --openai-tts-base-url http://localhost:8004/v1
 ```
 
-## Web UI (`voxa serve`)
+## Optional local console (`voxa serve`)
 
-Voxa ships an optional web frontend in [`web/`](web/) and a local operator backend behind
-`voxa serve` — one design system, two surfaces:
+The CLI is the product. If you'd rather click than type, `voxa serve` starts a local console
+that **shells out to the very same `voxa` command** — so the UI cannot drift away from the
+engine, because it *is* the engine. It binds to `127.0.0.1`; nothing is uploaded anywhere.
 
-- **Landing** — a public, trilingual (EN/AZ/TR) showcase, deployable as a static site.
-- **Operator app** — a local console: upload a video, pick engines, watch the seven-step
-  pipeline live (Server-Sent Events), and download the result. Nothing is uploaded to a
-  server — it runs on your own machine.
+<div align="center">
+<img src="docs/assets/app-en.png" alt="The local operator console after a finished dubbing job" width="820">
+<br>
+<sub>Upload a video, pick engines, watch the seven-step pipeline live, download the dub.</sub>
+</div>
 
 ```bash
 # Backend: REST + SSE, drives the same pipeline per job
-pip install ".[serve]"
+pipx install "voxa-dub[serve]"
 voxa serve                              # http://127.0.0.1:8000
 
 # Frontend (separate terminal)
 cd web && npm install && npm run dev    # http://localhost:3000  →  /en/app
 ```
 
-See [`web/README.md`](web/README.md) for development, environment variables, and deployment.
+It also carries the settings the CLI reads: API keys (kept in your local `.env`, never echoed
+back), per-provider models with a connection test, translation style, and speech style presets.
+
+The repository also contains the public landing site in [`web/`](web/) — a trilingual
+(EN/AZ/TR) showcase, deployable as a static site. See [`web/README.md`](web/README.md) for
+development, environment variables, and deployment.
 
 ## Project Structure
 
@@ -541,6 +560,8 @@ log attached.
 <div align="center">
 
 ---
+
+**Read this in another language:** 🇦🇿 [Azərbaycan](README.az.md) · 🇹🇷 [Türkçe](README.tr.md)
 
 **Voxa** · MIT · [Report a bug](https://github.com/akshinmrv/Voxa/issues) ·
 [Contribute](CONTRIBUTING.md) · [Architecture](docs/ARCHITECTURE.md)

@@ -35,3 +35,32 @@ jobs:
             --title "Voxa $GITHUB_REF_NAME" \
             --notes "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md) for the full list of changes." \
             --generate-notes
+
+  pypi:
+    name: Publish to PyPI
+    needs: release
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # Trusted Publishing: PyPI verifies this workflow's identity, so no API token
+      # is stored in the repository. Configure the publisher once at
+      # https://pypi.org/manage/project/voxa-dub/settings/publishing/
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the distribution
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+
+      - name: Check the metadata renders on PyPI
+        run: |
+          python -m pip install --upgrade twine
+          twine check dist/*
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

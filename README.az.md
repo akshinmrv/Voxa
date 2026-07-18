@@ -5,35 +5,28 @@
 **İstənilən videonu başqa dilə dublyaj et — və sinxronu qoru.**
 
 Voxa videonu transkripsiya edir, kontekstlə tərcümə edir, hədəf dildə səsləndirir və nəticəni
-orijinalın üzərinə miksləyir. Bu, dörd nitq mühərriki və dörd tərcümə backend-i olan tək
-fayllıq CLI alətidir — və bir güzəştsiz xüsusiyyəti var: dublyaj danışandan sürüşmür.
+orijinalın üzərinə miksləyir. Mühərrik tək Python faylıdır — dörd nitq mühərriki, dörd tərcümə
+backend-i və bir güzəştsiz xüsusiyyət: dublyaj danışandan sürüşmür.
 
 [![CI](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml/badge.svg)](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/akshinmrv/Voxa?display_name=tag&sort=semver)](https://github.com/akshinmrv/Voxa/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Stars](https://img.shields.io/github/stars/akshinmrv/Voxa?style=flat)](https://github.com/akshinmrv/Voxa/stargazers)
-
-🌐 **[voxa-servoogle.vercel.app](https://voxa-servoogle.vercel.app)** — demo dublyajlar, səs nümunələri və sənədlər
-
-<br>
-
-<img src="docs/assets/app-az.png" alt="Voxa operator tətbiqi (voxa serve) — tamamlanmış dublyaj işi" width="820">
-
-<sub>Lokal operator tətbiqi (<code>voxa serve</code>) — video yüklə, 7-addımlı gedişatı izlə, dublyajı endir.</sub>
 
 </div>
 
----
+```bash
+pipx install voxa-dub
+voxa talk.mp4 --target_lang ru        # → talk_dubbed_ru.mp4
+```
 
-## 🌍 Sənədləşdirmə
+<div align="center">
 
-Dili seçin:
+🎧 **[Demo dublyajları dinlə](https://voxa-servoogle.vercel.app)** — İngiliscədən türk, Azərbaycan
+və fransız dillərinə, API açarı olmadan
 
-- 🇬🇧 **English** → [README.md](README.md)
-- 🇦🇿 **Azərbaycan** — hazırda oxuduğunuz sənəd
-- 🇹🇷 **Türkçe** → [README.tr.md](README.tr.md)
+</div>
 
 ---
 
@@ -164,19 +157,24 @@ registry-lərin necə işlədiyini [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 
 
 ## Demo
 
-| Hədəf | Mənbə | Mühərrik | Fayl |
-|---|---|---|---|
-| 🇹🇷 Türkçe | İngilis | *TBD* | `docs/assets/dubbed_tr.mp4` |
-| 🇦🇿 Azərbaycan | İngilis | *TBD* | `docs/assets/dubbed_az.mp4` |
-| 🇫🇷 Fransız | İngilis | *TBD* | `docs/assets/dubbed_fr.mp4` |
+15 saniyəlik bir ingilis klipi, **tək transkripsiyadan** üç dilə dublyaj edilib. Aşağıdakı
+bütün dublyajlar **defolt mühərriklərlə və API açarı olmadan** hazırlanıb:
 
-> [!IMPORTANT]
-> Demo faylları `docs/assets/` qovluğunda saxlanılmalıdır. Kökdəki `*.mp4` gitignore olunub —
-> repo kökünə qoyulan video heç vaxt commit olunmayacaq.
+```bash
+voxa clip.mp4 --target_lang tr        # sonra --target_lang az, --target_lang fr
+```
 
-<!-- DEMO_TR --> <!-- paste the user-attachments URL for the Turkish demo here -->
-<!-- DEMO_AZ --> <!-- paste the user-attachments URL for the Azerbaijani demo here -->
-<!-- DEMO_FR --> <!-- paste the user-attachments URL for the French demo here -->
+| Hədəf | Mühərriklər | Dinlə |
+|---|---|---|
+| 🎬 Orijinal (İngilis) | — | [oynat ▶](https://voxa-servoogle.vercel.app) · [`original.mp4`](web/public/demo/original.mp4) |
+| 🇹🇷 Türkçe | `google` + `edge` | [oynat ▶](https://voxa-servoogle.vercel.app) · [`dub_tr.mp4`](web/public/demo/dub_tr.mp4) |
+| 🇦🇿 Azərbaycan | `google` + `edge` | [oynat ▶](https://voxa-servoogle.vercel.app) · [`dub_az.mp4`](web/public/demo/dub_az.mp4) |
+| 🇫🇷 Fransız | `google` + `edge` | [oynat ▶](https://voxa-servoogle.vercel.app) · [`dub_fr.mp4`](web/public/demo/dub_fr.mp4) |
+
+İkinci və üçüncü dillər keşlənmiş transkripsiyanı təkrar işlətdi — yalnız tərcümə və nitq
+yenidən yaradıldı, ona görə timeline hər üçündə eynidir.
+
+<!-- DEMO_TR --> <!-- DEMO_AZ --> <!-- DEMO_FR -->
 
 ## Quraşdırma
 
@@ -192,6 +190,19 @@ winget install Gyan.FFmpeg   # Windows
 **2. Voxa** — Python 3.9 və ya daha yeni.
 
 ```bash
+pipx install voxa-dub          # tövsiyə olunan: izolyasiya, PATH-ə `voxa` əlavə edir
+```
+
+Və ya heç nə quraşdırmadan bir dəfə işlət:
+
+```bash
+uvx voxa-dub talk.mp4 --target_lang ru
+```
+
+<details>
+<summary>Mənbədən (development üçün)</summary>
+
+```bash
 git clone https://github.com/akshinmrv/Voxa
 cd Voxa
 python3 -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
@@ -203,22 +214,24 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install .
 ```
 
+</details>
+
 > [!NOTE]
-> `pip install .` PATH-ə **`voxa`** əmrini əlavə edir — aşağıdakı bütün nümunələr onu
-> işlədir. Quraşdırmaq istəmirsinizsə (və ya yalnız `pip install -r requirements.txt`
-> etmisinizsə), skripti birbaşa işlədin: `python voxa.py …`. İkisi eyni işi görür.
+> Paketin adı **`voxa-dub`**-dır (PyPI-dakı `voxa` adı əlaqəsiz, tərk edilmiş paketə
+> məxsusdur). Quraşdırdığı əmr isə **`voxa`**-dır — aşağıdakı bütün nümunələr onu işlədir.
+> Skripti birbaşa işlətmək, `python voxa.py …`, eyni işi görür.
 
 **3. Opsional mühərriklər** — yalnız istifadə etdiyinizi quraşdırın.
 
 | Əmr | Nəyi açır |
 |---|---|
-| `pip install "voxa[faster]"` | `--whisper-backend faster` — 2–4× sürətli, torch-suz |
-| `pip install "voxa[piper]"` | `--tts piper` — tam offline |
-| `pip install "voxa[anthropic]"` | `--translator anthropic` |
-| `pip install "voxa[xtts]"` | `--tts xtts` səs klonlama |
+| `pipx install "voxa-dub[faster]"` | `--whisper-backend faster` — 2–4× sürətli, torch-suz |
+| `pipx install "voxa-dub[piper]"` | `--tts piper` — tam offline |
+| `pipx install "voxa-dub[anthropic]"` | `--translator anthropic` |
+| `pipx install "voxa-dub[xtts]"` | `--tts xtts` səs klonlama |
 
 > [!WARNING]
-> `voxa[xtts]` [`coqui-tts`](https://github.com/idiap/coqui-ai-TTS) forkunu quraşdırır.
+> `voxa-dub[xtts]` [`coqui-tts`](https://github.com/idiap/coqui-ai-TTS) forkunu quraşdırır.
 > **XTTS-v2 model çəkiləri qeyri-kommersiyadır** (CPML) və Coqui Inc. artıq mövcud deyil ki,
 > kommersiya lisenziyası satsın. Kommersiya klonlama üçün `--openai-tts-base-url` ilə
 > MIT lisenziyalı mühərrik işlədin.
@@ -314,7 +327,7 @@ backend təqdim edir — bir dizayn sistemi, iki səth:
 
 ```bash
 # Backend: REST + SSE
-pip install ".[serve]"
+pipx install "voxa-dub[serve]"
 voxa serve                              # http://127.0.0.1:8000
 
 # Frontend (ayrı terminal)
@@ -511,6 +524,8 @@ hesabatıdır.
 <div align="center">
 
 ---
+
+**Başqa dildə oxu:** 🇬🇧 [English](README.md) · 🇹🇷 [Türkçe](README.tr.md)
 
 **Voxa** · MIT · [Baq bildir](https://github.com/akshinmrv/Voxa/issues) ·
 [Töhfə ver](CONTRIBUTING.md) · [Arxitektura](docs/ARCHITECTURE.md)

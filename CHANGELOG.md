@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The distribution is now published as `voxa-dub`.** The `voxa` name on PyPI belongs to an
+  unrelated, abandoned package, so `pip install voxa` installed the wrong project entirely.
+  Install with `pipx install voxa-dub` (or run it without installing: `uvx voxa-dub …`). The
+  command it puts on your PATH is still **`voxa`**, and the import module is still `voxa`, so
+  nothing changes once it is installed. Tagged releases now publish to PyPI automatically via
+  Trusted Publishing.
+
 ### Added
 
 - **Web frontend (`web/`).** A trilingual (EN/AZ/TR) public landing plus a local operator

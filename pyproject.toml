@@ -3,8 +3,11 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "voxa"
-version = "1.0.0"
+# Distribution name. `voxa` on PyPI is an unrelated, abandoned package (v0.0.2, 2023), so
+# installing that would give people the wrong project. The command stays `voxa` — see
+# [project.scripts] below — and the import module is still `voxa`.
+name = "voxa-dub"
+version = "1.0.1"
 description = "Voxa — automatic video translation and dubbing (Whisper + LLM translation + multi-engine TTS)"
 readme = "README.md"
 requires-python = ">=3.9"
