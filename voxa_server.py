@@ -201,6 +201,16 @@ def _video_work_dir(content_key: Optional[str]) -> Path:
     return JOBS_DIR / (content_key or uuid.uuid4().hex)[:16]
 
 
+def error_from_log_line(line: str) -> Optional[str]:
+    """The human-readable reason from a voxa log line, or None if it isn't an error. Used to
+    report WHY a job failed instead of a bare exit code the operator must dig logs to explain."""
+    if " - ERROR - " in line:
+        return line.split(" - ERROR - ")[-1].strip() or None
+    if line.lstrip().startswith("❌"):
+        return line.strip() or None
+    return None
+
+
 async def _emit(job: Job, event: dict) -> None:
     job.events.append(event)
     for q in list(job.subscribers):
@@ -260,10 +270,10 @@ async def _run_job(job: Job) -> None:
             line = raw.decode("utf-8", errors="replace").rstrip()
             if not line:
                 continue
-            # Remember the most recent error so a failed job can show WHY, instead of a
-            # bare exit code the operator would have to dig through the logs to explain.
-            if " - ERROR - " in line or line.lstrip().startswith("❌"):
-                last_error = line.split(" - ERROR - ")[-1].strip() or line.strip()
+            # Remember the most recent error so a failed job can show WHY.
+            reason = error_from_log_line(line)
+            if reason:
+                last_error = reason
             await _emit(job, {"type": "log", "line": line})
             match = STEP_RE.search(line)
             if match:

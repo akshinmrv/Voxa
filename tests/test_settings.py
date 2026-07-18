@@ -380,6 +380,22 @@ def test_identical_bytes_hash_to_same_key():
 
 
 # ── P4: translation fallback + advanced timing ───────────
+def test_error_from_log_line_extracts_reason():
+    # The exact line a rejected TTS key produces.
+    line = ("2026-07-18 10:17:12,177 - ERROR - openai produced no speech for any of the 2 "
+            "segments — the dub would be silent. Check the engine's API key.")
+    assert srv.error_from_log_line(line) == (
+        "openai produced no speech for any of the 2 segments — the dub would be silent. "
+        "Check the engine's API key.")
+
+
+def test_error_from_log_line_handles_plain_and_non_errors():
+    assert srv.error_from_log_line("❌ OpenAI TTS selected but no API key found.") == \
+        "❌ OpenAI TTS selected but no API key found."
+    assert srv.error_from_log_line("2026-07-18 10:17:12 - INFO - [3/7] Transcribing...") is None
+    assert srv.error_from_log_line("") is None
+
+
 def test_translation_fallback_args():
     assert srv.translation_fallback_args({"translation": {"fallback": "google"}}) == \
         ["--fallback-translator", "google"]

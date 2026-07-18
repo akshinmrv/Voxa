@@ -23,6 +23,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
 
   const [sseStatus, setSseStatus] = useState<JobStatus | null>(null);
   const [sseStep, setSseStep] = useState<number | null>(null);
+  const [sseError, setSseError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const logRef = useRef<HTMLPreElement>(null);
 
@@ -37,6 +38,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
         setSseStep(data.step);
       } else if (data.type === "status") {
         setSseStatus(data.status);
+        if (data.error) setSseError(data.error);
         if (data.status === "done" || data.status === "failed") {
           es.close();
           meta.refetch();
@@ -62,6 +64,8 @@ export function JobDetail({ jobId }: { jobId: string }) {
   const fileName = meta.data?.fileName ?? jobId;
   const hasVideo = status === "done" && (meta.data?.hasVideo ?? true);
   const hasSrt = status === "done" && (meta.data?.hasSrt ?? false);
+  // The server reports the last error line, so the reason is visible without reading logs.
+  const failureReason = sseError ?? meta.data?.error ?? null;
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -111,7 +115,12 @@ export function JobDetail({ jobId }: { jobId: string }) {
       {status === "failed" && (
         <div className="flex gap-3 rounded-md border border-danger/25 bg-danger/10 p-4">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" />
-          <p className="text-sm text-muted-foreground">{t("failed")}</p>
+          <div className="min-w-0 space-y-2">
+            {failureReason && (
+              <p className="break-words font-mono text-sm text-foreground">{failureReason}</p>
+            )}
+            <p className="text-sm text-muted-foreground">{t("failed")}</p>
+          </div>
         </div>
       )}
 
