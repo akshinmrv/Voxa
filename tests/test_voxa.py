@@ -7,6 +7,7 @@ runtime deps (whisper/torch/ffmpeg) are not required — voxa guards those impor
 
 Run:  pytest -q
 """
+import asyncio
 import logging
 from types import SimpleNamespace
 
@@ -1230,3 +1231,41 @@ def test_fallback_survives_fallback_error(monkeypatch):
     monkeypatch.setattr(voxa, "translate_with_retry", boom)
     out = voxa._apply_translation_fallback(["x", "y"], ["x", "y"], _fb_args("google"), _LOGGER)
     assert out == ["x", "y"]  # returns the originals rather than raising
+
+
+# ── A totally failed synthesis must fail the run, not ship a silent dub ──
+def _subs(n=2):
+    return [voxa.Subtitle(i + 1,
+                          voxa.SubTime(0, 0, i, 0),
+                          voxa.SubTime(0, 0, i + 1, 0),
+                          f"line {i}") for i in range(n)]
+
+
+def _run_timeline(subs, render, work_dir):
+    return asyncio.run(voxa.synthesize_timeline(
+        subs, engine="openai", prefix="otts", sample_rate=24000, work_dir=work_dir,
+        concat_list=[], temp_files=[], render=render,
+        text_of=lambda s: s.text, desc="test"))
+
+
+def test_total_synthesis_failure_raises(tmp_path):
+    """Regression: a rejected API key made every segment fail, yet the concat list still
+    held the silence entries — the run 'succeeded' and returned the video undubbed."""
+    with pytest.raises(voxa.TTSError) as exc:
+        _run_timeline(_subs(2), lambda i, t, f, d: False, tmp_path)
+    assert "no speech" in str(exc.value).lower()
+
+
+def test_partial_synthesis_still_succeeds(tmp_path):
+    """One good segment is a usable (if imperfect) dub — only a TOTAL failure is fatal."""
+    def render(i, text, final_file, target_duration):
+        if i == 0:
+            return False
+        voxa.create_silence_wav(0.5, str(final_file), 24000)
+        return True
+    assert _run_timeline(_subs(2), render, tmp_path) == 1
+
+
+def test_no_subtitles_is_not_a_failure(tmp_path):
+    # Nothing to say isn't an engine failure, so it must not raise.
+    assert _run_timeline([], lambda i, t, f, d: False, tmp_path) == 0

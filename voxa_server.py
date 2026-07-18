@@ -255,10 +255,15 @@ async def _run_job(job: Job) -> None:
             return
 
         assert proc.stdout is not None
+        last_error = ""
         async for raw in proc.stdout:
             line = raw.decode("utf-8", errors="replace").rstrip()
             if not line:
                 continue
+            # Remember the most recent error so a failed job can show WHY, instead of a
+            # bare exit code the operator would have to dig through the logs to explain.
+            if " - ERROR - " in line or line.lstrip().startswith("❌"):
+                last_error = line.split(" - ERROR - ")[-1].strip() or line.strip()
             await _emit(job, {"type": "log", "line": line})
             match = STEP_RE.search(line)
             if match:
@@ -279,7 +284,7 @@ async def _run_job(job: Job) -> None:
             await _emit(job, {"type": "status", "status": "done"})
         else:
             job.status = "failed"
-            job.error = f"voxa exited with code {code}"
+            job.error = last_error or f"voxa exited with code {code}"
             await _emit(job, {"type": "status", "status": "failed", "error": job.error})
 
 

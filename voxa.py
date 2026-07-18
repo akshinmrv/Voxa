@@ -228,6 +228,10 @@ class FFmpegError(RuntimeError):
     almost always the only useful part of the diagnosis."""
 
 
+class TTSError(Exception):
+    """Raised by a TTS adapter when speech synthesis cannot proceed."""
+
+
 def run_ffmpeg(cmd: List[str], what: str, *, stderr_lines: int = 5) -> None:
     """Run ffmpeg, and on failure raise FFmpegError quoting what ffmpeg actually said.
     The bare `check=True` this replaces discarded stderr, leaving users with nothing but
@@ -1828,6 +1832,17 @@ async def synthesize_timeline(subs, *, engine: str, prefix: str, sample_rate: in
         else:
             cursor_ms = end_ms
 
+    # A total synthesis failure (e.g. a rejected API key) must not pass silently: the
+    # concat list is still full of the leading-silence entries, so the old "is the concat
+    # list empty?" check let a SILENT voiceover through and the run reported success while
+    # handing back the original video undubbed. Fail loudly instead — every engine goes
+    # through this loop, and process_video turns TTSError into a failed run.
+    if subs and generated == 0:
+        raise TTSError(
+            f"{engine} produced no speech for any of the {len(subs)} segments — the dub "
+            f"would be silent. Check the engine's API key / endpoint and try again."
+        )
+
     _LOG.info(f"✓ {engine} generated {generated}/{len(subs)} segments")
     _log_sync_drift(max_drift, engine)
     if quality_gate:
@@ -2343,10 +2358,6 @@ def log_quality_report(scores: List[Dict], engine: str):
 # in process_video logs it and aborts. All adapters share one signature and are
 # async so the dispatch is uniform (edge is natively async; the others simply
 # don't await — identical to the previous inline calls).
-class TTSError(Exception):
-    """Raised by a TTS adapter when speech synthesis cannot proceed."""
-
-
 async def _tts_edge(subs, args, work_dir, video_path, gate_asr, logger):
     logger.info(f"🔎 Finding voice for: {args.target_lang}")
     voice, has_emotions = await get_edge_voice(args.target_lang)
@@ -2726,6 +2737,8 @@ async def batch_process(video_files: List[str], args, logger: Logger):
         for video, success in results:
             if not success:
                 logger.info(f"  ❌ {video}")
+    # Non-zero when any video failed, so callers (CI, `voxa serve`) can tell.
+    return 0 if success_count == len(results) else 1
 
 
 async def main():
@@ -2944,11 +2957,12 @@ Examples:
     logger.info("")
 
     try:
+        # Propagate the pipeline's status: a failed run (bad key, no speech, missing model)
+        # must exit non-zero, or `voxa serve` reports the job as done and hands back an
+        # undubbed video.
         if len(args.videos) > 1:
-            await batch_process(args.videos, args, logger)
-        else:
-            await process_video(args.videos[0], args, logger)
-        return 0
+            return await batch_process(args.videos, args, logger)
+        return await process_video(args.videos[0], args, logger)
     except KeyboardInterrupt:
         logger.info("\n⚠️  Process interrupted by user")
         return 130
