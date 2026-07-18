@@ -46,9 +46,10 @@ jobs:
       # The heavy runtime deps (torch, whisper, ffmpeg, the TTS engines) are deliberately
       # NOT installed: voxa guards those imports, so the pure-logic suite runs in seconds.
       # numpy/soundfile/openai are what the tests themselves import; the few tests that
-      # need torch skip when it is absent.
+      # need torch skip when it is absent. The [serve] trio is needed because the settings
+      # tests import voxa_server and drive it through FastAPI's TestClient.
       - name: Install test dependencies
-        run: pip install pytest numpy soundfile openai
+        run: pip install pytest numpy soundfile openai fastapi httpx python-multipart
 
       - name: Syntax check
         run: python -m py_compile voxa.py

@@ -23,7 +23,7 @@ jobs:
       # A tag that can't build or pass its own tests should not become a release.
       - name: Verify the tagged commit
         run: |
-          pip install pytest ruff numpy soundfile openai
+          pip install pytest ruff numpy soundfile openai fastapi httpx python-multipart
           ruff check .
           pytest
 
