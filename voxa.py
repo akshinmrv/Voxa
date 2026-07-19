@@ -26,7 +26,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, NamedTuple, Optional, Tuple
+from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 # Heavy / third-party dependencies are guarded so the module can still be imported
 # (e.g. for unit tests) when they are not installed. They are required to actually
@@ -955,6 +955,114 @@ def _purge_synthesis_artifacts(work_dir: Path) -> int:
             _safe_unlink(p)
             removed += 1
     return removed
+
+
+def reusable_stages(state: "StateManager", args) -> List[str]:
+    """The stages a run with these parameters would skip, in pipeline order. Mirrors the
+    per-step checks in process_video, which additionally confirm the artifact still exists;
+    resume is sequential, so the first miss ends the chain."""
+    done: List[str] = []
+    for stage in _PIPELINE_STAGES:
+        if stage in ("extract_audio", "audio_enhancement"):
+            ok = state.is_completed(stage)          # no parameters of their own
+        else:
+            ok = state.is_valid(stage, stage_signature(stage, args))
+        if not ok:
+            break
+        done.append(stage)
+    return done
+
+
+def probe_duration(path: Path) -> Optional[float]:
+    """Source duration in seconds via ffprobe, or None if it cannot be determined."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "csv=p=0", str(path)],
+            capture_output=True, text=True, timeout=20)
+        return float(out.stdout.strip())
+    except Exception:
+        return None
+
+
+def plan_blockers(args) -> List[str]:
+    """Everything that would stop this run, phrased for the dry-run report. Mirrors the
+    preflight checks in cli(), which fail on the first one; a dry run lists them all so a
+    misconfigured setup can be fixed in one pass."""
+    problems: List[str] = []
+    if args.translator in LLM_PROVIDERS:
+        info = LLM_PROVIDERS[args.translator]
+        if not (getattr(args, f"{args.translator}_api_key", None)
+                or os.environ.get(info["env_key"])):
+            problems.append(f"no API key for the {args.translator} translator — "
+                            f"set {info['env_key']}")
+    if args.tts == "openai" and not getattr(args, "openai_tts_base_url", None):
+        if not (getattr(args, "openai_api_key", None) or os.environ.get("OPENAI_API_KEY")):
+            problems.append("no API key for OpenAI speech — set OPENAI_API_KEY, or point "
+                            "--openai-tts-base-url at a compatible server")
+    sample = getattr(args, "voice_sample", None)
+    if args.tts == "xtts" and sample and not Path(sample).exists():
+        problems.append(f"voice sample not found: {sample}")
+    return problems
+
+
+def build_run_plan(video_name: str, args, *, work_dir: Path, output_file: Path,
+                   duration: Optional[float] = None,
+                   reusable: Sequence[str] = (),
+                   blockers: Sequence[str] = ()) -> List[str]:
+    """The report --dry-run prints: what this run would do, without doing any of it.
+
+    Pure — it neither reads nor writes anything, so the caller gathers the facts and the
+    formatting stays testable."""
+    def row(label: str, value: str) -> str:
+        return f"   {label:<13}{value}"
+
+    length = f"  ({duration:.1f}s)" if duration else ""
+    lines = [f"🔎 Dry run — {video_name}{length}", ""]
+
+    lines.append(row("transcribe", f"whisper {args.whisper_model} "
+                                   f"({args.whisper_backend} backend)"))
+
+    translator = args.translator
+    model = getattr(args, f"{translator}_model", None)
+    detail = f"{translator}{f' {model}' if model else ''} → {args.target_lang}"
+    if translator in LLM_PROVIDERS:
+        detail += (f"  (batches of {args.llm_batch_size}, "
+                   f"~{args.speech_rate:g} chars/s length budget)")
+    lines.append(row("translate", detail))
+    if getattr(args, "fallback_translator", None):
+        lines.append(row("", f"falls back to {args.fallback_translator} if it fails"))
+    if getattr(args, "translation_prompt", None):
+        lines.append(row("", f"style: {args.translation_prompt[:58]}"))
+
+    if args.subtitles_only:
+        lines.append(row("speak", "skipped (--subtitles-only)"))
+    else:
+        speak = args.tts
+        if args.tts == "openai":
+            speak += f" {args.openai_tts_model} / voice {args.openai_voice}"
+        elif args.tts == "xtts":
+            speak += f"  (voice sample: {args.voice_sample or 'auto-extracted from the video'})"
+        lines.append(row("speak", speak))
+        if args.tts == "openai" and (getattr(args, "openai_tts_instructions", "") or "").strip():
+            lines.append(row("", f"style: {args.openai_tts_instructions[:58]}"))
+
+    if args.quality_gate:
+        lines.append(row("quality gate", f"on (scored with {args.gate_model})"))
+
+    lines.append(row("workspace", str(work_dir)))
+    if reusable:
+        lines.append(row("", f"reuses {len(reusable)} cached step(s): {', '.join(reusable)}"))
+    lines.append(row("output", str(output_file)))
+
+    if blockers:
+        lines.append("")
+        for problem in blockers:
+            lines.append(f"   ⚠️  would fail: {problem}")
+        lines += ["", "   Nothing was written, and this run would not start."]
+    else:
+        lines += ["", "   Nothing was written. Drop --dry-run to start."]
+    return lines
 
 
 def create_silence_wav(duration_seconds: float, output_file: str, sample_rate: int = 22050):
@@ -2862,6 +2970,10 @@ Examples:
 
     parser.add_argument("--max_sentence_duration", type=float, default=10.0,
                         help="Max sentence duration in seconds (default: 10.0)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Print what this run would do — engines, models, output path and "
+                             "which cached steps it would reuse — then exit without writing "
+                             "anything or downloading a model.")
     parser.add_argument("--keep-temp", action="store_true",
                         help="Keep temporary files")
     parser.add_argument("--subtitles-only", action="store_true",
@@ -2895,8 +3007,9 @@ Examples:
         return 1
     _apply_runtime_patches()
 
-    # Fail fast if an LLM translator is selected but no API key is available.
-    if args.translator in LLM_PROVIDERS:
+    # Fail fast if an LLM translator is selected but no API key is available. A dry run
+    # reports this in its plan instead, so every problem surfaces in one pass.
+    if args.translator in LLM_PROVIDERS and not args.dry_run:
         _pinfo = LLM_PROVIDERS[args.translator]
         _key = getattr(args, f"{args.translator}_api_key") or os.environ.get(_pinfo["env_key"])
         if not _key:
@@ -2911,7 +3024,7 @@ Examples:
               f"lines are already translated in context-aware batches.")
 
     # Fail fast if OpenAI TTS is selected with neither a key nor a self-hosted endpoint.
-    if (args.tts == "openai"
+    if (args.tts == "openai" and not args.dry_run
             and not (args.openai_api_key or os.environ.get("OPENAI_API_KEY"))
             and not args.openai_tts_base_url):
         print("❌ OpenAI TTS selected but no API key found.\n"
@@ -2925,6 +3038,28 @@ Examples:
         return 1
     if not _check_input_videos(args.videos):
         return 1
+
+    # --dry-run reports and exits here, before anything is created: the workspace and its
+    # log file are made just below, so short-circuiting later would still leave a directory
+    # behind and make "nothing was written" untrue.
+    if args.dry_run:
+        out_dir = Path(args.output_dir) if args.output_dir else Path.cwd()
+        blockers = plan_blockers(args)
+        for index, video in enumerate(args.videos):
+            source = Path(video)
+            plan_dir = Path.cwd() / f"{source.stem}_work"
+            plan = build_run_plan(
+                source.name, args,
+                work_dir=plan_dir,
+                output_file=out_dir / f"{source.stem}_dubbed_{args.target_lang}.mp4",
+                duration=probe_duration(source),
+                reusable=reusable_stages(StateManager(plan_dir), args),
+                blockers=blockers,
+            )
+            if index:
+                print()
+            print("\n".join(plan))
+        return 1 if blockers else 0
 
     first_video = Path(args.videos[0])
     work_dir = Path.cwd() / f"{first_video.stem}_work"

@@ -62,6 +62,7 @@ API anahtarı gerekmez. Varsayılanlar kutudan çıktığı gibi çalışır.
 | **Otomatik çeviri** | Google, Ollama (yerel), OpenAI, Anthropic |
 | **Bağlam duyarlı çeviri** | Satırlar bloklar hâlinde çevrilir; zamirler, cinsiyet, isimler ve ton sahne boyunca tutarlı kalır |
 | **Süreye uyumlu çeviri** | Her satıra karakter bütçesi verilir; dublaj sıkıştırılmadan yuvasına sığar |
+| **Çalışmayı önizle** | `--dry-run` motorları, modelleri, çıktı yolunu ve hangi önbelleklenmiş adımların yeniden kullanılacağını yazdırır — sonra hiçbir şey yazmadan çıkar |
 | **Altyazı işleme** | SRT çıktısı, `--subtitles-only` modu, dahili SubRip ayrıştırıcı (GPL bağımlılığı yok) |
 | **Ses klonlama** | Kısa bir referans örneğinden XTTS v2; vermezseniz kaynaktan otomatik çıkarılır |
 | **OpenAI TTS** | `gpt-4o-mini-tts`, talimatla yönlendirilen sunum |

@@ -63,6 +63,7 @@ No API key is required. The defaults work out of the box.
 | **Automatic translation** | Google, Ollama (local), OpenAI, Anthropic |
 | **Context-aware translation** | Lines are translated in blocks, not one by one, so pronouns, gender, names and tone stay consistent across a scene |
 | **Duration-matched translation** | Each line gets a character budget, so the dub fits its slot at a natural pace instead of being sped up |
+| **Preview a run** | `--dry-run` prints the engines, models, output path and which cached steps it would reuse — then exits without writing anything |
 | **Subtitle processing** | SRT output, `--subtitles-only` mode, built-in SubRip parser (no GPL dependency) |
 | **Voice cloning** | XTTS v2 from a short reference sample, auto-extracted from the source if you don't supply one |
 | **OpenAI TTS** | `gpt-4o-mini-tts` with instructable delivery |
@@ -353,6 +354,9 @@ voxa video.mp4 --target_lang tr --tts xtts
 
 # Fully offline: local LLM translation, offline speech
 voxa video.mp4 --target_lang fr --translator ollama --tts piper
+
+# See what a run would do — engines, output path, cached steps — without running it
+voxa video.mp4 --target_lang ru --dry-run
 
 # Subtitles only, no synthesis
 voxa video.mp4 --target_lang es --subtitles-only

@@ -1269,3 +1269,122 @@ def test_partial_synthesis_still_succeeds(tmp_path):
 def test_no_subtitles_is_not_a_failure(tmp_path):
     # Nothing to say isn't an engine failure, so it must not raise.
     assert _run_timeline([], lambda i, t, f, d: False, tmp_path) == 0
+
+
+# ── --dry-run: report the plan without touching anything ──
+def _plan_args(**over):
+    # Covers everything build_run_plan reads and everything stage_signature hashes.
+    base = dict(whisper_model="base", whisper_backend="openai", translator="google",
+                target_lang="tr", llm_batch_size=25, speech_rate=15.0, subtitles_only=False,
+                tts="edge", openai_tts_model="gpt-4o-mini-tts", openai_voice="alloy",
+                openai_tts_base_url=None, openai_tts_instructions="", openai_api_key=None,
+                voice_sample=None, quality_gate=False, gate_model="tiny",
+                fallback_translator=None, translation_prompt=None,
+                max_sentence_duration=10.0, no_speech_threshold=0.6, parallel=False,
+                no_stretch=False, detect_emotion=False, auto_rate=False)
+    base.update(over)
+    return SimpleNamespace(**base)
+
+
+def _plan(args, **kw):
+    from pathlib import Path
+    return "\n".join(voxa.build_run_plan(
+        "clip.mp4", args, work_dir=Path("clip_work"),
+        output_file=Path("clip_dubbed_tr.mp4"), **kw))
+
+
+def test_plan_reports_each_stage():
+    out = _plan(_plan_args())
+    assert "whisper base" in out
+    assert "google → tr" in out
+    assert "edge" in out
+    assert "clip_dubbed_tr.mp4" in out
+    assert "Nothing was written" in out
+
+
+def test_plan_shows_which_steps_would_be_reused():
+    out = _plan(_plan_args(), reusable=["extract_audio", "transcription"])
+    assert "reuses 2 cached step(s)" in out
+    assert "transcription" in out
+
+
+def test_plan_without_cache_says_nothing_about_reuse():
+    assert "cached step" not in _plan(_plan_args())
+
+
+def test_plan_lists_blockers_and_says_it_would_not_start():
+    out = _plan(_plan_args(), blockers=["no API key for OpenAI speech"])
+    assert "would fail: no API key for OpenAI speech" in out
+    assert "would not start" in out
+
+
+def test_plan_notes_subtitles_only_skips_speech():
+    assert "skipped (--subtitles-only)" in _plan(_plan_args(subtitles_only=True))
+
+
+def test_plan_shows_llm_budget_only_for_llm_translators():
+    assert "length budget" in _plan(_plan_args(translator="openai", openai_model="gpt-5"))
+    assert "length budget" not in _plan(_plan_args(translator="google"))
+
+
+# ── plan_blockers: everything that would stop the run, in one pass ──
+def test_blockers_flags_missing_openai_speech_key(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    problems = voxa.plan_blockers(_plan_args(tts="openai"))
+    assert len(problems) == 1 and "OPENAI_API_KEY" in problems[0]
+
+
+def test_blockers_satisfied_by_a_key_or_a_local_endpoint(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    assert voxa.plan_blockers(_plan_args(tts="openai")) == []
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    # A self-hosted OpenAI-compatible server needs no key at all.
+    assert voxa.plan_blockers(
+        _plan_args(tts="openai", openai_tts_base_url="http://localhost:8004/v1")) == []
+
+
+def test_blockers_flags_missing_translator_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    args = _plan_args(translator="anthropic")
+    args.anthropic_api_key = None
+    problems = voxa.plan_blockers(args)
+    assert any("ANTHROPIC_API_KEY" in p for p in problems)
+
+
+def test_blockers_flags_a_missing_voice_sample(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    problems = voxa.plan_blockers(_plan_args(tts="xtts", voice_sample="nope.wav"))
+    assert any("voice sample not found" in p for p in problems)
+
+
+def test_blockers_none_for_the_keyless_defaults(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    assert voxa.plan_blockers(_plan_args()) == []      # google + edge need nothing
+
+
+# ── reusable_stages: what a resume would actually skip ──
+def test_reusable_stages_stops_at_the_first_miss(tmp_path):
+    args = _plan_args()
+    state = voxa.StateManager(tmp_path)
+    state.mark_completed("extract_audio")
+    state.mark_completed("audio_enhancement")
+    state.mark_completed("transcription", voxa.stage_signature("transcription", args))
+    # merge_sentences never completed, so translation must not be reported either.
+    state.mark_completed("translation", voxa.stage_signature("translation", args))
+    assert voxa.reusable_stages(state, args) == [
+        "extract_audio", "audio_enhancement", "transcription"]
+
+
+def test_reusable_stages_drops_a_stage_whose_parameters_changed(tmp_path):
+    args = _plan_args()
+    state = voxa.StateManager(tmp_path)
+    state.mark_completed("extract_audio")
+    state.mark_completed("audio_enhancement")
+    state.mark_completed("transcription", voxa.stage_signature("transcription", args))
+    # A different Whisper model invalidates the transcription checkpoint.
+    changed = _plan_args(whisper_model="large")
+    assert voxa.reusable_stages(state, changed) == ["extract_audio", "audio_enhancement"]
+
+
+def test_reusable_stages_empty_when_nothing_ran(tmp_path):
+    assert voxa.reusable_stages(voxa.StateManager(tmp_path), _plan_args()) == []

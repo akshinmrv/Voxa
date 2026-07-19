@@ -62,6 +62,7 @@ API açarı tələb olunmur. Default parametrlər olduğu kimi işləyir.
 | **Avtomatik tərcümə** | Google, Ollama (lokal), OpenAI, Anthropic |
 | **Kontekst-məlumatlı tərcümə** | Sətirlər bloklarla tərcümə olunur, ona görə əvəzliklər, cins, adlar və ton səhnə boyu ardıcıl qalır |
 | **Uzunluğa uyğun tərcümə** | Hər sətrə simvol büdcəsi verilir ki, dublyaj sıxılmadan öz yerinə sığsın |
+| **İşi əvvəlcədən gör** | `--dry-run` mühərrikləri, modelləri, çıxış yolunu və hansı keşlənmiş addımların təkrar işlədiləcəyini çap edir — sonra heç nə yazmadan çıxır |
 | **Altyazı emalı** | SRT çıxışı, `--subtitles-only` rejimi, daxili SubRip parseri (GPL asılılığı yoxdur) |
 | **Səs klonlama** | XTTS v2, qısa referans nümunəsindən — verməsəniz, mənbədən avtomatik çıxarılır |
 | **OpenAI TTS** | `gpt-4o-mini-tts`, təlimatla idarə olunan ifa |
