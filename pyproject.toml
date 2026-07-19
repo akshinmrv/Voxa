@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 # installing that would give people the wrong project. The command stays `voxa` — see
 # [project.scripts] below — and the import module is still `voxa`.
 name = "voxa-dub"
-version = "1.0.1"
+version = "1.1.0"
 description = "Voxa — automatic video translation and dubbing (Whisper + LLM translation + multi-engine TTS)"
 readme = "README.md"
 requires-python = ">=3.9"

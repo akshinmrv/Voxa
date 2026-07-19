@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-18
+
+### Added
+
+- **`--dry-run`.** Prints what a run would do — transcription model, translator and target,
+  speech engine and voice, output path — and, most usefully, which cached steps it would
+  reuse, so dubbing the same video into a second language shows up front that only
+  translation and speech will rerun. It reports every blocker at once (a missing API key, a
+  missing voice sample) instead of failing on the first, returns non-zero when it finds any,
+  and writes nothing at all: no workspace, no log file.
+- **Container image.** `docker run --rm -v "$PWD:/data" ghcr.io/akshinmrv/voxa clip.mp4
+  --target_lang ru` — no Python, torch or ffmpeg on the host. Published to GHCR on each
+  tagged release.
+- **Speech-quality benchmark.** `scripts/benchmark.py` dubs one clip into several languages
+  under `--quality-gate` and collects the round-trip word error rate per language;
+  `docs/BENCHMARK.md` records a run across six languages together with its limitations.
+
+## [1.0.1] - 2026-07-18
+
 ### Changed
 
 - **The distribution is now published as `voxa-dub`.** The `voxa` name on PyPI belongs to an
@@ -95,5 +114,7 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/akshinmrv/Voxa/compare/v1.0.1...v1.1.0
+[1.0.1]: https://github.com/akshinmrv/Voxa/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/akshinmrv/Voxa/releases/tag/v1.0.0
