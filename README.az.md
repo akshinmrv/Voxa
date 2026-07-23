@@ -23,7 +23,7 @@ voxa talk.mp4 --target_lang ru        # → talk_dubbed_ru.mp4
 
 <div align="center">
 
-🎧 **[Demo dublyajları dinlə](https://voxa-servoogle.vercel.app)** — İngiliscədən türk, Azərbaycan
+🎧 **[Demo dublyajları dinlə](https://voxa.servoogle.com)** — İngiliscədən türk, Azərbaycan
 və fransız dillərinə, API açarı olmadan
 
 </div>
@@ -179,10 +179,10 @@ voxa clip.mp4 --target_lang tr        # sonra --target_lang az, --target_lang fr
 
 | Hədəf | Mühərriklər | Dinlə |
 |---|---|---|
-| 🎬 Orijinal (İngilis) | — | [oynat ▶](https://voxa-servoogle.vercel.app) · [`original.mp4`](web/public/demo/original.mp4) |
-| 🇹🇷 Türkçe | `google` + `edge` | [oynat ▶](https://voxa-servoogle.vercel.app) · [`dub_tr.mp4`](web/public/demo/dub_tr.mp4) |
-| 🇦🇿 Azərbaycan | `google` + `edge` | [oynat ▶](https://voxa-servoogle.vercel.app) · [`dub_az.mp4`](web/public/demo/dub_az.mp4) |
-| 🇫🇷 Fransız | `google` + `edge` | [oynat ▶](https://voxa-servoogle.vercel.app) · [`dub_fr.mp4`](web/public/demo/dub_fr.mp4) |
+| 🎬 Orijinal (İngilis) | — | [oynat ▶](https://voxa.servoogle.com) · [`original.mp4`](web/public/demo/original.mp4) |
+| 🇹🇷 Türkçe | `google` + `edge` | [oynat ▶](https://voxa.servoogle.com) · [`dub_tr.mp4`](web/public/demo/dub_tr.mp4) |
+| 🇦🇿 Azərbaycan | `google` + `edge` | [oynat ▶](https://voxa.servoogle.com) · [`dub_az.mp4`](web/public/demo/dub_az.mp4) |
+| 🇫🇷 Fransız | `google` + `edge` | [oynat ▶](https://voxa.servoogle.com) · [`dub_fr.mp4`](web/public/demo/dub_fr.mp4) |
 
 İkinci və üçüncü dillər keşlənmiş transkripsiyanı təkrar işlətdi — yalnız tərcümə və nitq
 yenidən yaradıldı, ona görə timeline hər üçündə eynidir.

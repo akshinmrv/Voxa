@@ -24,7 +24,7 @@ voxa talk.mp4 --target_lang ru        # → talk_dubbed_ru.mp4
 
 <div align="center">
 
-🎧 **[Hear the demo dubs](https://voxa-servoogle.vercel.app)** — English → Turkish, Azerbaijani
+🎧 **[Hear the demo dubs](https://voxa.servoogle.com)** — English → Turkish, Azerbaijani
 and French, produced with no API key
 
 </div>
@@ -181,10 +181,10 @@ voxa clip.mp4 --target_lang tr        # then --target_lang az, --target_lang fr
 
 | Target | Engines | Listen |
 |---|---|---|
-| 🎬 Original (English) | — | [play ▶](https://voxa-servoogle.vercel.app) · [`original.mp4`](web/public/demo/original.mp4) |
-| 🇹🇷 Turkish | `google` + `edge` | [play ▶](https://voxa-servoogle.vercel.app) · [`dub_tr.mp4`](web/public/demo/dub_tr.mp4) |
-| 🇦🇿 Azerbaijani | `google` + `edge` | [play ▶](https://voxa-servoogle.vercel.app) · [`dub_az.mp4`](web/public/demo/dub_az.mp4) |
-| 🇫🇷 French | `google` + `edge` | [play ▶](https://voxa-servoogle.vercel.app) · [`dub_fr.mp4`](web/public/demo/dub_fr.mp4) |
+| 🎬 Original (English) | — | [play ▶](https://voxa.servoogle.com) · [`original.mp4`](web/public/demo/original.mp4) |
+| 🇹🇷 Turkish | `google` + `edge` | [play ▶](https://voxa.servoogle.com) · [`dub_tr.mp4`](web/public/demo/dub_tr.mp4) |
+| 🇦🇿 Azerbaijani | `google` + `edge` | [play ▶](https://voxa.servoogle.com) · [`dub_az.mp4`](web/public/demo/dub_az.mp4) |
+| 🇫🇷 French | `google` + `edge` | [play ▶](https://voxa.servoogle.com) · [`dub_fr.mp4`](web/public/demo/dub_fr.mp4) |
 
 The second and third languages reused the cached transcription, so only translation and speech
 were regenerated — the timeline is identical across all three.
