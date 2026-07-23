@@ -5,7 +5,7 @@
 **İstənilən videonu başqa dilə dublyaj et — və sinxronu qoru.**
 
 Voxa videonu transkripsiya edir, kontekstlə tərcümə edir, hədəf dildə səsləndirir və nəticəni
-orijinalın üzərinə miksləyir. Mühərrik tək Python faylıdır — dörd nitq mühərriki, dörd tərcümə
+orijinalın üzərinə miksləyir. Mühərrik tək Python faylıdır — dörd nitq mühərriki, beş tərcümə
 backend-i və bir güzəştsiz xüsusiyyət: dublyaj danışandan sürüşmür.
 
 [![CI](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml/badge.svg)](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml)
@@ -59,7 +59,7 @@ API açarı tələb olunmur. Default parametrlər olduğu kimi işləyir.
 |---|---|
 | **Video dublyaj** | Dublyaj səsi orijinalın üzərinə miksləndir; video axını yenidən kodlaşdırılmır |
 | **Nitqin tanınması** | `openai-whisper` (tiny → turbo) və ya `faster-whisper` (2–4× sürətli, daxili VAD, torch-suz) |
-| **Avtomatik tərcümə** | Google, Ollama (lokal), OpenAI, Anthropic |
+| **Avtomatik tərcümə** | Google, Ollama (lokal), OpenAI, Anthropic, OpenRouter |
 | **Kontekst-məlumatlı tərcümə** | Sətirlər bloklarla tərcümə olunur, ona görə əvəzliklər, cins, adlar və ton səhnə boyu ardıcıl qalır |
 | **Uzunluğa uyğun tərcümə** | Hər sətrə simvol büdcəsi verilir ki, dublyaj sıxılmadan öz yerinə sığsın |
 | **İşi əvvəlcədən gör** | `--dry-run` mühərrikləri, modelləri, çıxış yolunu və hansı keşlənmiş addımların təkrar işlədiləcəyini çap edir — sonra heç nə yazmadan çıxır |
@@ -147,7 +147,7 @@ voxa clip.mp4 --target_lang az --tts edge --quality-gate --gate-model base
               └────────────┬────────────┘
                            ▼
               ┌─────────────────────────┐
-              │        Tərcümə          │  Google · Ollama · OpenAI · Anthropic
+              │        Tərcümə          │  Google · Ollama · OpenAI · Anthropic · OpenRouter
               │                         │  kontekstli, uzunluq büdcəli
               └────────────┬────────────┘
                            ▼
@@ -329,6 +329,10 @@ voxa video.mp4 --target_lang az
 # LLM ilə təbii, kontekstli tərcümə
 export OPENAI_API_KEY="sk-..."
 voxa video.mp4 --target_lang de --translator openai
+
+# Bir OpenRouter açarı ilə yüzlərlə model (DeepSeek, Gemini, Llama…) — əlavə quraşdırma yox
+export OPENROUTER_API_KEY="sk-or-..."
+voxa video.mp4 --target_lang az --translator openrouter --openrouter_model deepseek/deepseek-chat
 
 # Danışanın səsini klonla
 voxa video.mp4 --target_lang tr --tts xtts

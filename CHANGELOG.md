@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **OpenRouter translator.** `--translator openrouter` reaches OpenRouter's OpenAI-compatible
+  gateway, so a single `OPENROUTER_API_KEY` unlocks models from many vendors (DeepSeek,
+  Gemini, Llama, and OpenAI/Anthropic too) with no extra to install — the `openai` client is
+  already a core dependency. Model names are vendor-prefixed, e.g. `--openrouter_model
+  deepseek/deepseek-chat`. It works everywhere the other LLM translators do: as a
+  `--fallback-translator`, in the operator console's provider settings and connection test,
+  and in `--dry-run` plans. Adding it was one chat adapter and one registry line — the
+  extensibility the provider registries were built for.
+
 ## [1.1.0] - 2026-07-18
 
 ### Added

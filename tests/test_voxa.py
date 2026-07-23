@@ -367,6 +367,82 @@ def test_provider_registry_has_openai_and_anthropic():
         assert info["env_key"]
 
 
+# ── OpenRouter provider (OpenAI-compatible gateway) ──────
+def test_openrouter_registered_with_vendor_prefixed_default():
+    info = voxa.LLM_PROVIDERS["openrouter"]
+    assert info["env_key"] == "OPENROUTER_API_KEY"
+    # OpenRouter models are always vendor-prefixed ("vendor/model"); a bare name would 404.
+    assert "/" in info["default_model"]
+
+
+def test_openrouter_requires_key(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="OpenRouter API key not found"):
+        voxa._openrouter_chat_text("sys", "user", "openai/gpt-4o-mini", False, None)
+
+
+def _fake_openai_client(reply, captured_usage=None):
+    """A stand-in OpenAI client whose chat.completions.create returns `reply` as the
+    message content, with a usage object so token accounting is exercised."""
+    from types import SimpleNamespace
+
+    def _create(**kwargs):
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=reply))],
+            usage=SimpleNamespace(prompt_tokens=7, completion_tokens=3),
+        )
+
+    return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=_create)))
+
+
+def test_openrouter_routes_to_openrouter_endpoint(monkeypatch):
+    """The adapter must reach the OpenRouter base URL with the caller's key, and record
+    usage under 'openrouter' (not 'openai') so cost tracking stays per-provider."""
+    captured = {}
+
+    def _factory(api_key=None, base_url=None):
+        captured["api_key"] = api_key
+        captured["base_url"] = base_url
+        return _fake_openai_client("Привет")
+
+    monkeypatch.setattr(voxa, "get_openai_client", _factory)
+    monkeypatch.setattr(voxa, "_llm_usage", {})
+
+    out = voxa._openrouter_chat_text("sys", "hello", "openai/gpt-4o-mini", False, "or-key-123")
+
+    assert out == "Привет"
+    assert captured == {"api_key": "or-key-123", "base_url": voxa.OPENROUTER_BASE_URL}
+    assert voxa._llm_usage["openrouter"]["calls"] == 1
+    assert "openai" not in voxa._llm_usage
+
+
+def test_openrouter_batch_translation_via_registry(monkeypatch):
+    """End-to-end through the public API: translate_llm_batch resolves 'openrouter' from the
+    registry, so the whole pipeline reaches a new provider with no other code change."""
+    monkeypatch.setattr(
+        voxa, "get_openai_client",
+        lambda api_key=None, base_url=None: _fake_openai_client('{"translations": ["salam"]}'))
+    monkeypatch.setattr(voxa, "_llm_usage", {})
+
+    out = voxa.translate_llm_batch(["hello"], "az", "openrouter",
+                                   model="openai/gpt-4o-mini", api_key="or-key")
+    assert out == ["salam"]
+
+
+def test_openrouter_key_falls_back_to_env(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "env-or-key")
+    captured = {}
+
+    def _factory(api_key=None, base_url=None):
+        captured["api_key"] = api_key
+        return _fake_openai_client("ok")
+
+    monkeypatch.setattr(voxa, "get_openai_client", _factory)
+    monkeypatch.setattr(voxa, "_llm_usage", {})
+    voxa._openrouter_chat_text("sys", "user", "openai/gpt-4o-mini", False, None)
+    assert captured["api_key"] == "env-or-key"
+
+
 # ── Batch passthrough when no client (both providers) ─────
 def test_duration_to_max_chars():
     assert voxa._duration_to_max_chars(3.0, 15.0) == 45

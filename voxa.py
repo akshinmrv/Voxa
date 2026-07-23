@@ -85,6 +85,10 @@ except ImportError:
 # Default models — easily swappable. Override at runtime with --<provider>_model.
 DEFAULT_OPENAI_MODEL = "gpt-5"
 DEFAULT_ANTHROPIC_MODEL = "claude-opus-4-8"
+# OpenRouter is an OpenAI-compatible gateway to many vendors; model names are vendor-prefixed
+# (e.g. "openai/gpt-4o-mini", "deepseek/deepseek-chat", "google/gemini-2.0-flash-001").
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o-mini"
 
 # Language map for Ollama
 LANG_MAP = {
@@ -1451,9 +1455,10 @@ def _is_param_error(err) -> bool:
 
 
 def _openai_chat(client, messages, model: str, want_json: bool = False,
-                 max_backoff_retries: int = 5) -> str:
+                 max_backoff_retries: int = 5, usage_provider: str = "openai") -> str:
     """One OpenAI chat completion with graceful parameter degradation and exponential
-    backoff on rate-limit / 5xx errors. Records token usage. Raises on unrecoverable failure."""
+    backoff on rate-limit / 5xx errors. Records token usage under `usage_provider` (which
+    differs for OpenAI-compatible gateways like OpenRouter). Raises on unrecoverable failure."""
     combos = [(True, want_json), (False, want_json)]
     if want_json:
         combos += [(True, False), (False, False)]   # drop json mode if unsupported
@@ -1475,7 +1480,7 @@ def _openai_chat(client, messages, model: str, want_json: bool = False,
                     kwargs["response_format"] = {"type": "json_object"}
                 resp = client.chat.completions.create(**kwargs)
                 usage = getattr(resp, "usage", None)
-                _record_llm_usage("openai", getattr(usage, "prompt_tokens", 0),
+                _record_llm_usage(usage_provider, getattr(usage, "prompt_tokens", 0),
                                   getattr(usage, "completion_tokens", 0))
                 return resp.choices[0].message.content or ""
             except Exception as e:
@@ -1530,12 +1535,32 @@ def _anthropic_chat_text(system: str, user: str, model: str, want_json: bool,
     return "".join(parts)
 
 
+def _openrouter_chat_text(system: str, user: str, model: str, want_json: bool,
+                          api_key: Optional[str]) -> str:
+    # OpenRouter speaks the OpenAI protocol, so we reuse the OpenAI client and request helper
+    # (backoff, JSON-mode degradation) verbatim — only the endpoint and key source differ.
+    # This is the extensibility promise in practice: an OpenAI-compatible provider is one
+    # adapter and one registry line, no new client and no changes to the translation pipeline.
+    key = api_key or os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        raise RuntimeError("OpenRouter API key not found. "
+                           "Set OPENROUTER_API_KEY or pass --openrouter_api_key")
+    client = get_openai_client(key, base_url=OPENROUTER_BASE_URL)
+    if client is None:
+        raise RuntimeError("OpenRouter client unavailable (missing 'openai' package)")
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    return _openai_chat(client, messages, model, want_json=want_json,
+                        usage_provider="openrouter")
+
+
 # Provider registry — register a new LLM by adding its chat adapter here.
 LLM_PROVIDERS: Dict[str, Dict] = {
     "openai": {"chat": _openai_chat_text, "default_model": DEFAULT_OPENAI_MODEL,
                "env_key": "OPENAI_API_KEY"},
     "anthropic": {"chat": _anthropic_chat_text, "default_model": DEFAULT_ANTHROPIC_MODEL,
                   "env_key": "ANTHROPIC_API_KEY"},
+    "openrouter": {"chat": _openrouter_chat_text, "default_model": DEFAULT_OPENROUTER_MODEL,
+                   "env_key": "OPENROUTER_API_KEY"},
 }
 
 
@@ -2923,7 +2948,7 @@ Examples:
                         help="Extra translation style/persona guidance layered on top of the "
                              "built-in LLM prompt (tone, register, domain, brand voice). The "
                              "output format, line count and timing/isochrony rules always stay "
-                             "enforced. LLM translators only (openai/anthropic).")
+                             "enforced. LLM translators only (e.g. openai/anthropic/openrouter).")
     parser.add_argument("--parallel", action="store_true",
                         help="Translate segments in parallel threads (google/ollama only — "
                              "LLM translators already batch whole blocks in one call)")

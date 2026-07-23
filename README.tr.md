@@ -6,7 +6,7 @@
 
 Voxa bir videoyu yazıya çevirir, bağlamıyla birlikte çevirir, hedef dilde seslendirir ve
 sonucu orijinalin üzerine karıştırır. Motor tek bir Python dosyasıdır — dört konuşma motoru,
-dört çeviri arka ucu ve tavizsiz bir özellik: dublaj konuşmacıdan kaymaz.
+beş çeviri arka ucu ve tavizsiz bir özellik: dublaj konuşmacıdan kaymaz.
 
 [![CI](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml/badge.svg)](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/akshinmrv/Voxa?display_name=tag&sort=semver)](https://github.com/akshinmrv/Voxa/releases)
@@ -59,7 +59,7 @@ API anahtarı gerekmez. Varsayılanlar kutudan çıktığı gibi çalışır.
 |---|---|
 | **Video dublaj** | Dublaj sesi orijinalin üzerine karıştırılır; video akışı yeniden kodlanmaz |
 | **Konuşma tanıma** | `openai-whisper` (tiny → turbo) veya `faster-whisper` (2–4× hızlı, dahili VAD, torch'suz) |
-| **Otomatik çeviri** | Google, Ollama (yerel), OpenAI, Anthropic |
+| **Otomatik çeviri** | Google, Ollama (yerel), OpenAI, Anthropic, OpenRouter |
 | **Bağlam duyarlı çeviri** | Satırlar bloklar hâlinde çevrilir; zamirler, cinsiyet, isimler ve ton sahne boyunca tutarlı kalır |
 | **Süreye uyumlu çeviri** | Her satıra karakter bütçesi verilir; dublaj sıkıştırılmadan yuvasına sığar |
 | **Çalışmayı önizle** | `--dry-run` motorları, modelleri, çıktı yolunu ve hangi önbelleklenmiş adımların yeniden kullanılacağını yazdırır — sonra hiçbir şey yazmadan çıkar |
@@ -148,7 +148,7 @@ içerir.
               └────────────┬────────────┘
                            ▼
               ┌─────────────────────────┐
-              │         Çeviri          │  Google · Ollama · OpenAI · Anthropic
+              │         Çeviri          │  Google · Ollama · OpenAI · Anthropic · OpenRouter
               │                         │  bağlam duyarlı, süre bütçeli
               └────────────┬────────────┘
                            ▼
@@ -329,6 +329,10 @@ voxa video.mp4 --target_lang tr
 # LLM ile doğal, bağlam duyarlı çeviri
 export OPENAI_API_KEY="sk-..."
 voxa video.mp4 --target_lang de --translator openai
+
+# Tek bir OpenRouter anahtarıyla yüzlerce model (DeepSeek, Gemini, Llama…) — ek kurulum yok
+export OPENROUTER_API_KEY="sk-or-..."
+voxa video.mp4 --target_lang az --translator openrouter --openrouter_model deepseek/deepseek-chat
 
 # Konuşmacının sesini klonla
 voxa video.mp4 --target_lang tr --tts xtts

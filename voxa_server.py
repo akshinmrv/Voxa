@@ -64,6 +64,7 @@ _TRANSLATOR_META = {
     "ollama": {"label": "Ollama", "description": "Local LLM, fully offline", "offline": True},
     "openai": {"label": "OpenAI", "description": "Context-aware, needs API key"},
     "anthropic": {"label": "Anthropic", "description": "Context-aware, needs API key"},
+    "openrouter": {"label": "OpenRouter", "description": "Many vendors via one key"},
 }
 
 # Composable speech-style presets for OpenAI TTS (P3). Each compiles to a short phrase;

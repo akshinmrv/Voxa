@@ -6,7 +6,7 @@
 
 Voxa transcribes a video, translates it with context, speaks it in the target language, and
 mixes the result back over the original. The engine is one Python file with four speech
-engines, four translation backends, and one non-negotiable property: the dub does not drift
+engines, five translation backends, and one non-negotiable property: the dub does not drift
 away from the speaker.
 
 [![CI](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml/badge.svg)](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml)
@@ -60,7 +60,7 @@ No API key is required. The defaults work out of the box.
 |---|---|
 | **Video dubbing** | Dubbed voice mixed over the original as a faint ambience bed; video stream copied without re-encoding |
 | **Speech recognition** | `openai-whisper` (tiny → turbo) or `faster-whisper` (2–4× faster, built-in VAD, no torch) |
-| **Automatic translation** | Google, Ollama (local), OpenAI, Anthropic |
+| **Automatic translation** | Google, Ollama (local), OpenAI, Anthropic, OpenRouter |
 | **Context-aware translation** | Lines are translated in blocks, not one by one, so pronouns, gender, names and tone stay consistent across a scene |
 | **Duration-matched translation** | Each line gets a character budget, so the dub fits its slot at a natural pace instead of being sped up |
 | **Preview a run** | `--dry-run` prints the engines, models, output path and which cached steps it would reuse — then exits without writing anything |
@@ -148,7 +148,7 @@ languages, and — just as important — the limits of what a number like this c
               └────────────┬────────────┘
                            ▼
               ┌─────────────────────────┐
-              │       Translation       │  Google · Ollama · OpenAI · Anthropic
+              │       Translation       │  Google · Ollama · OpenAI · Anthropic · OpenRouter
               │                         │  context-aware, length-budgeted
               └────────────┬────────────┘
                            ▼
@@ -323,6 +323,7 @@ lands in your shell history and the process list.
 ```dotenv
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
+OPENROUTER_API_KEY=sk-or-...
 ```
 
 **Defaults.** Put common options in a JSON file. Keys are the long option names with dashes as
@@ -348,6 +349,10 @@ voxa video.mp4 --target_lang ru
 # Natural, context-aware translation with an LLM
 export OPENAI_API_KEY="sk-..."
 voxa video.mp4 --target_lang de --translator openai
+
+# Hundreds of models (DeepSeek, Gemini, Llama…) through one OpenRouter key — no extra to install
+export OPENROUTER_API_KEY="sk-or-..."
+voxa video.mp4 --target_lang az --translator openrouter --openrouter_model deepseek/deepseek-chat
 
 # Clone the original speaker's voice
 voxa video.mp4 --target_lang tr --tts xtts
