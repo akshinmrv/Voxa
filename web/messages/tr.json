@@ -319,6 +319,8 @@
         "fallbackNone": "Yok",
         "rateLabel": "Konuşma hızı (karakter/saniye)",
         "rateHint": "Saniyede ne kadar çeviri metni bütçelenir. Varsayılan 15; aralık 8–30. Düşük daha çok sıkıştırır, yüksek aceleye getirir.",
+        "workersLabel": "Paralel konuşma istekleri",
+        "workersHint": "Bulut motorlar (OpenAI, Edge) aynı anda kaç segment sentezler. Varsayılan 4; aralık 1–16. Yüksek daha hızlıdır ama API oran sınırına takılabilir. Çevrimdışı motorlar dikkate almaz.",
         "save": "Gelişmişi kaydet",
         "saved": "Kaydedildi",
         "qualityGateLabel": "Kalite denetimi (puanla ve konuşmayı yeniden dene)",

@@ -333,7 +333,7 @@ def default_settings() -> dict:
         "providers": {pid: {"model": None} for pid in voxa.LLM_PROVIDERS},
         "translation": {"prompt": None, "fallback": None},
         "speech": {"instructions": None, "presets": []},
-        "advanced": {"speechRate": None, "qualityGate": False},
+        "advanced": {"speechRate": None, "qualityGate": False, "ttsWorkers": None},
     }
 
 
@@ -341,6 +341,8 @@ def default_settings() -> dict:
 # this band, dub timing degrades (too low over-condenses, too high rushes delivery).
 SPEECH_RATE_MIN = 8.0
 SPEECH_RATE_MAX = 30.0
+TTS_WORKERS_MIN = 1
+TTS_WORKERS_MAX = 16
 
 
 def _merge_settings(base: dict, patch: dict) -> dict:
@@ -526,6 +528,10 @@ def advanced_timing_args(settings: dict) -> List[str]:
         args += ["--speech-rate", str(clamped)]
     if adv.get("qualityGate"):
         args += ["--quality-gate"]
+    workers = adv.get("ttsWorkers")
+    if workers is not None:
+        clamped = max(TTS_WORKERS_MIN, min(TTS_WORKERS_MAX, int(workers)))
+        args += ["--tts-workers", str(clamped)]
     return args
 
 
@@ -613,6 +619,16 @@ async def put_settings(patch: SettingsPatch, _: None = Depends(require_local)) -
                 raise HTTPException(
                     status_code=422,
                     detail=f"speechRate must be between {SPEECH_RATE_MIN} and {SPEECH_RATE_MAX}.")
+        workers = (data["advanced"] or {}).get("ttsWorkers")
+        if workers is not None:
+            try:
+                workers = int(workers)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422, detail="ttsWorkers must be an integer.")
+            if not (TTS_WORKERS_MIN <= workers <= TTS_WORKERS_MAX):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"ttsWorkers must be between {TTS_WORKERS_MIN} and {TTS_WORKERS_MAX}.")
     if "speech" in data:
         speech = data["speech"] or {}
         presets = speech.get("presets")

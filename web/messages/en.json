@@ -319,6 +319,8 @@
         "fallbackNone": "None",
         "rateLabel": "Speaking rate (chars/sec)",
         "rateHint": "How much translated text is budgeted per second. Default 15; range 8–30. Lower condenses more, higher rushes delivery.",
+        "workersLabel": "Parallel speech requests",
+        "workersHint": "How many segments the cloud engines (OpenAI, Edge) synthesize at once. Default 4; range 1–16. Higher is faster but may hit your API rate limit. Offline engines ignore it.",
         "save": "Save advanced",
         "saved": "Saved",
         "qualityGateLabel": "Quality gate (score & retry speech)",

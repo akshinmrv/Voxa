@@ -61,7 +61,7 @@ def test_missing_keys_backfilled_from_defaults(store):
     (store / "settings.json").write_text('{"defaultTranslator": "openai"}', encoding="utf-8")
     s = srv.read_settings()
     assert s["defaultTts"] == "edge"
-    assert s["advanced"] == {"speechRate": None, "qualityGate": False}
+    assert s["advanced"] == {"speechRate": None, "qualityGate": False, "ttsWorkers": None}
 
 
 def test_invalid_file_falls_back_to_defaults(store):
@@ -419,6 +419,16 @@ def test_advanced_timing_args_quality_gate():
     assert both == ["--speech-rate", "15.0", "--quality-gate"]
 
 
+def test_advanced_timing_args_tts_workers():
+    assert srv.advanced_timing_args({"advanced": {"ttsWorkers": 8}}) == ["--tts-workers", "8"]
+    assert srv.advanced_timing_args({"advanced": {"ttsWorkers": None}}) == []
+    # Defensive clamp even if a bad value slipped past validation.
+    assert srv.advanced_timing_args({"advanced": {"ttsWorkers": 999}}) == \
+        ["--tts-workers", str(srv.TTS_WORKERS_MAX)]
+    assert srv.advanced_timing_args({"advanced": {"ttsWorkers": 0}}) == \
+        ["--tts-workers", str(srv.TTS_WORKERS_MIN)]
+
+
 def test_fallback_roundtrip_and_validation(client):
     assert client.put("/api/settings",
                       json={"translation": {"fallback": "google"}}).status_code == 200
@@ -433,3 +443,12 @@ def test_speech_rate_roundtrip_and_validation(client):
     assert client.put("/api/settings", json={"advanced": {"speechRate": 100}}).status_code == 422
     assert client.put("/api/settings",
                       json={"advanced": {"speechRate": "fast"}}).status_code == 422
+
+
+def test_tts_workers_roundtrip_and_validation(client):
+    assert client.put("/api/settings", json={"advanced": {"ttsWorkers": 8}}).status_code == 200
+    assert client.get("/api/settings").json()["advanced"]["ttsWorkers"] == 8
+    assert client.put("/api/settings", json={"advanced": {"ttsWorkers": 99}}).status_code == 422
+    assert client.put("/api/settings", json={"advanced": {"ttsWorkers": 0}}).status_code == 422
+    assert client.put("/api/settings",
+                      json={"advanced": {"ttsWorkers": "many"}}).status_code == 422

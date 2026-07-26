@@ -43,6 +43,7 @@ export function SettingsView() {
   // Advanced: fallback translator + speaking rate (drafts; null = in sync with saved).
   const [fallbackDraft, setFallbackDraft] = useState<string | null>(null);
   const [rateDraft, setRateDraft] = useState<string | null>(null);
+  const [workersDraft, setWorkersDraft] = useState<string | null>(null);
 
   const save = useMutation({
     mutationFn: (patch: SettingsPatch) => updateSettings(patch),
@@ -75,6 +76,7 @@ export function SettingsView() {
       qc.setQueryData(["settings"], data);
       setFallbackDraft(null);
       setRateDraft(null);
+      setWorkersDraft(null);
     },
   });
 
@@ -129,11 +131,14 @@ export function SettingsView() {
 
   const savedFallback = settings.translation?.fallback ?? "";
   const savedRate = settings.advanced?.speechRate;
+  const savedWorkers = settings.advanced?.ttsWorkers;
   const fallbackValue = fallbackDraft ?? savedFallback;
   const rateValue = rateDraft ?? (savedRate != null ? String(savedRate) : "");
+  const workersValue = workersDraft ?? (savedWorkers != null ? String(savedWorkers) : "");
   const advancedDirty =
     (fallbackDraft !== null && fallbackDraft !== savedFallback) ||
-    (rateDraft !== null && rateDraft !== (savedRate != null ? String(savedRate) : ""));
+    (rateDraft !== null && rateDraft !== (savedRate != null ? String(savedRate) : "")) ||
+    (workersDraft !== null && workersDraft !== (savedWorkers != null ? String(savedWorkers) : ""));
   const qualityGate = settings.advanced?.qualityGate ?? false;
 
   return (
@@ -378,13 +383,29 @@ export function SettingsView() {
             />
           </Field>
 
+          <Field id="ttsWorkers" label={t("advanced.workersLabel")} hint={t("advanced.workersHint")}>
+            <Input
+              id="ttsWorkers"
+              type="number"
+              min={1}
+              max={16}
+              step={1}
+              placeholder="4"
+              value={workersValue}
+              onChange={(e) => setWorkersDraft(e.target.value)}
+            />
+          </Field>
+
           <div className="flex items-center gap-3">
             <Button
               disabled={!advancedDirty || saveAdvanced.isPending}
               onClick={() =>
                 saveAdvanced.mutate({
                   translation: { fallback: fallbackValue || null },
-                  advanced: { speechRate: rateValue.trim() ? Number(rateValue) : null },
+                  advanced: {
+                    speechRate: rateValue.trim() ? Number(rateValue) : null,
+                    ttsWorkers: workersValue.trim() ? Number(workersValue) : null,
+                  },
                 })
               }
             >
