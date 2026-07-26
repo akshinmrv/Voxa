@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-26
+
 ### Added
 
 - **OpenRouter translator.** `--translator openrouter` reaches OpenRouter's OpenAI-compatible
@@ -130,7 +132,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/akshinmrv/Voxa/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/akshinmrv/Voxa/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/akshinmrv/Voxa/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/akshinmrv/Voxa/releases/tag/v1.0.0
