@@ -2851,21 +2851,57 @@ async def process_video(video_path: str, args, logger: Logger):
     return 0
 
 
+def _format_hms(seconds: float) -> str:
+    """Compact human duration: '45s', '6m12s', '1h04m'. Used for batch progress/ETA."""
+    s = max(0, int(round(seconds)))
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    if h:
+        return f"{h}h{m:02d}m"
+    if m:
+        return f"{m}m{sec:02d}s"
+    return f"{sec}s"
+
+
+def _batch_progress_line(done: int, total: int, failed: int, elapsed: float) -> str:
+    """One cross-video progress line with an ETA from the mean wall-time per finished
+    video. Plain text — not a rewriting progress bar — so it stays readable in the log
+    file and when the output is piped."""
+    parts = [f"📊 Batch progress: {done}/{total} videos"]
+    if failed:
+        parts.append(f"{failed} failed")
+    parts.append(f"elapsed {_format_hms(elapsed)}")
+    remaining = total - done
+    if remaining > 0 and done > 0:
+        parts.append(f"~{_format_hms(elapsed / done * remaining)} left")
+    return " · ".join(parts)
+
+
 async def batch_process(video_files: List[str], args, logger: Logger):
-    logger.info(f"🎬 Batch processing {len(video_files)} videos")
+    total = len(video_files)
+    logger.info(f"🎬 Batch processing {total} videos")
     results = []
+    batch_start = time.monotonic()
     for i, video in enumerate(video_files, 1):
-        logger.info(f"\n{'='*60}\nProcessing video {i}/{len(video_files)}: {video}\n{'='*60}\n")
+        logger.info(f"\n{'='*60}\nProcessing video {i}/{total}: {video}\n{'='*60}\n")
         try:
             result = await process_video(video, args, logger)
             results.append((video, result == 0))
         except Exception as e:
             logger.error(f"Failed to process {video}: {e}")
             results.append((video, False))
+        # After each video (except the last, where the summary follows) report overall
+        # progress and an ETA for what's left, so a long run is legible without counting
+        # banners. One plain line, safe to pipe to a file.
+        if i < total:
+            failed = sum(1 for _, s in results if not s)
+            logger.info(_batch_progress_line(i, total, failed,
+                                             time.monotonic() - batch_start))
 
     success_count = sum(1 for _, s in results if s)
+    total_str = _format_hms(time.monotonic() - batch_start)
     logger.info(f"\n{'='*60}\nBATCH SUMMARY\n{'='*60}")
-    logger.info(f"✅ Successful: {success_count}/{len(results)}")
+    logger.info(f"✅ Successful: {success_count}/{len(results)} · total {total_str}")
     if success_count < len(results):
         for video, success in results:
             if not success:

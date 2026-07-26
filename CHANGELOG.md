@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--fallback-translator`, in the operator console's provider settings and connection test,
   and in `--dry-run` plans. Adding it was one chat adapter and one registry line — the
   extensibility the provider registries were built for.
+- **Batch progress with ETA.** In multi-video runs, each finished video now prints an overall
+  progress line — `📊 Batch progress: 7/20 videos · elapsed 21m00s · ~39m00s left` — with the
+  ETA estimated from the average wall-time per completed video, and the summary reports the
+  total. It's a plain line, not a rewriting progress bar, so it stays readable in the log file
+  and when the output is piped; the per-video banner is unchanged.
 
 ## [1.1.0] - 2026-07-18
 

@@ -443,6 +443,83 @@ def test_openrouter_key_falls_back_to_env(monkeypatch):
     assert captured["api_key"] == "env-or-key"
 
 
+# ── Batch progress + ETA (issue #7) ──────────────────────
+def test_format_hms_units():
+    assert voxa._format_hms(0) == "0s"
+    assert voxa._format_hms(45) == "45s"
+    assert voxa._format_hms(372) == "6m12s"
+    assert voxa._format_hms(3840) == "1h04m"
+    assert voxa._format_hms(-5) == "0s"           # clamped, never negative
+
+
+def test_batch_progress_line_has_count_and_eta():
+    # 7 of 20 done in 21 min -> 180 s/video -> 13 left -> ~39 min ETA.
+    line = voxa._batch_progress_line(7, 20, 0, 1260)
+    assert "7/20 videos" in line
+    assert "elapsed 21m00s" in line
+    assert "~39m00s left" in line                 # ETA from the running average
+    assert "failed" not in line                   # none failed -> no failure segment
+
+
+def test_batch_progress_line_reports_failures():
+    line = voxa._batch_progress_line(3, 10, 1, 600)
+    assert "3/10 videos" in line
+    assert "1 failed" in line
+
+
+def test_batch_progress_line_no_eta_when_done():
+    line = voxa._batch_progress_line(20, 20, 0, 3600)
+    assert "20/20 videos" in line
+    assert "left" not in line                     # nothing remaining -> no ETA claim
+
+
+class _RecordingLogger:
+    """Captures info/error messages so batch_process output can be asserted."""
+    def __init__(self):
+        self.lines = []
+
+    def info(self, msg):
+        self.lines.append(str(msg))
+
+    def error(self, msg):
+        self.lines.append(str(msg))
+
+
+def test_batch_process_emits_progress_between_videos(monkeypatch):
+    import asyncio
+
+    async def _ok(video, args, logger):
+        return 0
+
+    monkeypatch.setattr(voxa, "process_video", _ok)
+    rec = _RecordingLogger()
+    rc = asyncio.run(voxa.batch_process(["a.mp4", "b.mp4", "c.mp4"], object(), rec))
+    assert rc == 0
+    blob = "\n".join(rec.lines)
+    # A progress line after videos 1 and 2, but not a redundant 3/3 before the summary.
+    assert "Batch progress: 1/3 videos" in blob
+    assert "Batch progress: 2/3 videos" in blob
+    assert "Batch progress: 3/3" not in blob
+    assert "Successful: 3/3" in blob
+    assert "total" in blob                        # summary reports wall-clock total
+
+
+def test_batch_process_counts_failures_and_returns_nonzero(monkeypatch):
+    import asyncio
+
+    async def _mixed(video, args, logger):
+        return 0 if video == "good.mp4" else 1
+
+    monkeypatch.setattr(voxa, "process_video", _mixed)
+    rec = _RecordingLogger()
+    rc = asyncio.run(voxa.batch_process(["bad.mp4", "good.mp4"], object(), rec))
+    assert rc == 1
+    blob = "\n".join(rec.lines)
+    assert "1 failed" in blob                     # failure counted in the progress line
+    assert "Successful: 1/2" in blob
+    assert "bad.mp4" in blob                       # listed in the failure summary
+
+
 # ── Batch passthrough when no client (both providers) ─────
 def test_duration_to_max_chars():
     assert voxa._duration_to_max_chars(3.0, 15.0) == 45
