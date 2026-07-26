@@ -840,6 +840,99 @@ def _fake_sub(text, start_ms, end_ms):
     return SimpleNamespace(text=text, start=_t(start_ms), end=_t(end_ms))
 
 
+# ── Parallel TTS synthesis (_prerender_parallel, --tts-workers) ──
+def _prerender_subs(n):
+    return [_fake_sub(f"line {i}", i * 1000, i * 1000 + 800) for i in range(n)]
+
+
+def _run_prerender(subs, render, tmp_path, concurrency):
+    import asyncio
+    asyncio.run(voxa._prerender_parallel(
+        subs, render=render, text_of=lambda s: s.text, prefix="t",
+        work_dir=tmp_path, min_bytes=1000, concurrency=concurrency, engine="test", desc="t"))
+
+
+def test_prerender_parallel_renders_all_missing(tmp_path):
+    calls = []
+
+    def _render(i, text, final_file, target):          # sync render -> runs in a thread
+        calls.append(i)
+        final_file.write_bytes(b"x" * 2000)
+        return True
+
+    _run_prerender(_prerender_subs(5), _render, tmp_path, concurrency=3)
+    assert sorted(calls) == [0, 1, 2, 3, 4]
+    assert all((tmp_path / f"t_fin_{i}.wav").exists() for i in range(5))
+
+
+def test_prerender_parallel_skips_cached(tmp_path):
+    (tmp_path / "t_fin_1.wav").write_bytes(b"x" * 2000)  # already synthesised
+    calls = []
+
+    def _render(i, text, final_file, target):
+        calls.append(i)
+        final_file.write_bytes(b"x" * 2000)
+        return True
+
+    _run_prerender(_prerender_subs(3), _render, tmp_path, concurrency=2)
+    assert 1 not in calls                                # cached segment not re-rendered
+    assert sorted(calls) == [0, 2]
+
+
+def test_prerender_parallel_respects_concurrency_limit(tmp_path):
+    import asyncio
+    state = {"cur": 0, "peak": 0}
+
+    async def _render(i, text, final_file, target):      # async render -> awaited directly
+        state["cur"] += 1
+        state["peak"] = max(state["peak"], state["cur"])
+        await asyncio.sleep(0.02)
+        final_file.write_bytes(b"x" * 2000)
+        state["cur"] -= 1
+        return True
+
+    _run_prerender(_prerender_subs(8), _render, tmp_path, concurrency=3)
+    assert state["peak"] <= 3                             # semaphore caps concurrency
+    assert state["peak"] > 1                              # but it really did overlap
+
+
+def test_prerender_parallel_survives_render_error(tmp_path):
+    def _render(i, text, final_file, target):
+        if i == 2:
+            raise RuntimeError("boom")                   # one segment fails
+        final_file.write_bytes(b"x" * 2000)
+        return True
+
+    _run_prerender(_prerender_subs(4), _render, tmp_path, concurrency=2)  # must not raise
+    assert not (tmp_path / "t_fin_2.wav").exists()       # failed segment left for placement
+    assert all((tmp_path / f"t_fin_{i}.wav").exists() for i in (0, 1, 3))
+
+
+def test_synthesize_timeline_prerenders_only_when_parallel(tmp_path, monkeypatch):
+    """concurrency<=1 must skip Phase A entirely (byte-identical default); >1 runs it once."""
+    import asyncio
+    seen = []
+
+    async def _spy(*a, **k):
+        seen.append(k.get("concurrency"))
+
+    monkeypatch.setattr(voxa, "_prerender_parallel", _spy)
+    monkeypatch.setattr(voxa, "_has_content", lambda *a, **k: True)
+    monkeypatch.setattr(voxa, "create_silence_wav", lambda *a, **k: False)
+    monkeypatch.setattr(voxa, "_place_speech_block",
+                        lambda final_file, start_ms, end_ms, *a, **k: end_ms)
+
+    common = dict(engine="edge", prefix="p", sample_rate=16000, work_dir=tmp_path,
+                  concat_list=[], temp_files=[], render=lambda *a: True,
+                  text_of=lambda s: s.text, desc="t")
+    subs = _prerender_subs(2)
+
+    asyncio.run(voxa.synthesize_timeline(subs, **common, concurrency=1))
+    assert seen == []                                    # sequential: no Phase A
+    asyncio.run(voxa.synthesize_timeline(subs, **common, concurrency=4))
+    assert seen == [4]                                   # parallel: Phase A once, N=4
+
+
 # ── T1: Piper brought up to the S0/SY2 standard ──────────
 class _FakePiperPopen:
     """Stand-in for the piper binary: writes a non-empty WAV to --output_file."""

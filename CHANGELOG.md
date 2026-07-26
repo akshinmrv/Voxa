@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Network TTS now synthesises in parallel.** OpenAI and Edge speech ran one HTTP request
+  per segment, sequentially — the single biggest bottleneck on a long dub, and one a GPU
+  cannot help because the work is remote. Synthesis and placement are now separated: segments
+  are synthesised concurrently (bounded by `--tts-workers`, default 4) while the
+  order-dependent anchored placement pass stays sequential, so timing and drift are unchanged.
+  A dub's speech step is now several times faster (≈4× at the default on a network-latency-bound
+  run). Offline engines (Piper, XTTS) stay sequential since they are CPU/GPU-bound. Use
+  `--tts-workers 1` for the old one-at-a-time behaviour, or raise it if your API tier allows.
+
+### Added
+
+- OpenAI TTS requests now retry with exponential backoff on rate-limit / 5xx errors, so the
+  added concurrency rides out a 429 instead of dropping that segment's audio.
+
 ## [1.2.0] - 2026-07-26
 
 ### Added

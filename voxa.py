@@ -691,11 +691,32 @@ def _detect_pacing_conflicts(style: str) -> List[str]:
     return sorted({m.group(0).lower() for m in _PACING_CONFLICT_RE.finditer(style or "")})
 
 
+def _openai_speech_create(client, kwargs, max_retries: int = 5):
+    """OpenAI TTS speech.create with exponential backoff on rate-limit / 5xx errors, so
+    parallel synthesis (--tts-workers > 1) rides out a 429 instead of dropping the segment.
+    Retries without the `instructions` param on an older SDK that rejects it (TypeError)."""
+    backoff = 2.0
+    for attempt in range(max_retries):
+        try:
+            try:
+                return client.audio.speech.create(**kwargs)
+            except TypeError:
+                k = dict(kwargs)
+                k.pop("instructions", None)
+                return client.audio.speech.create(**k)
+        except Exception as e:
+            if _is_transient_error(e) and attempt < max_retries - 1:
+                time.sleep(backoff + random.uniform(0, 1))
+                backoff = min(backoff * 2, 30)
+                continue
+            raise
+
+
 async def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
                              lang_code: str, concat_list: list, temp_files: list,
                              work_dir: Path, enable_stretch: bool,
                              quality_gate: bool = False, asr_model=None,
-                             emotion_detection: bool = False):
+                             emotion_detection: bool = False, concurrency: int = 1):
     """Speech via OpenAI TTS (gpt-4o-mini-tts): multilingual, instructable delivery, no
     cloning. With emotion_detection an LLM tags each line with a delivery direction (A2 T1).
     Timeline, placement and scoring come from synthesize_timeline."""
@@ -725,12 +746,7 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
         kwargs = {"model": model, "voice": voice, "input": text, "response_format": "wav"}
         if seg_instr:
             kwargs["instructions"] = seg_instr
-        try:
-            resp = client.audio.speech.create(**kwargs)
-        except TypeError:
-            # Older openai SDK without the `instructions` parameter.
-            kwargs.pop("instructions", None)
-            resp = client.audio.speech.create(**kwargs)
+        resp = _openai_speech_create(client, kwargs)
         Path(raw_file).write_bytes(resp.content)
         if not _has_content(raw_file, 1000):
             _LOG.warning(f"OpenAI TTS returned empty audio for segment {i}: {text[:40]}")
@@ -758,11 +774,7 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
         try:
             kwargs = {"model": model, "voice": voice, "input": text, "response_format": "wav",
                       "instructions": _build_tts_instructions("", "")}  # guard only
-            try:
-                resp = client.audio.speech.create(**kwargs)
-            except TypeError:
-                kwargs.pop("instructions", None)
-                resp = client.audio.speech.create(**kwargs)
+            resp = _openai_speech_create(client, kwargs)
             cand_raw.write_bytes(resp.content)
         except Exception as e:
             _LOG.debug(f"neutral retry failed for segment {i}: {e}")
@@ -785,7 +797,8 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
         concat_list=concat_list, temp_files=temp_files, render=_render, on_ready=_regenerate,
         text_of=lambda s: normalize_tts_text(s.text),
         desc="OpenAI TTS", unit="phrase",
-        quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code)
+        quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code,
+        concurrency=concurrency)
 # ─────────────────────────────────────────────
 #  Existing code below — unchanged
 # ─────────────────────────────────────────────
@@ -1898,11 +1911,47 @@ async def _maybe_await(value):
     return await value if inspect.isawaitable(value) else value
 
 
+async def _prerender_parallel(subs, *, render, text_of, prefix, work_dir, min_bytes,
+                              concurrency, engine, desc):
+    """Synthesise every segment up front with bounded concurrency, writing each
+    <prefix>_fin_<i>.wav. Network TTS engines spend almost all their wall-time awaiting the
+    API, so overlapping those waits is a near-linear speedup. A sync render (OpenAI's
+    blocking HTTP call) is offloaded to a worker thread so it doesn't stall the event loop;
+    an async render (Edge) is awaited directly. synthesize_timeline's placement pass then
+    runs sequentially over the finished files, so drift/anchoring is byte-for-byte unchanged
+    — only the waiting overlaps. A per-segment failure is logged and left for the placement
+    pass to skip, exactly as in the sequential path."""
+    sem = asyncio.Semaphore(max(1, concurrency))
+    render_is_async = asyncio.iscoroutinefunction(render)
+    pbar = tqdm(total=len(subs), desc=f"{desc} ×{concurrency}", unit="segment")
+
+    async def _one(i, sub):
+        text = text_of(sub)
+        final_file = work_dir / f"{prefix}_fin_{i}.wav"
+        if text and not _has_content(final_file, min_bytes):
+            target_duration = (_sub_end_ms(sub) - _sub_start_ms(sub)) / 1000.0
+            async with sem:
+                try:
+                    if render_is_async:
+                        await render(i, text, final_file, target_duration)
+                    else:
+                        await asyncio.to_thread(render, i, text, final_file, target_duration)
+                except Exception as e:
+                    _LOG.error(f"{engine} segment {i} render error: {e}")
+        pbar.update(1)
+
+    try:
+        await asyncio.gather(*[_one(i, sub) for i, sub in enumerate(subs)])
+    finally:
+        pbar.close()
+
+
 async def synthesize_timeline(subs, *, engine: str, prefix: str, sample_rate: int,
                               work_dir: Path, concat_list: list, temp_files: list,
                               render, text_of, desc: str, unit: str = "segment",
                               min_bytes: int = 1000, quality_gate: bool = False,
-                              asr_model=None, gate_lang=None, on_ready=None) -> int:
+                              asr_model=None, gate_lang=None, on_ready=None,
+                              concurrency: int = 1) -> int:
     """Drive one TTS engine across the subtitle timeline (Template Method).
 
     Every engine shares this loop — leading silence, cached synthesis, absolute-anchor
@@ -1916,6 +1965,15 @@ async def synthesize_timeline(subs, *, engine: str, prefix: str, sample_rate: in
     and before placement (XTTS re-rolls a flagged take there), returning a gate score if it
     already computed one. Returns the number of segments placed.
     """
+    # Phase A (opt-in): pre-synthesise all segments concurrently. The placement loop below
+    # then finds each WAV already on disk (via _has_content) and skips re-rendering, so the
+    # order-dependent drift/anchoring maths is untouched. concurrency<=1 skips Phase A, so
+    # the sequential default path is byte-identical to before.
+    if concurrency > 1 and subs:
+        await _prerender_parallel(subs, render=render, text_of=text_of, prefix=prefix,
+                                  work_dir=work_dir, min_bytes=min_bytes,
+                                  concurrency=concurrency, engine=engine, desc=desc)
+
     scores: List[Dict] = []
     generated = 0
     cursor_ms = 0.0
@@ -2244,7 +2302,8 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
                                   enable_stretch: bool, emotion_detection: bool,
                                   rate_adjust: bool, has_emotion_support: bool = False,
                                   quality_gate: bool = False, asr_model=None,
-                                  gate_lang=None) -> Tuple[List[str], List[str]]:
+                                  gate_lang=None, concurrency: int = 1
+                                  ) -> Tuple[List[str], List[str]]:
     """Speech via Microsoft Edge voices. Timeline, placement and scoring come from
     synthesize_timeline; this only turns one line of text into one WAV."""
     concat_list, temp_files = [], []
@@ -2291,7 +2350,8 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
         concat_list=concat_list, temp_files=temp_files, render=_render,
         text_of=lambda s: normalize_tts_text(s.text),
         desc="Edge TTS", unit="sentence", min_bytes=100,
-        quality_gate=quality_gate, asr_model=asr_model, gate_lang=gate_lang)
+        quality_gate=quality_gate, asr_model=asr_model, gate_lang=gate_lang,
+        concurrency=concurrency)
 
     if emotion_stats:
         _LOG.info(f"🎭 Emotion usage: {emotion_stats}")
@@ -2502,7 +2562,8 @@ async def _tts_edge(subs, args, work_dir, video_path, gate_asr, logger):
         rate_adjust=args.auto_rate,
         has_emotion_support=has_emotions,
         quality_gate=args.quality_gate, asr_model=gate_asr,
-        gate_lang=args.target_lang[:2].lower()
+        gate_lang=args.target_lang[:2].lower(),
+        concurrency=max(1, getattr(args, "tts_workers", 4))
     )
 
 
@@ -2581,7 +2642,8 @@ async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
         concat_list, temp_files, work_dir,
         enable_stretch=not args.no_stretch,
         quality_gate=args.quality_gate, asr_model=gate_asr,
-        emotion_detection=args.detect_emotion
+        emotion_detection=args.detect_emotion,
+        concurrency=max(1, getattr(args, "tts_workers", 4))
     )
     return concat_list, temp_files
 
@@ -3013,6 +3075,12 @@ Examples:
     parser.add_argument("--voice-sample", type=str, default=None,
                         help="Path to reference WAV for XTTS voice cloning (optional, "
                              "auto-extracted from source video if not provided)")
+    parser.add_argument("--tts-workers", type=int, default=4,
+                        help="Parallel synthesis requests for network TTS engines "
+                             "(openai, edge) — most of their time is spent awaiting the API, "
+                             "so this is the main speed lever (default: 4). Offline engines "
+                             "(piper, xtts) ignore it and stay sequential. Raise it if your "
+                             "API tier allows; set 1 to synthesize one segment at a time.")
 
     parser.add_argument("--no-stretch", action="store_true",
                         help="Disable audio time-stretching")
