@@ -16,8 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot help because the work is remote. Synthesis and placement are now separated: segments
   are synthesised concurrently (bounded by `--tts-workers`, default 4) while the
   order-dependent anchored placement pass stays sequential, so timing and drift are unchanged.
-  A dub's speech step is now several times faster (≈4× at the default on a network-latency-bound
-  run). Offline engines (Piper, XTTS) stay sequential since they are CPU/GPU-bound. Use
+  On a measured run (2.4-min clip, 37 segments, RTX-class VPS) the speech step dropped from
+  57.5s to 18.5s for OpenAI TTS at the default 4 workers (3.1×), and to 12.7s at 8 workers
+  (4.5×); Edge TTS went 44.0s → 17.1s (2.6×) → 13.6s (3.2×). Longer, more network-bound clips
+  gain more. Offline engines (Piper, XTTS) stay sequential since they are CPU/GPU-bound. Use
   `--tts-workers 1` for the old one-at-a-time behaviour, or raise it if your API tier allows.
 
 ### Added
