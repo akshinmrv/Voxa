@@ -1039,8 +1039,14 @@ def _stage_own_params(stage: str, args) -> Dict:
     if stage == "merge_sentences":
         # The non-speech filter runs every load, but merged_sentences.json is cached, so a
         # threshold change must invalidate the merge (and downstream), not the transcript.
-        return {"max_sentence_duration": args.max_sentence_duration,
-                "no_speech_threshold": args.no_speech_threshold}
+        params = {"max_sentence_duration": args.max_sentence_duration,
+                  "no_speech_threshold": args.no_speech_threshold}
+        # Diarization runs as part of the merge step, so its parameters live here. Only added
+        # when enabled, so a run without --diarize keeps its exact previous signature.
+        if getattr(args, "diarize", False):
+            params["diarize"] = True
+            params["num_speakers"] = getattr(args, "num_speakers", None)
+        return params
     if stage == "translation":
         model = getattr(args, f"{args.translator}_model", None)   # None for google
         return {"target_lang": args.target_lang, "translator": args.translator,
@@ -1143,6 +1149,11 @@ def plan_blockers(args) -> List[str]:
     srt = getattr(args, "subtitles", None)
     if srt and not Path(srt).exists():
         problems.append(f"subtitles file not found: {srt}")
+    if getattr(args, "diarize", False):
+        if srt:
+            problems.append("--diarize is not usable with --subtitles yet (it needs the audio)")
+        elif not _pyannote_available():
+            problems.append(_PYANNOTE_HINT)
     return problems
 
 
@@ -1165,6 +1176,9 @@ def build_run_plan(video_name: str, args, *, work_dir: Path, output_file: Path,
     else:
         lines.append(row("transcribe", f"whisper {args.whisper_model} "
                                        f"({args.whisper_backend} backend)"))
+    if getattr(args, "diarize", False):
+        hint = f", {args.num_speakers} speakers" if getattr(args, "num_speakers", None) else ""
+        lines.append(row("diarize", f"pyannote{hint}"))
 
     translator = args.translator
     model = getattr(args, f"{translator}_model", None)
@@ -1968,34 +1982,109 @@ def _apply_translation_fallback(texts: List[str], translated: List[str], args, l
     return repaired
 
 
+class DiarizationError(RuntimeError):
+    """Speaker diarization could not run (pyannote missing, no HF token, or a model error)."""
+
+
+_PYANNOTE_HINT = (
+    "Speaker diarization needs pyannote.audio and a Hugging Face token — "
+    "install with:  pip install 'voxa-dub[diarize]'  then set HF_TOKEN "
+    "(accept the model terms at hf.co/pyannote/speaker-diarization-3.1 first)")
+
+
+def _pyannote_available() -> bool:
+    try:
+        import pyannote.audio  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _assign_speaker(seg: Dict, turns: Sequence[Tuple[str, float, float]]) -> Optional[str]:
+    """Label a segment with the diarization turn (speaker, start, end) it overlaps most in
+    time. Pure — the testable core of diarization. Returns None if nothing overlaps."""
+    best, best_overlap = None, 0.0
+    for spk, s, e in turns:
+        overlap = min(seg['end'], e) - max(seg['start'], s)
+        if overlap > best_overlap:
+            best, best_overlap = spk, overlap
+    return best
+
+
+def diarize_segments(audio_path: str, segments: List[Dict], *, num_speakers: Optional[int] = None,
+                     hf_token: Optional[str] = None) -> List[Dict]:
+    """Tag every transcription segment with a 'speaker' from pyannote diarization; returns a new
+    list (inputs untouched). Optional feature: pyannote.audio is an extra and its pretrained
+    model is Hugging-Face-gated — MIT-licensed, but you must accept its terms and pass a token
+    (no commercial restriction). Raises DiarizationError, with guidance, when it cannot run."""
+    token = hf_token or os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+    if not token:
+        raise DiarizationError(_PYANNOTE_HINT)
+    try:
+        from pyannote.audio import Pipeline
+    except Exception as e:
+        raise DiarizationError(_PYANNOTE_HINT) from e
+    try:
+        pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1",
+                                            use_auth_token=token)
+        if torch is not None and torch.cuda.is_available():
+            pipeline.to(torch.device("cuda"))
+        opts = {"num_speakers": num_speakers} if num_speakers else {}
+        annotation = pipeline(audio_path, **opts)
+        turns = [(str(label), float(turn.start), float(turn.end))
+                 for turn, _, label in annotation.itertracks(yield_label=True)]
+    except Exception as e:
+        raise DiarizationError(f"pyannote diarization failed: {e}") from e
+    fallback = turns[0][0] if turns else "SPEAKER_00"
+    out: List[Dict] = []
+    for seg in segments:
+        tagged = dict(seg)
+        tagged['speaker'] = _assign_speaker(seg, turns) or fallback
+        out.append(tagged)
+    return out
+
+
 def merge_segments_into_sentences(segments: List[Dict], max_duration: float = 10.0) -> List[Dict]:
+    """Merge Whisper's short segments into sentence-sized blocks. When segments carry a
+    'speaker' (from diarization), a block never spans a speaker change — a merged sentence must
+    belong to one speaker, or two people would be voiced as one line. With no 'speaker' present
+    the speaker logic is inert, so the output is byte-for-byte identical to the pre-diarization
+    behaviour."""
     sentence_endings = re.compile(r'[.!?;:]\s*$')
     merged = []
-    current_group = {'text': '', 'start': None, 'end': None}
+    cur = {'text': '', 'start': None, 'end': None, 'speaker': None}
+
+    def _flush():
+        if cur['text']:
+            entry = {'text': cur['text'], 'start': cur['start'], 'end': cur['end']}
+            if cur['speaker'] is not None:
+                entry['speaker'] = cur['speaker']
+            merged.append(entry)
 
     for i, seg in enumerate(segments):
         text = seg['text'].strip()
         if not text:
             continue
-        if current_group['start'] is None:
-            current_group['start'] = seg['start']
-        current_group['text'] = (current_group['text'] + ' ' + text).strip()
-        current_group['end'] = seg['end']
-        duration = current_group['end'] - current_group['start']
+        spk = seg.get('speaker')
+        # A sentence cannot span two speakers: close the block before a speaker change.
+        if cur['text'] and spk != cur['speaker']:
+            _flush()
+            cur = {'text': '', 'start': None, 'end': None, 'speaker': None}
+        if cur['start'] is None:
+            cur['start'] = seg['start']
+            cur['speaker'] = spk
+        cur['text'] = (cur['text'] + ' ' + text).strip()
+        cur['end'] = seg['end']
+        duration = cur['end'] - cur['start']
         has_sentence_end = sentence_endings.search(text)
         has_pause = False
         if i + 1 < len(segments):
             has_pause = (segments[i + 1]['start'] - seg['end']) > 0.5
         if has_sentence_end or duration >= max_duration or has_pause:
-            merged.append({
-                'text': current_group['text'],
-                'start': current_group['start'],
-                'end': current_group['end']
-            })
-            current_group = {'text': '', 'start': None, 'end': None}
+            _flush()
+            cur = {'text': '', 'start': None, 'end': None, 'speaker': None}
 
-    if current_group['text']:
-        merged.append(current_group)
+    _flush()
     return merged
 
 
@@ -2915,6 +3004,19 @@ async def process_video(video_path: str, args, logger: Logger):
         with open(merged_json, 'r', encoding='utf-8') as f:
             merged_segments = json.load(f)
     else:
+        # Optional diarization runs here (not on a cached-merge resume): it tags each segment
+        # with a speaker so the merge below never splits a sentence across two people. Needs
+        # the source audio, so it isn't available with --subtitles (guarded in preflight).
+        if getattr(args, "diarize", False):
+            logger.info("🗣️  Diarizing speakers (pyannote)...")
+            try:
+                segments = diarize_segments(str(audio_wav), segments,
+                                            num_speakers=args.num_speakers,
+                                            hf_token=args.hf_token)
+            except DiarizationError as e:
+                logger.error(f"Diarization failed: {e}")
+                return 1
+            logger.info(f"🗣️  Detected {len({s.get('speaker') for s in segments})} speaker(s)")
         logger.info("[4/7] Merging segments into sentences...")
         merged_segments = merge_segments_into_sentences(segments, args.max_sentence_duration)
         logger.info(f"✨ Merged {len(segments)} segments → {len(merged_segments)} sentences")
@@ -3278,6 +3380,16 @@ Examples:
                              "(skips Whisper). Handy for re-dubbing with hand-corrected "
                              "captions, or when accurate subtitles already exist. The lines "
                              "are still translated and spoken.")
+    parser.add_argument("--diarize", action="store_true",
+                        help="Detect who speaks when (pyannote) and keep each sentence within "
+                             "one speaker. Needs the 'diarize' extra and a Hugging Face token "
+                             "(HF_TOKEN). Distinct voices per speaker land in a later release.")
+    parser.add_argument("--num-speakers", type=int, default=None, metavar="N",
+                        help="Hint the exact number of speakers for --diarize (optional; "
+                             "improves accuracy when you know it).")
+    parser.add_argument("--hf-token", default=None,
+                        help="Hugging Face token for --diarize (falls back to the HF_TOKEN env "
+                             "var). Accept the model terms on its Hugging Face page first.")
     parser.add_argument("--verbose", action="store_true",
                         help="Enable verbose (DEBUG-level) logging")
     parser.add_argument("--log-format", choices=["plain", "json"], default="plain",
@@ -3352,6 +3464,13 @@ Examples:
     if args.subtitles and not args.dry_run and not Path(args.subtitles).exists():
         print(f"❌ Subtitles file not found: {args.subtitles}")
         return 1
+    if args.diarize and not args.dry_run:
+        if args.subtitles:
+            print("❌ --diarize can't be combined with --subtitles yet (it needs the audio).")
+            return 1
+        if not _pyannote_available():
+            print(f"❌ {_PYANNOTE_HINT}")
+            return 1
 
     # --dry-run reports and exits here, before anything is created: the workspace and its
     # log file are made just below, so short-circuiting later would still leave a directory

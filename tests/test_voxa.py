@@ -459,9 +459,73 @@ def test_transcription_signature_tracks_subtitles(tmp_path):
 
 def test_plan_blockers_flags_missing_subtitles(tmp_path):
     args = SimpleNamespace(translator="google", tts="edge", voice_sample=None,
-                           openai_tts_base_url=None, videos=["v.mp4"],
+                           openai_tts_base_url=None, videos=["v.mp4"], diarize=False,
                            subtitles=str(tmp_path / "nope.srt"))
     assert any("subtitles file not found" in b for b in voxa.plan_blockers(args))
+
+
+# ── Speaker diarization (--diarize, P0) ──────────────────
+def test_assign_speaker_by_overlap():
+    turns = [("A", 0.0, 2.0), ("B", 2.0, 5.0)]
+    assert voxa._assign_speaker({"start": 0.2, "end": 1.5}, turns) == "A"
+    assert voxa._assign_speaker({"start": 3.0, "end": 4.0}, turns) == "B"
+    assert voxa._assign_speaker({"start": 1.5, "end": 2.4}, turns) == "A"   # 0.5s A vs 0.4s B
+    assert voxa._assign_speaker({"start": 10.0, "end": 11.0}, turns) is None  # no overlap
+
+
+def test_merge_breaks_on_speaker_change():
+    segs = [
+        {"start": 0.0, "end": 1.0, "text": "Hello", "speaker": "A"},
+        {"start": 1.0, "end": 2.0, "text": "there", "speaker": "A"},
+        {"start": 2.0, "end": 3.0, "text": "Hi", "speaker": "B"},   # change -> new block
+    ]
+    merged = voxa.merge_segments_into_sentences(segs, max_duration=100)
+    assert len(merged) == 2
+    assert merged[0] == {"text": "Hello there", "start": 0.0, "end": 2.0, "speaker": "A"}
+    assert merged[1] == {"text": "Hi", "start": 2.0, "end": 3.0, "speaker": "B"}
+
+
+def test_merge_without_speaker_is_byte_identical():
+    segs = [{"start": 0.0, "end": 1.0, "text": "Hello"},
+            {"start": 1.0, "end": 2.0, "text": "there"}]
+    # No 'speaker' anywhere -> output must not gain a 'speaker' key (unchanged behaviour).
+    assert voxa.merge_segments_into_sentences(segs, max_duration=100) == \
+        [{"text": "Hello there", "start": 0.0, "end": 2.0}]
+
+
+def test_merge_signature_tracks_diarize():
+    common = dict(max_sentence_duration=10.0, no_speech_threshold=0.6,
+                  whisper_model="base", whisper_backend="openai", subtitles=None)
+    off = SimpleNamespace(**common, diarize=False, num_speakers=None)
+    on = SimpleNamespace(**common, diarize=True, num_speakers=2)
+    assert voxa.stage_signature("merge_sentences", off) \
+        != voxa.stage_signature("merge_sentences", on)
+
+
+def test_plan_blockers_diarize_needs_pyannote(monkeypatch):
+    args = SimpleNamespace(translator="google", tts="edge", voice_sample=None,
+                           openai_tts_base_url=None, videos=["v.mp4"], subtitles=None,
+                           diarize=True, num_speakers=None)
+    monkeypatch.setattr(voxa, "_pyannote_available", lambda: False)
+    assert any("pyannote" in b for b in voxa.plan_blockers(args))
+    monkeypatch.setattr(voxa, "_pyannote_available", lambda: True)
+    assert not any("pyannote" in b for b in voxa.plan_blockers(args))
+
+
+def test_plan_blockers_diarize_conflicts_with_subtitles(monkeypatch):
+    monkeypatch.setattr(voxa, "_pyannote_available", lambda: True)
+    args = SimpleNamespace(translator="google", tts="edge", voice_sample=None,
+                           openai_tts_base_url=None, videos=["v.mp4"],
+                           subtitles="x.srt", diarize=True, num_speakers=None)
+    # (x.srt also missing, but the point is the --diarize/--subtitles conflict is reported)
+    assert any("not usable with --subtitles" in b for b in voxa.plan_blockers(args))
+
+
+def test_diarize_segments_requires_token(monkeypatch):
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGINGFACE_TOKEN", raising=False)
+    with pytest.raises(voxa.DiarizationError):
+        voxa.diarize_segments("a.wav", [{"start": 0, "end": 1, "text": "hi"}], hf_token=None)
 
 
 # ── Provider registry ────────────────────────────────────

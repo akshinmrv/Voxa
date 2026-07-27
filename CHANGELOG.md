@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Speaker diarization foundation (`--diarize`).** Detects who speaks when (pyannote.audio) and
+  tags each segment with a speaker, so a merged sentence never spans two people — the groundwork
+  for voicing each speaker differently. Optional extra (`pip install 'voxa-dub[diarize]'`) with a
+  Hugging-Face-gated model: MIT-licensed and free to ship, but you accept its terms and pass a
+  token (`--hf-token` / `HF_TOKEN`). Optional `--num-speakers` hint. Default off, so runs without
+  `--diarize` are byte-for-byte unchanged. This lands the pipeline plumbing and the speaker-aware
+  sentence merge; **distinct voices per speaker come in a follow-up.** Not yet combinable with
+  `--subtitles` (diarization needs the source audio).
+
 ## [1.5.0] - 2026-07-27
 
 ### Added

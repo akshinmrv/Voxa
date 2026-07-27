@@ -58,6 +58,9 @@ anthropic = ["anthropic"]
 # URL input (voxa <video-url>). Downloading may breach a platform's Terms of Service — you
 # are responsible for the rights to the content. See the README's "Dubbing from a URL" note.
 url = ["yt-dlp"]
+# Speaker diarization (--diarize). pyannote.audio's code is MIT; its pretrained model is
+# gated on Hugging Face (accept the terms + set HF_TOKEN) but carries no commercial restriction.
+diarize = ["pyannote.audio"]
 # `voxa serve` — the optional operator web server (see voxa_server.py).
 serve = ["fastapi", "uvicorn[standard]", "python-multipart"]
 dev = ["pytest", "ruff"]
