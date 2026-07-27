@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Voxa v1.0 — Professional Video Translation and Dubbing
+Voxa — Professional Video Translation and Dubbing
 
 Pipeline: extract audio -> Whisper transcription -> translate -> TTS -> mux.
 Translation: Google, Ollama, or an LLM provider (OpenAI / Anthropic) with
@@ -27,6 +27,34 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
+
+
+def _detect_version() -> str:
+    """Single source of truth for the version: the installed package metadata (built from
+    pyproject.toml). Falls back to reading pyproject.toml when running from a source checkout
+    (`python voxa.py`) where the distribution isn't installed under its name."""
+    try:
+        from importlib.metadata import PackageNotFoundError
+        from importlib.metadata import version as _pkg_version
+        try:
+            return _pkg_version("voxa-dub")
+        except PackageNotFoundError:
+            pass
+    except Exception:
+        pass
+    try:
+        pyproject = Path(__file__).with_name("pyproject.toml")
+        if pyproject.exists():
+            m = re.search(r'^version\s*=\s*"([^"]+)"',
+                          pyproject.read_text(encoding="utf-8"), re.M)
+            if m:
+                return m.group(1)
+    except Exception:
+        pass
+    return "0.0.0+unknown"
+
+
+__version__ = _detect_version()
 
 # Heavy / third-party dependencies are guarded so the module can still be imported
 # (e.g. for unit tests) when they are not installed. They are required to actually
@@ -2974,7 +3002,7 @@ async def batch_process(video_files: List[str], args, logger: Logger):
 
 async def main():
     parser = argparse.ArgumentParser(
-        description="Voxa v1.0 — Professional Video Dubbing",
+        description=f"Voxa v{__version__} — Professional Video Dubbing",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -2999,6 +3027,8 @@ Examples:
     )
 
     parser.add_argument("videos", nargs="+", help="Input video file(s)")
+    parser.add_argument("--version", action="version", version=f"voxa {__version__}",
+                        help="Show the version and exit")
     parser.add_argument("--target_lang", default="ru", help="Target language code (default: ru)")
     parser.add_argument("--output-dir", help="Output directory (default: current directory)")
 
@@ -3198,7 +3228,9 @@ Examples:
                     json_format=(args.log_format == "json"))
 
     logger.info("╔════════════════════════════════════════════════════════╗")
-    logger.info("║" + " " * 15 + "Voxa v1.0 - Configuration" + " " * 16 + "║")
+    _title = f"Voxa v{__version__} - Configuration"[:56]
+    _pad = 56 - len(_title)
+    logger.info("║" + " " * (_pad // 2) + _title + " " * (_pad - _pad // 2) + "║")
     logger.info("╚════════════════════════════════════════════════════════╝")
     logger.info(f"📹 Videos: {len(args.videos)}")
     logger.info(f"🌍 Target Language: {args.target_lang}")

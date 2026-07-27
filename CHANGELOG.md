@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`voxa --version`.** Prints the version and exits.
+
+### Fixed
+
+- The version now comes from the package metadata (a single source of truth built from
+  `pyproject.toml`) instead of a hard-coded "v1.0" string, so the `--help` banner, the startup
+  configuration box and `--version` all report the real release (e.g. 1.3.0) instead of a stale
+  number.
+
 ## [1.3.0] - 2026-07-26
 
 ### Changed

@@ -9,6 +9,8 @@ Run:  pytest -q
 """
 import asyncio
 import logging
+import re
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -355,6 +357,22 @@ def test_record_usage_accumulates():
     assert u["calls"] == 2
     assert u["input_tokens"] == 20
     assert u["output_tokens"] == 10
+
+
+# ── Version (single source of truth) ─────────────────────
+def test_version_detected_and_shaped():
+    assert isinstance(voxa.__version__, str)
+    assert re.match(r"^\d+\.\d+\.\d+", voxa.__version__), voxa.__version__
+    assert voxa.__version__ != "0.0.0+unknown"
+
+
+def test_detect_version_reads_pyproject_fallback():
+    # The source-checkout fallback must find a parseable version in pyproject.toml, so the CLI
+    # never falls back to the "unknown" sentinel when run from a clone.
+    pp = Path(voxa.__file__).with_name("pyproject.toml")
+    if pp.exists():
+        m = re.search(r'^version\s*=\s*"([^"]+)"', pp.read_text(encoding="utf-8"), re.M)
+        assert m and re.match(r"^\d+\.\d+\.\d+", m.group(1))
 
 
 # ── Provider registry ────────────────────────────────────
