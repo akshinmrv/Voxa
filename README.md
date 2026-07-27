@@ -312,6 +312,14 @@ Check it took:
 python -c "import torch; print(torch.cuda.is_available())"   # → True
 ```
 
+> [!NOTE]
+> A brand-new GPU can outrun its PyTorch build: `torch.cuda.is_available()` returns `True`, yet
+> transcription fails with *"no kernel image is available for execution on the device"* — the
+> installed torch simply has no compiled kernels for that architecture yet. Install a newer CUDA
+> build (a higher `cuXXX`), or sidestep torch altogether with **`--whisper-backend faster`**
+> (`voxa-dub[faster]`, CTranslate2): it transcribes without the PyTorch/CUDA version matching,
+> and is also 2–4× faster on CPU.
+
 When the GPU is in use, the run log prints `⚙️  Using device: CUDA` at the transcription step
 (it prints `CPU` otherwise). Rough VRAM per Whisper model: `tiny`/`base` ≈ 1 GB, `small` ≈ 2 GB,
 `medium` ≈ 5 GB, `turbo` ≈ 6 GB, `large` ≈ 10 GB; XTTS wants roughly 4 GB more.

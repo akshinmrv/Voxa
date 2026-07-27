@@ -305,6 +305,14 @@ Doğrulayın:
 python -c "import torch; print(torch.cuda.is_available())"   # → True
 ```
 
+> [!NOTE]
+> Çok yeni bir GPU, PyTorch derlemesini geçebilir: `torch.cuda.is_available()` **True** döner ama
+> yazıya çevirme *"no kernel image is available for execution on the device"* hatası verir —
+> kurulu torch, o mimari için henüz derlenmiş çekirdeklere sahip değildir. Daha yeni bir CUDA
+> derlemesi (daha yüksek `cuXXX`) kurun ya da torch'u tamamen atlayın: **`--whisper-backend faster`**
+> (`voxa-dub[faster]`, CTranslate2) — PyTorch/CUDA sürüm eşleştirmesi olmadan yazıya çevirir ve
+> CPU'da 2–4× daha hızlıdır.
+
 GPU kullanıldığında çalışma günlüğü yazıya çevirme adımında `⚙️  Using device: CUDA` yazar
 (aksi hâlde `CPU`). Whisper modeline göre yaklaşık VRAM: `tiny`/`base` ≈ 1 GB, `small` ≈ 2 GB,
 `medium` ≈ 5 GB, `turbo` ≈ 6 GB, `large` ≈ 10 GB; XTTS bunun üstüne yaklaşık 4 GB ister.
