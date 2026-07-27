@@ -271,6 +271,13 @@ callers and a port-mapped request does not qualify — run the console natively 
 | `pipx install "voxa-dub[piper]"` | `--tts piper` — fully offline |
 | `pipx install "voxa-dub[anthropic]"` | `--translator anthropic` |
 | `pipx install "voxa-dub[xtts]"` | `--tts xtts` voice cloning |
+| `pipx install "voxa-dub[url]"` | `voxa <video-url>` — download the input first (yt-dlp) |
+
+> [!NOTE]
+> **Dubbing from a URL** (`voxa "https://…" --target_lang de`) downloads the video with
+> `yt-dlp` and then runs the normal pipeline. Downloading may breach the source platform's
+> Terms of Service — **you are responsible for having the right to the content**; the CLI
+> prints this before it fetches. Local files behave exactly as before.
 
 > [!WARNING]
 > `voxa-dub[xtts]` installs [`coqui-tts`](https://github.com/idiap/coqui-ai-TTS), the maintained

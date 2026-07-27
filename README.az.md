@@ -263,6 +263,13 @@ işləyir (`serve --host 0.0.0.0`), amma onun settings endpoint-ləri yalnız lo
 | `pipx install "voxa-dub[piper]"` | `--tts piper` — tam offline |
 | `pipx install "voxa-dub[anthropic]"` | `--translator anthropic` |
 | `pipx install "voxa-dub[xtts]"` | `--tts xtts` səs klonlama |
+| `pipx install "voxa-dub[url]"` | `voxa <video-url>` — girişi əvvəlcə yüklə (yt-dlp) |
+
+> [!NOTE]
+> **URL-dən dublyaj** (`voxa "https://…" --target_lang de`) videonu `yt-dlp` ilə yükləyib adi
+> pipeline-ı işlədir. Yükləmə mənbə platformanın İstifadə Şərtlərini poza bilər — **məzmuna
+> hüququn olması sənin məsuliyyətindədir**; CLI bunu yükləmədən əvvəl xəbərdar edir. Lokal
+> fayllar əvvəlki kimi işləyir.
 
 > [!WARNING]
 > `voxa-dub[xtts]` [`coqui-tts`](https://github.com/idiap/coqui-ai-TTS) forkunu quraşdırır.

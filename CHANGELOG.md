@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Dub straight from a URL.** `voxa <video-url> --target_lang de` downloads the video with
+  yt-dlp and then runs the normal pipeline on it. It is an optional extra —
+  `pip install 'voxa-dub[url]'` — because downloading may breach the source platform's Terms
+  of Service: the CLI prints a notice and **you are responsible for having the right to the
+  content**. Local files behave exactly as before, and `--dry-run` reports the pending
+  download without fetching anything.
+
 ## [1.3.1] - 2026-07-27
 
 ### Added

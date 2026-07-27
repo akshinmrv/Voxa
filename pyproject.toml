@@ -55,6 +55,9 @@ xtts = ["coqui-tts", "torchaudio"]
 piper = ["piper-tts"]
 faster = ["faster-whisper"]
 anthropic = ["anthropic"]
+# URL input (voxa <video-url>). Downloading may breach a platform's Terms of Service — you
+# are responsible for the rights to the content. See the README's "Dubbing from a URL" note.
+url = ["yt-dlp"]
 # `voxa serve` — the optional operator web server (see voxa_server.py).
 serve = ["fastapi", "uvicorn[standard]", "python-multipart"]
 dev = ["pytest", "ruff"]

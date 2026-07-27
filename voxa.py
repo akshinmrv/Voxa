@@ -237,11 +237,19 @@ def _check_external_tools() -> bool:
     return True
 
 
+def _looks_like_url(s: str) -> bool:
+    """True for an http(s) URL input (resolved to a local file via yt-dlp before the run)."""
+    return s.startswith(("http://", "https://"))
+
+
 def _check_input_videos(videos: List[str]) -> bool:
     """Verify every input path exists, is a file and is non-empty, before creating a
-    workspace or loading any model."""
+    workspace or loading any model. URL inputs are skipped — they are validated when
+    downloaded (or reported by --dry-run)."""
     ok = True
     for v in videos:
+        if _looks_like_url(v):
+            continue
         p = Path(v)
         if not p.exists():
             print(f"❌ Input video not found: {v}")
@@ -262,6 +270,73 @@ class FFmpegError(RuntimeError):
 
 class TTSError(Exception):
     """Raised by a TTS adapter when speech synthesis cannot proceed."""
+
+
+class VideoDownloadError(RuntimeError):
+    """A URL input could not be fetched (yt-dlp missing, network, or unavailable video)."""
+
+
+_YTDLP_HINT = "URL input needs yt-dlp — install it with:  pip install 'voxa-dub[url]'"
+
+
+def _ytdlp_available() -> bool:
+    try:
+        import yt_dlp  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def download_video(url: str, dest_dir: Path) -> Path:
+    """Download one video URL to `dest_dir` with yt-dlp and return the local mp4 path.
+
+    Optional feature: yt-dlp is an extra, not a core dependency. **Downloading may breach the
+    source platform's Terms of Service — the caller is responsible for having the right to the
+    content** (the CLI prints this before it runs). An already-downloaded file is reused, so a
+    re-run resumes instead of fetching again."""
+    try:
+        import yt_dlp
+    except Exception as e:
+        raise VideoDownloadError(_YTDLP_HINT) from e
+    opts = {
+        "outtmpl": str(dest_dir / "%(title).80s [%(id)s].%(ext)s"),
+        "format": "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
+        "merge_output_format": "mp4",
+        "noplaylist": True,
+        "overwrites": False,        # reuse a prior download (resume-friendly)
+        "quiet": True, "no_warnings": True, "noprogress": True,
+    }
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            path = Path(ydl.prepare_filename(info))
+            if not path.exists():           # after a merge the real file is the .mp4
+                path = path.with_suffix(".mp4")
+    except VideoDownloadError:
+        raise
+    except Exception as e:
+        raise VideoDownloadError(f"failed to download {url}: {e}") from e
+    if not path.exists() or path.stat().st_size == 0:
+        raise VideoDownloadError(f"download produced no usable file for {url}")
+    return path
+
+
+def _resolve_video_inputs(videos: List[str], dest_dir: Path, logger=None) -> List[str]:
+    """Return a list of local file paths: a URL is downloaded via yt-dlp (with a Terms-of-Service
+    notice), a local path is passed through unchanged."""
+    log = (logger.info if logger else print)
+    resolved: List[str] = []
+    for v in videos:
+        if not _looks_like_url(v):
+            resolved.append(v)
+            continue
+        log(f"🌐 Downloading from {v} via yt-dlp")
+        log("   ⚠️  You are responsible for having the right to this content; downloading "
+            "may breach the source platform's Terms of Service.")
+        path = download_video(v, dest_dir)
+        log(f"   ✓ Saved: {path.name}")
+        resolved.append(str(path))
+    return resolved
 
 
 def run_ffmpeg(cmd: List[str], what: str, *, stderr_lines: int = 5) -> None:
@@ -1048,6 +1123,8 @@ def plan_blockers(args) -> List[str]:
     sample = getattr(args, "voice_sample", None)
     if args.tts == "xtts" and sample and not Path(sample).exists():
         problems.append(f"voice sample not found: {sample}")
+    if any(_looks_like_url(v) for v in getattr(args, "videos", [])) and not _ytdlp_available():
+        problems.append(_YTDLP_HINT)
     return problems
 
 
@@ -3026,7 +3103,9 @@ Examples:
         """
     )
 
-    parser.add_argument("videos", nargs="+", help="Input video file(s)")
+    parser.add_argument("videos", nargs="+",
+                        help="Input video file(s), or http(s) URL(s) to download first "
+                             "(URLs need the optional 'url' extra: pip install 'voxa-dub[url]')")
     parser.add_argument("--version", action="version", version=f"voxa {__version__}",
                         help="Show the version and exit")
     parser.add_argument("--target_lang", default="ru", help="Target language code (default: ru)")
@@ -3195,6 +3274,17 @@ Examples:
     # filename or a missing FFmpeg produces a readable error and leaves no stray folder.
     if not _check_external_tools():
         return 1
+
+    # Resolve URL inputs to local files (optional yt-dlp feature). Downloading is a real
+    # action with side effects, so a dry run never does it — it reports the pending download
+    # in the plan instead (and flags a missing yt-dlp as a blocker).
+    if not args.dry_run and any(_looks_like_url(v) for v in args.videos):
+        try:
+            args.videos = _resolve_video_inputs(args.videos, Path.cwd())
+        except VideoDownloadError as e:
+            print(f"❌ {e}")
+            return 1
+
     if not _check_input_videos(args.videos):
         return 1
 
@@ -3205,6 +3295,14 @@ Examples:
         out_dir = Path(args.output_dir) if args.output_dir else Path.cwd()
         blockers = plan_blockers(args)
         for index, video in enumerate(args.videos):
+            if index:
+                print()
+            if _looks_like_url(video):
+                print(f"input        {video}")
+                print("  ↓ would download with yt-dlp, then run the pipeline on the result")
+                print("  (output path, duration and cached-step reuse are known only after "
+                      "the download)")
+                continue
             source = Path(video)
             plan_dir = Path.cwd() / f"{source.stem}_work"
             plan = build_run_plan(
@@ -3215,8 +3313,6 @@ Examples:
                 reusable=reusable_stages(StateManager(plan_dir), args),
                 blockers=blockers,
             )
-            if index:
-                print()
             print("\n".join(plan))
         return 1 if blockers else 0
 

@@ -375,6 +375,52 @@ def test_detect_version_reads_pyproject_fallback():
         assert m and re.match(r"^\d+\.\d+\.\d+", m.group(1))
 
 
+# ── URL input (optional yt-dlp) ──────────────────────────
+def test_looks_like_url():
+    assert voxa._looks_like_url("https://youtu.be/x")
+    assert voxa._looks_like_url("http://example.com/v.mp4")
+    assert not voxa._looks_like_url("video.mp4")
+    assert not voxa._looks_like_url("/path/to/video.mp4")
+
+
+def test_check_input_videos_skips_urls(tmp_path):
+    # A URL alone passes (validated when downloaded); a missing local file still fails.
+    assert voxa._check_input_videos(["https://youtu.be/x"]) is True
+    assert voxa._check_input_videos([str(tmp_path / "nope.mp4")]) is False
+
+
+def test_resolve_video_inputs_downloads_only_urls(monkeypatch, tmp_path):
+    calls = []
+
+    def _fake_dl(url, dest):
+        calls.append((url, dest))
+        return tmp_path / "downloaded.mp4"
+
+    monkeypatch.setattr(voxa, "download_video", _fake_dl)
+    out = voxa._resolve_video_inputs(["local.mp4", "https://youtu.be/x"], tmp_path)
+    assert out[0] == "local.mp4"                              # local passes through untouched
+    assert out[1] == str(tmp_path / "downloaded.mp4")         # URL gets downloaded
+    assert calls == [("https://youtu.be/x", tmp_path)]        # only the URL hit the downloader
+
+
+def test_resolve_video_inputs_propagates_download_error(monkeypatch, tmp_path):
+    def _boom(url, dest):
+        raise voxa.VideoDownloadError("no network")
+
+    monkeypatch.setattr(voxa, "download_video", _boom)
+    with pytest.raises(voxa.VideoDownloadError):
+        voxa._resolve_video_inputs(["https://youtu.be/x"], tmp_path)
+
+
+def test_plan_blockers_flags_missing_ytdlp(monkeypatch):
+    args = SimpleNamespace(translator="google", tts="edge", voice_sample=None,
+                           openai_tts_base_url=None, videos=["https://youtu.be/x"])
+    monkeypatch.setattr(voxa, "_ytdlp_available", lambda: False)
+    assert any("yt-dlp" in b for b in voxa.plan_blockers(args))   # flagged when absent
+    monkeypatch.setattr(voxa, "_ytdlp_available", lambda: True)
+    assert not any("yt-dlp" in b for b in voxa.plan_blockers(args))  # silent when present
+
+
 # ── Provider registry ────────────────────────────────────
 def test_provider_registry_has_openai_and_anthropic():
     assert "openai" in voxa.LLM_PROVIDERS

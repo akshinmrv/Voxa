@@ -264,6 +264,13 @@ açıktır — port eşlemeli bir istek buna uymaz, bu yüzden konsolu yerel ola
 | `pipx install "voxa-dub[piper]"` | `--tts piper` — tamamen çevrimdışı |
 | `pipx install "voxa-dub[anthropic]"` | `--translator anthropic` |
 | `pipx install "voxa-dub[xtts]"` | `--tts xtts` ses klonlama |
+| `pipx install "voxa-dub[url]"` | `voxa <video-url>` — girişi önce indir (yt-dlp) |
+
+> [!NOTE]
+> **URL'den dublaj** (`voxa "https://…" --target_lang de`) videoyu `yt-dlp` ile indirip normal
+> pipeline'ı çalıştırır. İndirme, kaynak platformun Kullanım Koşullarını ihlal edebilir —
+> **içeriğe hakkınız olmasından siz sorumlusunuz**; CLI indirmeden önce bunu uyarır. Yerel
+> dosyalar eskisi gibi çalışır.
 
 > [!WARNING]
 > `voxa-dub[xtts]` bakımı sürdürülen [`coqui-tts`](https://github.com/idiap/coqui-ai-TTS) çatalını
