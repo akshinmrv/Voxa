@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-26
+
 ### Changed
 
 - **Network TTS now synthesises in parallel.** OpenAI and Edge speech ran one HTTP request
@@ -22,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - OpenAI TTS requests now retry with exponential backoff on rate-limit / 5xx errors, so the
   added concurrency rides out a 429 instead of dropping that segment's audio.
+- **The operator console exposes the parallel-synthesis worker count.** Settings → Advanced has
+  a "Parallel speech requests" field (1–16) that drives `--tts-workers` for console jobs, so the
+  concurrency can be raised or lowered without touching the CLI.
 
 ## [1.2.0] - 2026-07-26
 
@@ -148,7 +153,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/akshinmrv/Voxa/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/akshinmrv/Voxa/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/akshinmrv/Voxa/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/akshinmrv/Voxa/compare/v1.0.0...v1.0.1
