@@ -528,6 +528,33 @@ def test_diarize_segments_requires_token(monkeypatch):
         voxa.diarize_segments("a.wav", [{"start": 0, "end": 1, "text": "hi"}], hf_token=None)
 
 
+# ── Per-speaker voices (--diarize, P1) ───────────────────
+def test_assign_speaker_voices_distinct_and_cycling():
+    # Two speakers, three voices -> the first two, in first-appearance order.
+    assert voxa.assign_speaker_voices(["A", "B", "A", "B"], ["v1", "v2", "v3"]) \
+        == {"A": "v1", "B": "v2"}
+    # More speakers than voices -> the pool cycles.
+    assert voxa.assign_speaker_voices(["A", "B", "C"], ["v1", "v2"]) \
+        == {"A": "v1", "B": "v2", "C": "v1"}
+    # None speakers and an empty pool are handled without error.
+    assert voxa.assign_speaker_voices([None, None], ["v1"]) == {}
+    assert voxa.assign_speaker_voices(["A"], []) == {}
+
+
+def test_seconds_to_subtime_and_sub_ms():
+    st = voxa._seconds_to_subtime(3723.456)                 # 1h 2m 3s 456ms
+    assert (st.hours, st.minutes, st.seconds, st.milliseconds) == (1, 2, 3, 456)
+    sub = voxa.Subtitle(1, voxa._seconds_to_subtime(2.5), voxa._seconds_to_subtime(5.0), "hi", "A")
+    assert voxa._sub_start_ms(sub) == 2500 and voxa._sub_end_ms(sub) == 5000
+
+
+def test_subtitle_speaker_defaults_none():
+    # read_srt builds 4-field Subtitles, so the new speaker field must default to None.
+    sub = voxa.Subtitle(1, voxa._seconds_to_subtime(0), voxa._seconds_to_subtime(1), "hi")
+    assert sub.speaker is None
+    assert sub.text == "hi"
+
+
 # ── Provider registry ────────────────────────────────────
 def test_provider_registry_has_openai_and_anthropic():
     assert "openai" in voxa.LLM_PROVIDERS

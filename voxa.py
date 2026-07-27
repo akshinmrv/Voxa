@@ -815,11 +815,20 @@ def _openai_speech_create(client, kwargs, max_retries: int = 5):
             raise
 
 
+# Voice pool for per-speaker assignment under --diarize (the same names --openai-voice accepts).
+# Ordered contrast-first: the earliest voices are the most audibly distinct from one another, so
+# the common two- or three-speaker case gets an obvious separation (a deep male, then a bright
+# female, then an expressive voice) instead of two similar mid-range voices.
+OPENAI_TTS_VOICE_POOL = ["onyx", "nova", "fable", "shimmer", "echo", "alloy",
+                         "ash", "ballad", "coral", "sage", "verse"]
+
+
 async def generate_openai_tts(subs, client, voice: str, model: str, instructions: str,
                              lang_code: str, concat_list: list, temp_files: list,
                              work_dir: Path, enable_stretch: bool,
                              quality_gate: bool = False, asr_model=None,
-                             emotion_detection: bool = False, concurrency: int = 1):
+                             emotion_detection: bool = False, concurrency: int = 1,
+                             speaker_voices: Optional[Dict[str, str]] = None):
     """Speech via OpenAI TTS (gpt-4o-mini-tts): multilingual, instructable delivery, no
     cloning. With emotion_detection an LLM tags each line with a delivery direction (A2 T1).
     Timeline, placement and scoring come from synthesize_timeline."""
@@ -846,7 +855,10 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
         raw_file = work_dir / f"otts_raw_{i}.wav"
         hint = _delivery_hint(i, deliveries, subs[i].text)
         seg_instr = _build_tts_instructions(instructions, hint)
-        kwargs = {"model": model, "voice": voice, "input": text, "response_format": "wav"}
+        seg_voice = voice
+        if speaker_voices:
+            seg_voice = speaker_voices.get(getattr(subs[i], "speaker", None), voice)
+        kwargs = {"model": model, "voice": seg_voice, "input": text, "response_format": "wav"}
         if seg_instr:
             kwargs["instructions"] = seg_instr
         resp = _openai_speech_create(client, kwargs)
@@ -1302,6 +1314,23 @@ async def get_edge_voice(lang_code: str, emotion: Optional[str] = None) -> Tuple
     return "en-US-ChristopherNeural", False
 
 
+async def get_edge_voices(lang_code: str) -> List[str]:
+    """Distinct Edge voice names for a language (style-capable ones first), so different
+    speakers can get different voices under --diarize. Returns at least one name."""
+    try:
+        voices = await edge_tts.VoicesManager.create()
+        suitable = voices.find(Locale=lang_code) or \
+            [v for v in voices.voices if v['Locale'].startswith(lang_code[:2])]
+        styled = [v['Name'] for v in suitable if v.get('StyleList')]
+        plain = [v['Name'] for v in suitable if not v.get('StyleList')]
+        names = list(dict.fromkeys(styled + plain))
+        if names:
+            return names
+    except Exception as e:
+        _LOG.warning(f"Edge voice pool lookup failed: {e}")
+    return ["en-US-ChristopherNeural"]
+
+
 def format_timestamp(seconds: float) -> str:
     td = timedelta(seconds=seconds)
     hours = td.seconds // 3600
@@ -1331,6 +1360,7 @@ class Subtitle(NamedTuple):
     start: SubTime
     end: SubTime
     text: str
+    speaker: Optional[str] = None   # set only when --diarize tags who is speaking
 
 
 _SRT_TIME_RE = re.compile(r"(\d+):(\d{2}):(\d{2})[,.](\d{1,3})")
@@ -1382,6 +1412,27 @@ def _segments_from_srt(path: str) -> List[Dict]:
                          "end": _sub_end_ms(s) / 1000.0,
                          "text": text})
     return segments
+
+
+def _seconds_to_subtime(sec: float) -> SubTime:
+    """Seconds -> SubTime, so diarized translated segments can be turned into Subtitle records
+    that carry a speaker (the SRT round-trip would drop it)."""
+    ms = max(0, int(round(sec * 1000)))
+    return SubTime(ms // 3600000, (ms % 3600000) // 60000, (ms % 60000) // 1000, ms % 1000)
+
+
+def assign_speaker_voices(speakers: Sequence[Optional[str]],
+                          voice_pool: Sequence[str]) -> Dict[str, str]:
+    """Map each distinct speaker to a voice from the pool, in first-appearance order, cycling
+    the pool when there are more speakers than voices. Deterministic — the same input always
+    yields the same mapping. Pure (the testable core of per-speaker voice assignment)."""
+    order: List[str] = []
+    for s in speakers:
+        if s is not None and s not in order:
+            order.append(s)
+    if not voice_pool:
+        return {}
+    return {spk: voice_pool[i % len(voice_pool)] for i, spk in enumerate(order)}
 
 
 _EMOTION_WORDS = {
@@ -2025,12 +2076,19 @@ def diarize_segments(audio_path: str, segments: List[Dict], *, num_speakers: Opt
     except Exception as e:
         raise DiarizationError(_PYANNOTE_HINT) from e
     try:
-        pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1",
-                                            use_auth_token=token)
+        try:
+            pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1",
+                                                token=token)
+        except TypeError:
+            # pyannote.audio < 4 spelled the token argument use_auth_token.
+            pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1",
+                                                use_auth_token=token)
         if torch is not None and torch.cuda.is_available():
             pipeline.to(torch.device("cuda"))
         opts = {"num_speakers": num_speakers} if num_speakers else {}
-        annotation = pipeline(audio_path, **opts)
+        result = pipeline(audio_path, **opts)
+        # pyannote.audio >= 4 wraps the result; the Annotation is on .speaker_diarization.
+        annotation = getattr(result, "speaker_diarization", result)
         turns = [(str(label), float(turn.start), float(turn.end))
                  for turn, _, label in annotation.itertracks(yield_label=True)]
     except Exception as e:
@@ -2512,7 +2570,10 @@ def parallel_translate(segments: List[Dict], target_lang: str, translator_type: 
         translated = translate_with_retry(text, target_lang, translator_type, ollama_model,
                                           llm_model=llm_model,
                                           llm_api_key=llm_api_key)
-        return idx, {'text': translated, 'start': seg['start'], 'end': seg['end']}
+        out = {'text': translated, 'start': seg['start'], 'end': seg['end']}
+        if 'speaker' in seg:
+            out['speaker'] = seg['speaker']
+        return idx, out
 
     results = [None] * len(segments)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -2532,7 +2593,8 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
                                   enable_stretch: bool, emotion_detection: bool,
                                   rate_adjust: bool, has_emotion_support: bool = False,
                                   quality_gate: bool = False, asr_model=None,
-                                  gate_lang=None, concurrency: int = 1
+                                  gate_lang=None, concurrency: int = 1,
+                                  speaker_voices: Optional[Dict[str, str]] = None
                                   ) -> Tuple[List[str], List[str]]:
     """Speech via Microsoft Edge voices. Timeline, placement and scoring come from
     synthesize_timeline; this only turns one line of text into one WAV."""
@@ -2544,8 +2606,15 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
         raw_file = work_dir / f"edge_raw_{i}.mp3"
         wav_file = work_dir / f"edge_cnv_{i}.wav"
 
+        # Per-speaker voice under --diarize. Emotion styling is skipped in that mode: a mapped
+        # voice may not support the requested style, and a voice change already carries the turn.
+        seg_voice = voice
+        if speaker_voices:
+            seg_voice = speaker_voices.get(getattr(subs[i], "speaker", None), voice)
+        styled = has_emotion_support and not speaker_voices
+
         emotion = None
-        if emotion_detection and has_emotion_support:
+        if emotion_detection and styled:
             emotion = detect_emotion(txt)
             if emotion:
                 emotion_stats[emotion] = emotion_stats.get(emotion, 0) + 1
@@ -2559,8 +2628,7 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
                 rate = f"{rate_factor * 100:+.0f}%"
 
         if not _has_content(raw_file):
-            if not await generate_tts_edge(txt, voice, str(raw_file), emotion, rate,
-                                           has_emotion_support):
+            if not await generate_tts_edge(txt, seg_voice, str(raw_file), emotion, rate, styled):
                 return False
         temp_files.append(str(raw_file))
 
@@ -2785,6 +2853,13 @@ async def _tts_edge(subs, args, work_dir, video_path, gate_asr, logger):
     logger.info(f"🔎 Finding voice for: {args.target_lang}")
     voice, has_emotions = await get_edge_voice(args.target_lang)
     logger.info(f"🎙️  Selected: {voice} (Emotions: {'Yes' if has_emotions else 'No'})")
+    speaker_voices = None
+    if getattr(args, "diarize", False):
+        pool = await get_edge_voices(args.target_lang)
+        speaker_voices = assign_speaker_voices([s.speaker for s in subs], pool)
+        if speaker_voices:
+            logger.info(f"🗣️  Per-speaker voices: "
+                        f"{', '.join(f'{k}→{v}' for k, v in speaker_voices.items())}")
     return await synthesize_speech_batch(
         subs, voice, work_dir,
         enable_stretch=not args.no_stretch,
@@ -2793,7 +2868,8 @@ async def _tts_edge(subs, args, work_dir, video_path, gate_asr, logger):
         has_emotion_support=has_emotions,
         quality_gate=args.quality_gate, asr_model=gate_asr,
         gate_lang=args.target_lang[:2].lower(),
-        concurrency=max(1, getattr(args, "tts_workers", 4))
+        concurrency=max(1, getattr(args, "tts_workers", 4)),
+        speaker_voices=speaker_voices
     )
 
 
@@ -2865,6 +2941,12 @@ async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
         logger.warning(f"⚠️  Speech style asks for slower delivery ({', '.join(conflicts)}). "
                        f"The timing guard still applies, so the dub stays anchored to the "
                        f"source — that part of the style will not take effect.")
+    speaker_voices = None
+    if getattr(args, "diarize", False):
+        speaker_voices = assign_speaker_voices([s.speaker for s in subs], OPENAI_TTS_VOICE_POOL)
+        if speaker_voices:
+            logger.info(f"🗣️  Per-speaker voices: "
+                        f"{', '.join(f'{k}→{v}' for k, v in speaker_voices.items())}")
     concat_list, temp_files = [], []
     await generate_openai_tts(
         subs, client, args.openai_voice, args.openai_tts_model,
@@ -2873,7 +2955,8 @@ async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
         enable_stretch=not args.no_stretch,
         quality_gate=args.quality_gate, asr_model=gate_asr,
         emotion_detection=args.detect_emotion,
-        concurrency=max(1, getattr(args, "tts_workers", 4))
+        concurrency=max(1, getattr(args, "tts_workers", 4)),
+        speaker_voices=speaker_voices
     )
     return concat_list, temp_files
 
@@ -3051,7 +3134,8 @@ async def process_video(video_path: str, args, logger: Logger):
             )
             translated_texts = _apply_translation_fallback(texts, translated_texts, args, logger)
             translated_segments = [
-                {'text': tt or seg['text'].strip(), 'start': seg['start'], 'end': seg['end']}
+                {'text': tt or seg['text'].strip(), 'start': seg['start'], 'end': seg['end'],
+                 **({'speaker': seg['speaker']} if 'speaker' in seg else {})}
                 for seg, tt in zip(indexed, translated_texts)
             ]
             log_llm_usage_summary(args.translator, llm_model)
@@ -3069,8 +3153,9 @@ async def process_video(video_path: str, args, logger: Logger):
                     continue
                 translated = translate_with_retry(text, args.target_lang,
                                                   args.translator, args.ollama_model)
-                translated_segments.append({'text': translated, 'start': seg['start'],
-                                            'end': seg['end']})
+                translated_segments.append(
+                    {'text': translated, 'start': seg['start'], 'end': seg['end'],
+                     **({'speaker': seg['speaker']} if 'speaker' in seg else {})})
         with open(translated_json, 'w', encoding='utf-8') as f:
             json.dump(translated_segments, f, ensure_ascii=False, indent=2)
         state.mark_completed('translation', translation_sig)
@@ -3108,7 +3193,14 @@ async def process_video(video_path: str, args, logger: Logger):
                             f"file(s) before re-synthesizing")
         state.set_signature('synthesis', synthesis_sig)
         logger.info("[6/7] Synthesizing speech...")
-        subs = read_srt(srt_file)
+        if getattr(args, "diarize", False):
+            # Build subs straight from the translated segments so the speaker tag survives to
+            # synthesis (the SRT has no speaker field). Same content the SRT was written from.
+            subs = [Subtitle(i + 1, _seconds_to_subtime(s['start']),
+                             _seconds_to_subtime(s['end']), s['text'], s.get('speaker'))
+                    for i, s in enumerate(translated_segments) if s.get('text', '').strip()]
+        else:
+            subs = read_srt(srt_file)
         gate_asr = _get_gate_asr(args.gate_model) if args.quality_gate else None
 
         spec = TTS_PROVIDERS.get(args.tts)
