@@ -350,6 +350,9 @@ voxa video.mp4 --target_lang fr --translator ollama --tts piper
 # Yalnızca altyazı
 voxa video.mp4 --target_lang es --subtitles-only
 
+# Mevcut SRT'den dublaj — Whisper'ı atla (elle düzeltilmiş altyazı veya zaten var olan)
+voxa video.mp4 --target_lang de --subtitles captions.srt
+
 # Tek komutta birden çok video
 voxa a.mp4 b.mp4 c.mp4 --target_lang tr
 

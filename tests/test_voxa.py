@@ -421,6 +421,49 @@ def test_plan_blockers_flags_missing_ytdlp(monkeypatch):
     assert not any("yt-dlp" in b for b in voxa.plan_blockers(args))  # silent when present
 
 
+# ── External subtitles import (--subtitles) ──────────────
+def test_file_sig_missing_and_present(tmp_path):
+    assert voxa._file_sig(str(tmp_path / "nope.srt")) == "missing"
+    f = tmp_path / "x.srt"
+    f.write_text("hi", encoding="utf-8")
+    assert ":" in voxa._file_sig(str(f))                 # size:mtime
+
+
+def test_segments_from_srt(tmp_path):
+    srt = tmp_path / "in.srt"
+    srt.write_text(
+        "1\n00:00:00,000 --> 00:00:02,000\nHello there.\n\n"
+        "2\n00:00:02,500 --> 00:00:05,000\nSecond\nline here.\n\n"
+        "3\n00:00:05,000 --> 00:00:06,000\n\n",           # empty cue -> dropped
+        encoding="utf-8")
+    segs = voxa._segments_from_srt(str(srt))
+    assert len(segs) == 2
+    assert segs[0] == {"start": 0.0, "end": 2.0, "text": "Hello there."}
+    assert segs[1]["text"] == "Second line here."         # multi-line cue collapsed
+    assert segs[1]["start"] == 2.5 and segs[1]["end"] == 5.0
+
+
+def test_transcription_signature_tracks_subtitles(tmp_path):
+    srt = tmp_path / "s.srt"
+    srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nHi\n", encoding="utf-8")
+    base = SimpleNamespace(whisper_model="base", whisper_backend="openai", subtitles=None)
+    withsrt = SimpleNamespace(whisper_model="base", whisper_backend="openai", subtitles=str(srt))
+    # Providing subtitles changes the transcription signature (so a cached Whisper run isn't reused)
+    assert voxa.stage_signature("transcription", base) \
+        != voxa.stage_signature("transcription", withsrt)
+    # ...and editing the SRT invalidates it again (size changes).
+    sig1 = voxa.stage_signature("transcription", withsrt)
+    srt.write_text("1\n00:00:00,000 --> 00:00:02,000\nHi there, friend\n", encoding="utf-8")
+    assert sig1 != voxa.stage_signature("transcription", withsrt)
+
+
+def test_plan_blockers_flags_missing_subtitles(tmp_path):
+    args = SimpleNamespace(translator="google", tts="edge", voice_sample=None,
+                           openai_tts_base_url=None, videos=["v.mp4"],
+                           subtitles=str(tmp_path / "nope.srt"))
+    assert any("subtitles file not found" in b for b in voxa.plan_blockers(args))
+
+
 # ── Provider registry ────────────────────────────────────
 def test_provider_registry_has_openai_and_anthropic():
     assert "openai" in voxa.LLM_PROVIDERS

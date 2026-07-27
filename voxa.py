@@ -1009,6 +1009,16 @@ class StateManager:
 # it, not just the stage itself. This is what fixes the stale-work-directory bug: dubbing
 # the same video to a second language reuses transcription but regenerates translation and
 # speech, instead of silently returning the first language's audio.
+def _file_sig(path: str) -> str:
+    """A cheap content signature (size + mtime) for a file, so a change to it invalidates the
+    cached stage that consumed it. Returns 'missing' when the file is absent."""
+    try:
+        st = Path(path).stat()
+        return f"{st.st_size}:{int(st.st_mtime)}"
+    except OSError:
+        return "missing"
+
+
 _PIPELINE_STAGES = ["extract_audio", "audio_enhancement", "transcription",
                     "merge_sentences", "translation", "synthesis"]
 
@@ -1019,8 +1029,13 @@ def _stage_own_params(stage: str, args) -> Dict:
     audio_enhancement depend only on the source video, which is already covered by the
     input_sig check, so they contribute nothing here."""
     if stage == "transcription":
-        return {"whisper_model": args.whisper_model,
-                "whisper_backend": args.whisper_backend}
+        params = {"whisper_model": args.whisper_model,
+                  "whisper_backend": args.whisper_backend}
+        # Provided subtitles stand in for Whisper; their content must invalidate the cache.
+        srt = getattr(args, "subtitles", None)
+        if srt:
+            params["subtitles"] = _file_sig(srt)
+        return params
     if stage == "merge_sentences":
         # The non-speech filter runs every load, but merged_sentences.json is cached, so a
         # threshold change must invalidate the merge (and downstream), not the transcript.
@@ -1125,6 +1140,9 @@ def plan_blockers(args) -> List[str]:
         problems.append(f"voice sample not found: {sample}")
     if any(_looks_like_url(v) for v in getattr(args, "videos", [])) and not _ytdlp_available():
         problems.append(_YTDLP_HINT)
+    srt = getattr(args, "subtitles", None)
+    if srt and not Path(srt).exists():
+        problems.append(f"subtitles file not found: {srt}")
     return problems
 
 
@@ -1142,8 +1160,11 @@ def build_run_plan(video_name: str, args, *, work_dir: Path, output_file: Path,
     length = f"  ({duration:.1f}s)" if duration else ""
     lines = [f"🔎 Dry run — {video_name}{length}", ""]
 
-    lines.append(row("transcribe", f"whisper {args.whisper_model} "
-                                   f"({args.whisper_backend} backend)"))
+    if getattr(args, "subtitles", None):
+        lines.append(row("transcribe", f"skipped — using {args.subtitles}"))
+    else:
+        lines.append(row("transcribe", f"whisper {args.whisper_model} "
+                                       f"({args.whisper_backend} backend)"))
 
     translator = args.translator
     model = getattr(args, f"{translator}_model", None)
@@ -1332,6 +1353,21 @@ def read_srt(path) -> List[Subtitle]:
         text = "\n".join(lines[cursor + 1:]).strip()
         subs.append(Subtitle(index, start, end, text))
     return subs
+
+
+def _segments_from_srt(path: str) -> List[Dict]:
+    """Read an external SRT into the transcription segment format ({start, end, text} in
+    seconds), so provided subtitles can stand in for Whisper and skip transcription entirely.
+    Multi-line cues collapse to a single spoken line; empty cues are dropped."""
+    segments: List[Dict] = []
+    for s in read_srt(path):
+        text = " ".join(s.text.split())
+        if not text:
+            continue
+        segments.append({"start": _sub_start_ms(s) / 1000.0,
+                         "end": _sub_end_ms(s) / 1000.0,
+                         "text": text})
+    return segments
 
 
 _EMOTION_WORDS = {
@@ -2804,8 +2840,11 @@ async def process_video(video_path: str, args, logger: Logger):
 
     start_time = time.time()
 
-    # Step 1: Extract audio
-    if state.is_completed('extract_audio') and audio_wav.exists():
+    # Step 1: Extract audio (only needed for transcription — skipped when subtitles are given)
+    using_subtitles = bool(getattr(args, "subtitles", None))
+    if using_subtitles:
+        logger.info("[1/7] ✓ Audio extraction skipped (using provided subtitles)")
+    elif state.is_completed('extract_audio') and audio_wav.exists():
         logger.info("[1/7] ✓ Audio extraction already completed")
     else:
         logger.info("[1/7] Extracting audio...")
@@ -2815,8 +2854,10 @@ async def process_video(video_path: str, args, logger: Logger):
         ], "Audio extraction")
         state.mark_completed('extract_audio')
 
-    # Step 2: Audio enhancement
-    if state.is_completed('audio_enhancement') and audio_clean.exists():
+    # Step 2: Audio enhancement (only for transcription — skipped with provided subtitles)
+    if using_subtitles:
+        logger.info("[2/7] ✓ Audio enhancement skipped (using provided subtitles)")
+    elif state.is_completed('audio_enhancement') and audio_clean.exists():
         logger.info("[2/7] ✓ Audio enhancement already completed")
     else:
         logger.info("[2/7] Enhancing audio (noise reduction)...")
@@ -2830,6 +2871,20 @@ async def process_video(video_path: str, args, logger: Logger):
         logger.info("[3/7] ✓ Transcription already completed")
         with open(transcript_json, 'r', encoding='utf-8') as f:
             segments = json.load(f)
+    elif using_subtitles:
+        logger.info(f"[3/7] Using provided subtitles: {args.subtitles}")
+        try:
+            segments = _segments_from_srt(args.subtitles)
+        except Exception as e:
+            logger.error(f"Could not read --subtitles {args.subtitles}: {e}")
+            return 1
+        if not segments:
+            logger.error(f"--subtitles {args.subtitles} produced no usable cues")
+            return 1
+        logger.info(f"📄 Loaded {len(segments)} subtitle cues (transcription skipped)")
+        with open(transcript_json, 'w', encoding='utf-8') as f:
+            json.dump(segments, f, ensure_ascii=False, indent=2)
+        state.mark_completed('transcription', transcription_sig)
     else:
         logger.info(f"[3/7] Transcribing with Whisper ({args.whisper_model}, "
                     f"backend: {args.whisper_backend})...")
@@ -2847,8 +2902,10 @@ async def process_video(video_path: str, args, logger: Logger):
             return 1
 
     # Transcription hygiene: drop non-speech (music/intro) segments Whisper hallucinated,
-    # so the dub doesn't speak over the source's silent/intro sections.
-    segments = filter_nonspeech_segments(segments, args.no_speech_threshold)
+    # so the dub doesn't speak over the source's silent/intro sections. Provided subtitles
+    # are authoritative, so they are never filtered.
+    if not using_subtitles:
+        segments = filter_nonspeech_segments(segments, args.no_speech_threshold)
 
     # Step 4: Merge into sentences
     merged_segments = []
@@ -3216,6 +3273,11 @@ Examples:
                         help="Keep temporary files")
     parser.add_argument("--subtitles-only", action="store_true",
                         help="Generate only subtitles")
+    parser.add_argument("--subtitles", default=None, metavar="SRT",
+                        help="Use this source-language .srt instead of transcribing the video "
+                             "(skips Whisper). Handy for re-dubbing with hand-corrected "
+                             "captions, or when accurate subtitles already exist. The lines "
+                             "are still translated and spoken.")
     parser.add_argument("--verbose", action="store_true",
                         help="Enable verbose (DEBUG-level) logging")
     parser.add_argument("--log-format", choices=["plain", "json"], default="plain",
@@ -3286,6 +3348,9 @@ Examples:
             return 1
 
     if not _check_input_videos(args.videos):
+        return 1
+    if args.subtitles and not args.dry_run and not Path(args.subtitles).exists():
+        print(f"❌ Subtitles file not found: {args.subtitles}")
         return 1
 
     # --dry-run reports and exits here, before anything is created: the workspace and its

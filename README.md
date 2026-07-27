@@ -373,6 +373,9 @@ voxa video.mp4 --target_lang ru --dry-run
 # Subtitles only, no synthesis
 voxa video.mp4 --target_lang es --subtitles-only
 
+# Dub from an existing SRT — skip Whisper (hand-corrected captions, or subtitles you already have)
+voxa video.mp4 --target_lang de --subtitles captions.srt
+
 # Several videos in one command
 voxa a.mp4 b.mp4 c.mp4 --target_lang ru
 

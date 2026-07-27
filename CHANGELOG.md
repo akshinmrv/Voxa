@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Import subtitles with `--subtitles file.srt`.** Skip Whisper and dub from a source-language
+  SRT you already have — hand-corrected captions, or accurate subtitles that shipped with the
+  source. The lines are still translated and spoken; audio extraction and transcription are
+  skipped, and editing the SRT re-runs the stages that depend on it. Local files and the normal
+  transcribe-first flow are unchanged.
+
 ## [1.4.0] - 2026-07-27
 
 ### Added
