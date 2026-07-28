@@ -2167,6 +2167,26 @@ def _plan_anchored_block(actual_ms: float, start_ms: float,
     return 0.0, max(0.0, room - actual_ms)
 
 
+# A dubbed line may breathe into the pause before the next line, so a longer target-language
+# line is spoken at a natural pace instead of being sped up to fit only its own spoken window.
+# This is the minimum silence kept before the next onset, so consecutive lines never run together.
+MIN_INTER_LINE_GAP_MS = 150.0
+
+
+def _dub_target_ms(own_ms: float, start_ms: float, next_start_ms) -> float:
+    """Duration to fit a dubbed line into, anchored at start_ms (Pillar 1). With a known next
+    onset the line may extend into the following pause — up to MIN_INTER_LINE_GAP_MS before that
+    onset — so a longer translation keeps a natural pace instead of being compressed to its own
+    spoken window. It never reaches next_start (that would delay the next line and break the
+    anchor), and it never shortens below the line's own window. With no next onset (the last
+    line) it keeps its own spoken duration."""
+    own = float(own_ms)
+    if next_start_ms is None:
+        return own
+    slot = float(next_start_ms) - float(start_ms)
+    return max(own, slot - MIN_INTER_LINE_GAP_MS)
+
+
 def _sub_start_ms(sub) -> int:
     t = sub.start
     return (t.hours * 3600 + t.minutes * 60 + t.seconds) * 1000 + t.milliseconds
@@ -2217,7 +2237,10 @@ async def _prerender_parallel(subs, *, render, text_of, prefix, work_dir, min_by
         text = text_of(sub)
         final_file = work_dir / f"{prefix}_fin_{i}.wav"
         if text and not _has_content(final_file, min_bytes):
-            target_duration = (_sub_end_ms(sub) - _sub_start_ms(sub)) / 1000.0
+            start_ms = _sub_start_ms(sub)
+            next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
+            target_duration = _dub_target_ms(_sub_end_ms(sub) - start_ms,
+                                              start_ms, next_start_ms) / 1000.0
             async with sem:
                 try:
                     if render_is_async:
@@ -2273,7 +2296,8 @@ async def synthesize_timeline(subs, *, engine: str, prefix: str, sample_rate: in
         text = text_of(sub)
         if not text:
             continue
-        target_duration = (end_ms - start_ms) / 1000.0
+        next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
+        target_duration = _dub_target_ms(end_ms - start_ms, start_ms, next_start_ms) / 1000.0
 
         # ── Silence up to this segment's source onset ───────
         sil_ms = start_ms - cursor_ms
@@ -2300,7 +2324,6 @@ async def synthesize_timeline(subs, *, engine: str, prefix: str, sample_rate: in
         gate_score = on_ready(i, text, final_file, target_duration) if on_ready else None
 
         if _has_content(final_file, min_bytes):
-            next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
             cursor_ms = _place_speech_block(final_file, start_ms, end_ms, next_start_ms,
                                             sample_rate, work_dir, i, concat_list, temp_files)
             generated += 1

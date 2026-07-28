@@ -294,6 +294,19 @@ def test_plan_anchored_block():
     assert trim == 0.0 and pad == 0.0
 
 
+def test_dub_target_borrows_the_following_pause():
+    gap = voxa.MIN_INTER_LINE_GAP_MS
+    # A line at [1000, 3000] (own 2000ms) with a pause until the next onset at 5000:
+    # the slot is 4000ms, so the line may breathe up to (4000 - gap) instead of only 2000ms.
+    assert voxa._dub_target_ms(2000, 1000, 5000) == pytest.approx(4000 - gap)
+    # No usable pause (next onset right at the line's end) → keep the own window, never shrink.
+    assert voxa._dub_target_ms(2000, 1000, 3000) == 2000.0
+    # A pause smaller than the kept breath must not shrink the line below its own window.
+    assert voxa._dub_target_ms(2000, 1000, 3000 + gap / 2) == 2000.0
+    # The last line (no next onset) keeps its own spoken duration.
+    assert voxa._dub_target_ms(2000, 1000, None) == 2000.0
+
+
 def test_sub_start_ms():
     class _T:
         hours, minutes, seconds, milliseconds = 0, 1, 2, 300
@@ -1129,6 +1142,30 @@ def test_synthesize_timeline_prerenders_only_when_parallel(tmp_path, monkeypatch
     assert seen == []                                    # sequential: no Phase A
     asyncio.run(voxa.synthesize_timeline(subs, **common, concurrency=4))
     assert seen == [4]                                   # parallel: Phase A once, N=4
+
+
+def test_prerender_target_borrows_the_following_pause(tmp_path):
+    """The parallel pre-render must fit each line to the same gap-borrowing target the
+    sequential path uses — otherwise it would over-compress a longer line, and the placement
+    pass would just reuse that already-rushed clip."""
+    import asyncio
+    from pathlib import Path
+    captured = {}
+
+    def _render(i, text, final_file, target_duration):
+        captured[i] = target_duration
+        Path(final_file).write_bytes(b"FIN".ljust(1500, b"0"))
+        return True
+
+    # seg0 speaks [0, 1000] then a pause until the next onset at 3000ms; seg1 is the last line.
+    subs = [_fake_sub("bir", 0, 1000), _fake_sub("iki", 3000, 4000)]
+    asyncio.run(voxa._prerender_parallel(
+        subs, render=_render, text_of=lambda s: s.text, prefix="p", work_dir=tmp_path,
+        min_bytes=100, concurrency=2, engine="edge", desc="t"))
+    # seg0 breathes into the pause: slot 3000ms minus the kept inter-line gap, not its own 1000ms.
+    assert captured[0] == pytest.approx((3000 - voxa.MIN_INTER_LINE_GAP_MS) / 1000.0)
+    # seg1 has no next onset, so it keeps its own spoken window.
+    assert captured[1] == pytest.approx(1.0)
 
 
 # ── T1: Piper brought up to the S0/SY2 standard ──────────
