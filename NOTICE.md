@@ -53,6 +53,7 @@ Licenses below were read from the installed package metadata.
 | [piper-tts](https://github.com/rhasspy/piper) | `--tts piper` | MIT |
 | [coqui-tts](https://github.com/idiap/coqui-ai-TTS) | `--tts xtts` | MPL-2.0 (toolkit only) |
 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | `--whisper-backend faster` | MIT |
+| [pyannote.audio](https://github.com/pyannote/pyannote-audio) | `--diarize` (speaker diarization) | MIT |
 
 ### ⚠️ Copyleft dependencies you should know about
 
@@ -92,6 +93,7 @@ Voxa downloads models at runtime; it never ships weights.
 | Whisper weights (OpenAI) | MIT | ✅ Allowed |
 | Piper voices | Per-voice (commonly MIT / CC-BY) | ✅ Check the individual voice |
 | **XTTS-v2 weights (Coqui)** | **Coqui Public Model License (CPML) 1.0** | ❌ **Non-commercial only** |
+| **pyannote `speaker-diarization-3.1`** | MIT (access-gated on Hugging Face) | ✅ Allowed — accept the terms and pass a token |
 
 ### About XTTS
 
@@ -106,6 +108,14 @@ Coqui Inc. **ceased operations in January 2024**. Consequences:
 If you need voice cloning for a commercial product, XTTS is not a viable path. Consider an
 MIT-licensed alternative such as [Chatterbox](https://github.com/resemble-ai/chatterbox), served
 behind an OpenAI-compatible endpoint.
+
+### About diarization
+
+`--diarize` uses [pyannote.audio](https://github.com/pyannote/pyannote-audio) (MIT). Its pretrained
+pipeline, `pyannote/speaker-diarization-3.1`, is **MIT-licensed** but **gated on Hugging Face**: you
+accept its terms once and pass a token (`--hf-token` / `HF_TOKEN`). The gate is access control, not a
+commercial restriction — unlike the XTTS weights above, there is no non-commercial clause. It is an
+optional extra (`voxa-dub[diarize]`) and is off by default.
 
 ---
 

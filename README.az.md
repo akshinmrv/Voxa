@@ -264,6 +264,15 @@ işləyir (`serve --host 0.0.0.0`), amma onun settings endpoint-ləri yalnız lo
 | `pipx install "voxa-dub[anthropic]"` | `--translator anthropic` |
 | `pipx install "voxa-dub[xtts]"` | `--tts xtts` səs klonlama |
 | `pipx install "voxa-dub[url]"` | `voxa <video-url>` — girişi əvvəlcə yüklə (yt-dlp) |
+| `pipx install "voxa-dub[diarize]"` | `--diarize` — hər danışana ayrı səs (pyannote) |
+
+> [!NOTE]
+> **Çox danışan** (`--diarize`) kimin nə vaxt danışdığını aşkarlayır və hər danışana ayrı səs verir —
+> müsahibə/podkast tək səslə dublyaj olunmasın. Hugging Face token (`--hf-token` və ya `HF_TOKEN`) və
+> [hf.co/pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
+> ünvanında model şərtlərinin birdəfəlik qəbulu lazımdır — model MIT lisenziyalıdır, sadəcə gated.
+> Danışan sayını bilirsənsə `--num-speakers N` ver. Edge və OpenAI TTS hər danışana ayrı səs alır;
+> Piper/XTTS hələ tək səsdir və `--diarize` `--subtitles` ilə birləşmir (mənbə audio lazımdır).
 
 > [!NOTE]
 > **URL-dən dublyaj** (`voxa "https://…" --target_lang de`) videonu `yt-dlp` ilə yükləyib adi
@@ -361,6 +370,9 @@ voxa video.mp4 --target_lang es --subtitles-only
 # Hazır SRT-dən dublyaj — Whisper-i atla (düzəldilmiş altyazı, ya da onsuz da mövcud olan)
 voxa video.mp4 --target_lang de --subtitles captions.srt
 
+# Hər danışana öz səsi (müsahibə, podkast) — Hugging Face token lazımdır
+voxa video.mp4 --target_lang de --diarize --num-speakers 2 --hf-token hf_...
+
 # Bir əmrdə bir neçə video
 voxa a.mp4 b.mp4 c.mp4 --target_lang az
 
@@ -371,6 +383,12 @@ voxa video.mp4 --target_lang az --quality-gate --gate-model base
 voxa video.mp4 --target_lang tr --tts openai \
      --openai-tts-base-url http://localhost:8004/v1
 ```
+
+> [!TIP]
+> Hədəf dil ingiliscədən uzundursa (türkçə, rusca) ən təbii nəticəni **LLM translator** verir
+> (`--translator openai` / `anthropic` / `openrouter`): hər sətir uzunluq büdcəsi alır, ona görə
+> öz slotuna təbii sürətlə sığır. Sətirlər həm də sonrakı pauzaya nəfəs alır — sürətləndirilmir.
+> `google` hərfi tərcümə edir, ona görə uzun sətir hələ də sıxıla bilər.
 
 ## Veb interfeys (`voxa serve`)
 

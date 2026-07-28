@@ -68,9 +68,10 @@ No API key is required. The defaults work out of the box.
 | **Voice cloning** | XTTS v2 from a short reference sample, auto-extracted from the source if you don't supply one |
 | **OpenAI TTS** | `gpt-4o-mini-tts` with instructable delivery |
 | **Expressive delivery** | `--detect-emotion` selects native voice styles on Edge; on OpenAI TTS an LLM tags each line with an emotion/energy/pace instruction |
+| **Speaker diarization** | `--diarize` detects who speaks when and gives each speaker their own voice on Edge and OpenAI TTS (pyannote, optional extra) |
 | **Self-hosted speech** | `--openai-tts-base-url` drives any OpenAI-compatible `/v1/audio/speech` server — no API key, no extra dependency |
 | **Offline speech** | Piper, fully offline after the model download |
-| **Anchored placement** | Over-runs are trimmed with a fade; short clips are padded; drift cannot accumulate |
+| **Anchored placement** | Each line stays in sync with the speaker; a longer translation breathes into the pause that follows instead of being rushed, and drift cannot accumulate |
 | **Quality gate** | Each clip is transcribed back and scored (word error rate, clipping, silence, pacing), with a per-job report |
 | **Auto-regeneration** | XTTS sampling is stochastic, so a flagged segment is re-synthesized up to twice and the best take is kept |
 | **Batch processing** | Pass several videos in one command |
@@ -272,6 +273,16 @@ callers and a port-mapped request does not qualify — run the console natively 
 | `pipx install "voxa-dub[anthropic]"` | `--translator anthropic` |
 | `pipx install "voxa-dub[xtts]"` | `--tts xtts` voice cloning |
 | `pipx install "voxa-dub[url]"` | `voxa <video-url>` — download the input first (yt-dlp) |
+| `pipx install "voxa-dub[diarize]"` | `--diarize` — a distinct voice per speaker (pyannote) |
+
+> [!NOTE]
+> **Multiple speakers** (`--diarize`) detects who speaks when and gives each speaker a distinct
+> voice, so an interview or podcast isn't dubbed in one voice. It needs a Hugging Face token
+> (`--hf-token` or `HF_TOKEN`) and a one-time acceptance of the model terms at
+> [hf.co/pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) —
+> the model is MIT-licensed and free to ship, only gated. Pass `--num-speakers N` if you know the
+> count. Edge and OpenAI TTS get per-speaker voices; Piper and XTTS stay single-voice for now, and
+> `--diarize` isn't combinable with `--subtitles` (diarization needs the source audio).
 
 > [!NOTE]
 > **Dubbing from a URL** (`voxa "https://…" --target_lang de`) downloads the video with
@@ -384,6 +395,9 @@ voxa video.mp4 --target_lang es --subtitles-only
 # Dub from an existing SRT — skip Whisper (hand-corrected captions, or subtitles you already have)
 voxa video.mp4 --target_lang de --subtitles captions.srt
 
+# Give every speaker their own voice (interviews, podcasts) — needs a Hugging Face token
+voxa video.mp4 --target_lang de --diarize --num-speakers 2 --hf-token hf_...
+
 # Several videos in one command
 voxa a.mp4 b.mp4 c.mp4 --target_lang ru
 
@@ -394,6 +408,12 @@ voxa video.mp4 --target_lang az --quality-gate --gate-model base
 voxa video.mp4 --target_lang tr --tts openai \
      --openai-tts-base-url http://localhost:8004/v1
 ```
+
+> [!TIP]
+> A wordier target language (Turkish or Russian for an English source) reads most naturally with an
+> **LLM translator** (`--translator openai` / `anthropic` / `openrouter`): each line gets a length
+> budget so it fits its slot at a natural pace. Lines also breathe into the pause that follows
+> instead of being sped up. `google` translates literally, so a long line can still be compressed.
 
 ## Optional local console (`voxa serve`)
 
@@ -468,7 +488,8 @@ tested honestly.
 
 | Item | Status | Note |
 |---|---|---|
-| Parallel synthesis for network engines | Planned | Requests are issued sequentially today; this is the main performance headroom |
+| Per-speaker voices for Piper & XTTS | Considering | Edge and OpenAI TTS get distinct voices under `--diarize` today; offline engines stay single-voice |
+| Diarization robustness | Considering | Min-turn smoothing and confidence handling for noisy multi-speaker audio |
 | Azure Neural TTS adapter | Blocked | Needs an API key to test. Official `az-AZ` voices and real SSML prosody |
 | Speaker similarity and MOS scoring | Considering | Would extend the quality gate beyond word error rate |
 | Wider golden set | Considering | More languages and edge cases in the regression harness |

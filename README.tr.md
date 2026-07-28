@@ -265,6 +265,16 @@ açıktır — port eşlemeli bir istek buna uymaz, bu yüzden konsolu yerel ola
 | `pipx install "voxa-dub[anthropic]"` | `--translator anthropic` |
 | `pipx install "voxa-dub[xtts]"` | `--tts xtts` ses klonlama |
 | `pipx install "voxa-dub[url]"` | `voxa <video-url>` — girişi önce indir (yt-dlp) |
+| `pipx install "voxa-dub[diarize]"` | `--diarize` — her konuşmacıya ayrı ses (pyannote) |
+
+> [!NOTE]
+> **Birden çok konuşmacı** (`--diarize`) kimin ne zaman konuştuğunu algılar ve her konuşmacıya ayrı
+> bir ses verir — röportaj/podcast tek sesle dublajlanmasın. Bir Hugging Face token'ı (`--hf-token`
+> veya `HF_TOKEN`) ve
+> [hf.co/pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
+> adresinde model koşullarının bir kez kabul edilmesi gerekir — model MIT lisanslıdır, yalnızca
+> gated. Sayıyı biliyorsanız `--num-speakers N` verin. Edge ve OpenAI TTS her konuşmacıya ayrı ses
+> alır; Piper/XTTS şimdilik tek ses ve `--diarize`, `--subtitles` ile birleşmez (kaynak ses gerekir).
 
 > [!NOTE]
 > **URL'den dublaj** (`voxa "https://…" --target_lang de`) videoyu `yt-dlp` ile indirip normal
@@ -361,6 +371,9 @@ voxa video.mp4 --target_lang es --subtitles-only
 # Mevcut SRT'den dublaj — Whisper'ı atla (elle düzeltilmiş altyazı veya zaten var olan)
 voxa video.mp4 --target_lang de --subtitles captions.srt
 
+# Her konuşmacıya kendi sesi (röportaj, podcast) — Hugging Face token gerekir
+voxa video.mp4 --target_lang de --diarize --num-speakers 2 --hf-token hf_...
+
 # Tek komutta birden çok video
 voxa a.mp4 b.mp4 c.mp4 --target_lang tr
 
@@ -371,6 +384,12 @@ voxa video.mp4 --target_lang az --quality-gate --gate-model base
 voxa video.mp4 --target_lang tr --tts openai \
      --openai-tts-base-url http://localhost:8004/v1
 ```
+
+> [!TIP]
+> Hedef dil kaynaktan daha uzunsa (Türkçe, Rusça) en doğal sonucu **LLM çevirmen** verir
+> (`--translator openai` / `anthropic` / `openrouter`): her satır bir uzunluk bütçesi alır, böylece
+> kendi yuvasına doğal bir hızda sığar. Satırlar ayrıca sonraki duraklamaya nefes alır —
+> hızlandırılmaz. `google` birebir çevirir, bu yüzden uzun bir satır yine de sıkıştırılabilir.
 
 ## Web arayüzü (`voxa serve`)
 
