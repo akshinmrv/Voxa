@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-07-28
+
 ### Added
 
 - **Speaker diarization with per-speaker voices (`--diarize`).** Detects who speaks when
@@ -17,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--num-speakers` hint. Default off, so runs without `--diarize` are byte-for-byte unchanged.
   Piper/XTTS stay single-voice for now, and it isn't yet combinable with `--subtitles`
   (diarization needs the source audio).
+
+### Changed
+
+- **Dubbed lines now breathe into the pause before the next line.** When the target language is
+  wordier than the source (Turkish or Russian for English, say), a line no longer has to be sped
+  up to fit only its original spoken window — it may extend into the following silence, up to a
+  short gap before the next line's onset, so the pace stays natural instead of sounding rushed.
+  The start of every line is still anchored to the source timeline, so nothing drifts and lines
+  never overlap. This pairs with an LLM translator's per-line length budget for the most natural
+  result; with the plain `google` translator a very verbose line can still be compressed to fit.
 
 ## [1.5.0] - 2026-07-27
 
@@ -200,7 +212,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/akshinmrv/Voxa/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/akshinmrv/Voxa/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/akshinmrv/Voxa/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/akshinmrv/Voxa/compare/v1.3.0...v1.3.1
