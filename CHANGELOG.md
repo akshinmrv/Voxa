@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--diarize`. It appears only when the `diarize` extra is installed, and the Hugging Face token is
   read from the server's environment, just like the OpenAI key.
 
+### Changed
+
+- **Diarization folds a voice it accidentally split.** In auto mode (no `--num-speakers` or
+  `--max-speakers`), pyannote can split one clean voice into two speakers; Voxa now merges speakers
+  whose voice embeddings are near-identical back into one, so a two-person clip isn't dubbed in
+  three voices. It merges by voice, not by timing, so it never mislabels the way a positional guess
+  would, and setting a count or bound keeps pyannote's own clustering untouched.
+
 ## [1.6.2] - 2026-07-28
 
 ### Added

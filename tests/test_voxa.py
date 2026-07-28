@@ -582,6 +582,27 @@ def test_merge_signature_tracks_max_speakers():
         == voxa.stage_signature("merge_sentences", bare)
 
 
+def test_merge_similar_speakers_folds_over_split():
+    # SPEAKER_01 and SPEAKER_02 are the same voice (identical embeddings); SPEAKER_00 differs.
+    turns = [("SPEAKER_00", 0.0, 4.0), ("SPEAKER_02", 4.0, 7.0),
+             ("SPEAKER_01", 7.0, 9.0), ("SPEAKER_02", 9.0, 11.0)]
+    labels = ["SPEAKER_00", "SPEAKER_01", "SPEAKER_02"]
+    emb = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 0.0]]   # 01 ≈ 02, both orthogonal to 00
+    out = voxa._merge_similar_speakers(turns, labels, emb, threshold=0.5)
+    # 01 is folded into the longer-speaking 02; the distinct 00 is untouched.
+    assert {t[0] for t in out} == {"SPEAKER_00", "SPEAKER_02"}
+    assert sum(1 for t in out if t[0] == "SPEAKER_00") == 1
+
+
+def test_merge_similar_speakers_keeps_distinct_and_is_safe():
+    turns = [("A", 0.0, 2.0), ("B", 2.0, 4.0)]
+    emb = [[1.0, 0.0], [0.0, 1.0]]                              # orthogonal → nothing merges
+    assert voxa._merge_similar_speakers(turns, ["A", "B"], emb, threshold=0.5) == turns
+    # No embeddings (pyannote < 4) or a shape mismatch → unchanged, never crashes.
+    assert voxa._merge_similar_speakers(turns, ["A", "B"], None) == turns
+    assert voxa._merge_similar_speakers(turns, ["A", "B", "C"], emb) == turns
+
+
 # ── Per-speaker voices (--diarize, P1) ───────────────────
 def test_assign_speaker_voices_distinct_and_cycling():
     # Two speakers, three voices -> the first two, in first-appearance order.

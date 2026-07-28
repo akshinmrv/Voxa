@@ -2106,6 +2106,59 @@ def _nearest_turn_speaker(seg: Dict,
     return best
 
 
+# Two pyannote speaker embeddings this close (cosine) are almost certainly the same voice that the
+# clustering over-split into two labels. Same-speaker pairs sit ~0.7-0.9, different speakers ~0-0.4,
+# so this threshold catches an over-split while staying clear of two genuinely similar voices.
+SPEAKER_MERGE_COSINE = 0.5
+
+
+def _merge_similar_speakers(turns: Sequence[Tuple[str, float, float]], labels: Sequence[str],
+                            embeddings, threshold: float = SPEAKER_MERGE_COSINE
+                            ) -> List[Tuple[str, float, float]]:
+    """Fold speakers whose voice embeddings are near-identical into one (P3): pyannote sometimes
+    splits a single clean voice into two labels, which would then be dubbed in two voices. Merges
+    by embedding, not time or duration, so it never mislabels the way a positional heuristic would;
+    the longer-speaking label in each cluster is the one kept. Pure — `labels[i]` pairs with
+    `embeddings[i]`; returns the turns unchanged when nothing merges, embeddings are missing, or the
+    shape is unexpected (so pyannote < 4, which exposes no embeddings, is unaffected)."""
+    if embeddings is None or len(labels) < 2:
+        return list(turns)
+    import numpy as np
+    emb = np.asarray(embeddings, dtype="float64")
+    if emb.ndim != 2 or emb.shape[0] != len(labels):
+        return list(turns)
+    dur: Dict[str, float] = {}
+    for spk, s, e in turns:
+        dur[spk] = dur.get(spk, 0.0) + (e - s)
+    normed = emb / (np.linalg.norm(emb, axis=1, keepdims=True) + 1e-9)
+    parent = {lab: lab for lab in labels}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    n = len(labels)
+    for i in range(n):
+        for j in range(i + 1, n):
+            if float(normed[i] @ normed[j]) >= threshold:
+                ri, rj = find(labels[i]), find(labels[j])
+                if ri != rj:
+                    parent[rj] = ri
+    groups: Dict[str, List[str]] = {}
+    for lab in labels:
+        groups.setdefault(find(lab), []).append(lab)
+    remap: Dict[str, str] = {}
+    for members in groups.values():
+        rep = max(members, key=lambda lab: dur.get(lab, 0.0))
+        for lab in members:
+            remap[lab] = rep
+    if all(remap[lab] == lab for lab in labels):
+        return list(turns)
+    return [(remap.get(spk, spk), s, e) for spk, s, e in turns]
+
+
 def diarize_segments(audio_path: str, segments: List[Dict], *, num_speakers: Optional[int] = None,
                      min_speakers: Optional[int] = None, max_speakers: Optional[int] = None,
                      hf_token: Optional[str] = None) -> List[Dict]:
@@ -2152,6 +2205,13 @@ def diarize_segments(audio_path: str, segments: List[Dict], *, num_speakers: Opt
         annotation = getattr(result, "speaker_diarization", result)
         turns = [(str(label), float(turn.start), float(turn.end))
                  for turn, _, label in annotation.itertracks(yield_label=True)]
+        # Auto mode (no count/bounds) is where an unconstrained clustering over-splits a single
+        # voice into two labels; fold those back together by their speaker embeddings.
+        if not (num_speakers or min_speakers or max_speakers):
+            labels = list(annotation.labels()) if hasattr(annotation, "labels") \
+                else sorted({t[0] for t in turns})
+            turns = _merge_similar_speakers(turns, labels,
+                                            getattr(result, "speaker_embeddings", None))
     except Exception as e:
         raise DiarizationError(f"pyannote diarization failed: {e}") from e
     turns = _filter_short_turns(turns)
