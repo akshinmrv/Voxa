@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-07-28
+
 ### Added
 
 - **`--min-speakers` / `--max-speakers` for `--diarize`.** Bound the speaker count when you don't
@@ -240,7 +242,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.6.2...HEAD
+[1.6.2]: https://github.com/akshinmrv/Voxa/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/akshinmrv/Voxa/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/akshinmrv/Voxa/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/akshinmrv/Voxa/compare/v1.4.0...v1.5.0
