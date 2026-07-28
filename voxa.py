@@ -1061,6 +1061,11 @@ def _stage_own_params(stage: str, args) -> Dict:
         if getattr(args, "diarize", False):
             params["diarize"] = True
             params["num_speakers"] = getattr(args, "num_speakers", None)
+            # Only recorded when set, so an existing --diarize run keeps its exact signature.
+            if getattr(args, "min_speakers", None):
+                params["min_speakers"] = args.min_speakers
+            if getattr(args, "max_speakers", None):
+                params["max_speakers"] = args.max_speakers
         return params
     if stage == "translation":
         model = getattr(args, f"{args.translator}_model", None)   # None for google
@@ -2075,7 +2080,34 @@ def _assign_speaker(seg: Dict, turns: Sequence[Tuple[str, float, float]]) -> Opt
     return best
 
 
+# Diarization turns shorter than this are almost always spurious — a clipped word or a brief
+# overlap misattributed to a new speaker. Dropping them before assignment reduces flicker (P2).
+MIN_DIARIZATION_TURN_S = 0.25
+
+
+def _filter_short_turns(turns: Sequence[Tuple[str, float, float]],
+                        min_dur: float = MIN_DIARIZATION_TURN_S) -> List[Tuple[str, float, float]]:
+    """Drop diarization turns shorter than min_dur (likely noise). Never returns empty for a
+    non-empty input — if every turn is short the audio is simply brief, so keep it as-is."""
+    kept = [t for t in turns if (t[2] - t[1]) >= min_dur]
+    return kept or list(turns)
+
+
+def _nearest_turn_speaker(seg: Dict,
+                          turns: Sequence[Tuple[str, float, float]]) -> Optional[str]:
+    """Speaker of the turn nearest in time to a segment that overlaps none — a better fallback
+    than an arbitrary first turn when a segment lands in a diarization gap. Pure."""
+    best, best_gap = None, None
+    mid = (seg['start'] + seg['end']) / 2.0
+    for spk, s, e in turns:
+        gap = 0.0 if s <= mid <= e else min(abs(mid - s), abs(mid - e))
+        if best_gap is None or gap < best_gap:
+            best, best_gap = spk, gap
+    return best
+
+
 def diarize_segments(audio_path: str, segments: List[Dict], *, num_speakers: Optional[int] = None,
+                     min_speakers: Optional[int] = None, max_speakers: Optional[int] = None,
                      hf_token: Optional[str] = None) -> List[Dict]:
     """Tag every transcription segment with a 'speaker' from pyannote diarization; returns a new
     list (inputs untouched). Optional feature: pyannote.audio is an extra and its pretrained
@@ -2098,19 +2130,37 @@ def diarize_segments(audio_path: str, segments: List[Dict], *, num_speakers: Opt
                                                 use_auth_token=token)
         if torch is not None and torch.cuda.is_available():
             pipeline.to(torch.device("cuda"))
-        opts = {"num_speakers": num_speakers} if num_speakers else {}
-        result = pipeline(audio_path, **opts)
+        # An exact count wins; otherwise optional bounds curb over-/under-splitting. pyannote
+        # does the constrained clustering itself, so this never mislabels the way a hand-rolled
+        # merge would.
+        if num_speakers:
+            opts = {"num_speakers": num_speakers}
+        else:
+            opts = {}
+            if min_speakers:
+                opts["min_speakers"] = min_speakers
+            if max_speakers:
+                opts["max_speakers"] = max_speakers
+        try:
+            result = pipeline(audio_path, **opts)
+        except TypeError:
+            # A pyannote build that doesn't accept these bounds shouldn't break diarization —
+            # fall back to an unconstrained (or exact-count) run.
+            result = pipeline(audio_path,
+                              **({"num_speakers": num_speakers} if num_speakers else {}))
         # pyannote.audio >= 4 wraps the result; the Annotation is on .speaker_diarization.
         annotation = getattr(result, "speaker_diarization", result)
         turns = [(str(label), float(turn.start), float(turn.end))
                  for turn, _, label in annotation.itertracks(yield_label=True)]
     except Exception as e:
         raise DiarizationError(f"pyannote diarization failed: {e}") from e
+    turns = _filter_short_turns(turns)
     fallback = turns[0][0] if turns else "SPEAKER_00"
     out: List[Dict] = []
     for seg in segments:
         tagged = dict(seg)
-        tagged['speaker'] = _assign_speaker(seg, turns) or fallback
+        tagged['speaker'] = (_assign_speaker(seg, turns)
+                             or _nearest_turn_speaker(seg, turns) or fallback)
         out.append(tagged)
     return out
 
@@ -3140,6 +3190,8 @@ async def process_video(video_path: str, args, logger: Logger):
             try:
                 segments = diarize_segments(str(audio_wav), segments,
                                             num_speakers=args.num_speakers,
+                                            min_speakers=getattr(args, "min_speakers", None),
+                                            max_speakers=getattr(args, "max_speakers", None),
                                             hf_token=args.hf_token)
             except DiarizationError as e:
                 logger.error(f"Diarization failed: {e}")
@@ -3518,12 +3570,19 @@ Examples:
                              "captions, or when accurate subtitles already exist. The lines "
                              "are still translated and spoken.")
     parser.add_argument("--diarize", action="store_true",
-                        help="Detect who speaks when (pyannote) and keep each sentence within "
-                             "one speaker. Needs the 'diarize' extra and a Hugging Face token "
-                             "(HF_TOKEN). Distinct voices per speaker land in a later release.")
+                        help="Detect who speaks when (pyannote) and give each speaker their own "
+                             "voice on Edge and OpenAI TTS. Needs the 'diarize' extra and a "
+                             "Hugging Face token (HF_TOKEN).")
     parser.add_argument("--num-speakers", type=int, default=None, metavar="N",
                         help="Hint the exact number of speakers for --diarize (optional; "
                              "improves accuracy when you know it).")
+    parser.add_argument("--min-speakers", type=int, default=None, metavar="N",
+                        help="Lower bound on the speaker count for --diarize (ignored when "
+                             "--num-speakers is set).")
+    parser.add_argument("--max-speakers", type=int, default=None, metavar="N",
+                        help="Upper bound on the speaker count for --diarize — curbs "
+                             "over-splitting when the exact count is unknown (ignored when "
+                             "--num-speakers is set).")
     parser.add_argument("--hf-token", default=None,
                         help="Hugging Face token for --diarize (falls back to the HF_TOKEN env "
                              "var). Accept the model terms on its Hugging Face page first.")

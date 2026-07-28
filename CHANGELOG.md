@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`--min-speakers` / `--max-speakers` for `--diarize`.** Bound the speaker count when you don't
+  know it exactly — pyannote clusters within the bounds, which curbs the over-splitting a clean or
+  short recording can produce. `--num-speakers` still wins when you do know the exact count.
+
+### Changed
+
+- **Diarization is steadier.** Sub-quarter-second diarization turns (a clipped word, a brief
+  misattribution to a new speaker) are dropped before speakers are assigned, and a segment that
+  overlaps no turn now takes the nearest turn's speaker instead of an arbitrary one.
+
 ## [1.6.1] - 2026-07-28
 
 ### Changed

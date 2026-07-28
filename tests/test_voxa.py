@@ -541,6 +541,47 @@ def test_diarize_segments_requires_token(monkeypatch):
         voxa.diarize_segments("a.wav", [{"start": 0, "end": 1, "text": "hi"}], hf_token=None)
 
 
+# ── Diarization robustness (--diarize, P2) ───────────────
+def test_filter_short_turns_drops_spurious():
+    turns = [("A", 0.0, 2.0), ("B", 2.0, 2.1), ("A", 2.1, 4.0)]   # B is a 0.1s flicker
+    assert voxa._filter_short_turns(turns) == [("A", 0.0, 2.0), ("A", 2.1, 4.0)]
+    # If every turn is short, keep them rather than returning nothing (the audio is just brief).
+    tiny = [("A", 0.0, 0.1), ("B", 0.1, 0.2)]
+    assert voxa._filter_short_turns(tiny) == tiny
+
+
+def test_nearest_turn_speaker_fallback():
+    turns = [("A", 0.0, 2.0), ("B", 5.0, 7.0)]
+    # A segment in the gap [2, 5] overlaps nothing, so it takes the nearer turn's speaker.
+    assert voxa._nearest_turn_speaker({"start": 2.2, "end": 2.8}, turns) == "A"
+    assert voxa._nearest_turn_speaker({"start": 4.5, "end": 4.9}, turns) == "B"
+
+
+def test_merge_single_speaker_matches_no_speaker():
+    plain = [{"start": 0.0, "end": 1.0, "text": "Hello"},
+             {"start": 1.0, "end": 2.0, "text": "there"}]
+    one = [dict(s, speaker="A") for s in plain]
+    m_plain = voxa.merge_segments_into_sentences(plain, max_duration=100)
+    m_one = voxa.merge_segments_into_sentences(one, max_duration=100)
+    # One speaker must never split the sentence: same text and timing, only a speaker tag added.
+    assert [{k: v for k, v in b.items() if k != "speaker"} for b in m_one] == m_plain
+    assert all(b["speaker"] == "A" for b in m_one)
+
+
+def test_merge_signature_tracks_max_speakers():
+    common = dict(max_sentence_duration=10.0, no_speech_threshold=0.6,
+                  whisper_model="base", whisper_backend="openai", subtitles=None,
+                  diarize=True, num_speakers=None)
+    plain = SimpleNamespace(**common, min_speakers=None, max_speakers=None)
+    capped = SimpleNamespace(**common, min_speakers=None, max_speakers=3)
+    assert voxa.stage_signature("merge_sentences", plain) \
+        != voxa.stage_signature("merge_sentences", capped)
+    # An unset bound leaves the signature identical to before the bound existed (no needless purge).
+    bare = SimpleNamespace(**common)
+    assert voxa.stage_signature("merge_sentences", plain) \
+        == voxa.stage_signature("merge_sentences", bare)
+
+
 # ── Per-speaker voices (--diarize, P1) ───────────────────
 def test_assign_speaker_voices_distinct_and_cycling():
     # Two speakers, three voices -> the first two, in first-appearance order.
