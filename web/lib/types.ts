@@ -28,6 +28,8 @@ export type VoxaOptions = {
   openaiTtsModels: WhisperModel[];
   openaiVoices: WhisperModel[];
   speechPresets: SpeechPreset[];
+  /** Whether the optional pyannote extra is installed, so the form can offer diarization. */
+  diarizeAvailable?: boolean;
 };
 
 export type JobConfig = {
@@ -38,6 +40,9 @@ export type JobConfig = {
   voiceSample?: string;
   openaiTtsModel?: string;
   openaiVoice?: string;
+  diarize?: boolean;
+  numSpeakers?: number;
+  maxSpeakers?: number;
 };
 
 export type JobStatus = "queued" | "running" | "done" | "failed";

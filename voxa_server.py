@@ -118,6 +118,8 @@ def build_options() -> dict:
         "openaiVoices": [{"id": v, "label": v} for v in OPENAI_VOICES],
         "speechPresets": [{"id": k, "label": k.capitalize()}
                           for k in SPEECH_STYLE_PRESETS],
+        # So the job form can offer diarization only when the optional extra is installed.
+        "diarizeAvailable": voxa._pyannote_available(),
     }
 
 
@@ -152,6 +154,9 @@ class JobConfigModel(BaseModel):
     voiceSample: Optional[str] = None
     openaiTtsModel: Optional[str] = None
     openaiVoice: Optional[str] = None
+    diarize: bool = False
+    numSpeakers: Optional[int] = None
+    maxSpeakers: Optional[int] = None
 
 
 class CreateJobModel(BaseModel):
@@ -247,6 +252,7 @@ async def _run_job(job: Job) -> None:
                 cmd += ["--openai-tts-model", cfg.openaiTtsModel]
             if cfg.openaiVoice:
                 cmd += ["--openai-voice", cfg.openaiVoice]
+        cmd += diarize_args(cfg)
 
         # Force UTF-8 in the child so its emoji log lines encode to the pipe on any
         # console codepage (Windows defaults to a legacy ANSI codepage otherwise).
@@ -515,6 +521,20 @@ def translation_fallback_args(settings: dict) -> List[str]:
     when the primary LLM translator substantially fails, so it's safe to always pass."""
     fb = (settings.get("translation") or {}).get("fallback")
     return ["--fallback-translator", fb] if fb else []
+
+
+def diarize_args(cfg: JobConfigModel) -> List[str]:
+    """CLI flags for a job's diarization choice (empty when off). An exact speaker count wins;
+    otherwise an optional upper bound curbs over-splitting. The HF token flows to the child
+    through the inherited environment, exactly like the OpenAI key does."""
+    if not cfg.diarize:
+        return []
+    args = ["--diarize"]
+    if cfg.numSpeakers:
+        args += ["--num-speakers", str(cfg.numSpeakers)]
+    elif cfg.maxSpeakers:
+        args += ["--max-speakers", str(cfg.maxSpeakers)]
+    return args
 
 
 def advanced_timing_args(settings: dict) -> List[str]:

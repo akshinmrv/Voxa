@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The operator console runs diarization.** The `voxa serve` job form now has a "Speakers" toggle
+  that gives each speaker their own voice, with an optional speaker count — mirroring the CLI's
+  `--diarize`. It appears only when the `diarize` extra is installed, and the Hugging Face token is
+  read from the server's environment, just like the OpenAI key.
+
 ## [1.6.2] - 2026-07-28
 
 ### Added

@@ -452,3 +452,23 @@ def test_tts_workers_roundtrip_and_validation(client):
     assert client.put("/api/settings", json={"advanced": {"ttsWorkers": 0}}).status_code == 422
     assert client.put("/api/settings",
                       json={"advanced": {"ttsWorkers": "many"}}).status_code == 422
+
+
+# ── Operator console diarization ─────────────────────────
+def test_diarize_args_builds_flags():
+    base = dict(targetLang="tr", translator="google", tts="edge")
+    assert srv.diarize_args(srv.JobConfigModel(**base)) == []
+    assert srv.diarize_args(srv.JobConfigModel(**base, diarize=True)) == ["--diarize"]
+    assert srv.diarize_args(srv.JobConfigModel(**base, diarize=True, numSpeakers=2)) == \
+        ["--diarize", "--num-speakers", "2"]
+    assert srv.diarize_args(srv.JobConfigModel(**base, diarize=True, maxSpeakers=3)) == \
+        ["--diarize", "--max-speakers", "3"]
+    # An exact count wins over an upper bound.
+    assert srv.diarize_args(
+        srv.JobConfigModel(**base, diarize=True, numSpeakers=2, maxSpeakers=5)) == \
+        ["--diarize", "--num-speakers", "2"]
+
+
+def test_build_options_reports_diarize_availability():
+    # The job form uses this flag to offer diarization only when the extra is installed.
+    assert "diarizeAvailable" in srv.build_options()

@@ -54,6 +54,8 @@ export function NewJobFlow() {
     voiceSample: sel.voiceSample,
     openaiTtsModel: sel.openaiTtsModel ?? options.openaiTtsModels[0]?.id ?? "gpt-4o-mini-tts",
     openaiVoice: sel.openaiVoice ?? options.openaiVoices[0]?.id ?? "alloy",
+    diarize: sel.diarize ?? false,
+    numSpeakers: sel.numSpeakers,
   };
 
   const selectedTts = options.ttsEngines.find((e) => e.id === config.tts);
@@ -190,6 +192,32 @@ export function NewJobFlow() {
               ))}
             </Select>
           </Field>
+
+          {options.diarizeAvailable && (
+            <Field id="diarize" label={t("diarize")} hint={t("diarizeHint")}>
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={!!config.diarize}
+                  onChange={(e) => set("diarize", e.target.checked)}
+                  className="h-4 w-4 rounded-sm border-input accent-primary"
+                />
+                {t("diarizeToggle")}
+              </label>
+              {config.diarize && (
+                <input
+                  type="number"
+                  min={1}
+                  placeholder={t("numSpeakersPlaceholder")}
+                  value={config.numSpeakers ?? ""}
+                  onChange={(e) =>
+                    set("numSpeakers", e.target.value ? Number(e.target.value) : undefined)
+                  }
+                  className="mt-2 h-10 w-full rounded-sm border border-input bg-surface-1 px-3 text-sm text-foreground transition-colors hover:border-primary/40 placeholder:text-fg-subtle"
+                />
+              )}
+            </Field>
+          )}
 
           <div className="pt-1">
             <Button
