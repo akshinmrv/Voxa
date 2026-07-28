@@ -610,7 +610,8 @@ def _xtts_fit_candidate(tts_model, text: str, speaker_wav: str, xtts_lang: str,
 async def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
                         concat_list: list, temp_files: list,
                         work_dir: Path, enable_stretch: bool,
-                        quality_gate: bool = False, asr_model=None):
+                        quality_gate: bool = False, asr_model=None,
+                        media_ms: Optional[float] = None):
     """Cloned speech with XTTS v2. Timeline, placement and scoring come from
     synthesize_timeline; A3 quality-gate regeneration runs in the on_ready hook."""
     sample_rate = 24000
@@ -666,7 +667,8 @@ async def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
         subs, engine="xtts", prefix="xtts", sample_rate=sample_rate, work_dir=work_dir,
         concat_list=concat_list, temp_files=temp_files, render=_render, on_ready=_regenerate,
         text_of=lambda s: s.text.strip(), desc="XTTS Synthesis", unit="phrase",
-        quality_gate=quality_gate, asr_model=asr_model, gate_lang=xtts_lang)
+        quality_gate=quality_gate, asr_model=asr_model, gate_lang=xtts_lang,
+        media_ms=media_ms)
 def infer_delivery(text: str) -> str:
     """Language-agnostic delivery hint from a line's punctuation/structure (questions,
     exclamations, trailing-off), appended to the TTS instruction. A cheap structural tier;
@@ -828,7 +830,8 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
                              work_dir: Path, enable_stretch: bool,
                              quality_gate: bool = False, asr_model=None,
                              emotion_detection: bool = False, concurrency: int = 1,
-                             speaker_voices: Optional[Dict[str, str]] = None):
+                             speaker_voices: Optional[Dict[str, str]] = None,
+                             media_ms: Optional[float] = None):
     """Speech via OpenAI TTS (gpt-4o-mini-tts): multilingual, instructable delivery, no
     cloning. With emotion_detection an LLM tags each line with a delivery direction (A2 T1).
     Timeline, placement and scoring come from synthesize_timeline."""
@@ -913,7 +916,7 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
         text_of=lambda s: normalize_tts_text(s.text),
         desc="OpenAI TTS", unit="phrase",
         quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code,
-        concurrency=concurrency)
+        media_ms=media_ms, concurrency=concurrency)
 # ─────────────────────────────────────────────
 #  Existing code below — unchanged
 # ─────────────────────────────────────────────
@@ -1138,6 +1141,14 @@ def probe_duration(path: Path) -> Optional[float]:
         return None
 
 
+def _media_ms(path) -> Optional[float]:
+    """Total media duration in milliseconds — the room the final line may breathe into (it has
+    no next line to protect) so a longer translation isn't compressed to its own window. None
+    when the duration can't be probed, which just keeps the old own-window behaviour."""
+    dur = probe_duration(Path(path))
+    return dur * 1000.0 if dur else None
+
+
 def plan_blockers(args) -> List[str]:
     """Everything that would stop this run, phrased for the dry-run report. Mirrors the
     preflight checks in cli(), which fail on the first one; a dry run lists them all so a
@@ -1262,7 +1273,8 @@ def download_piper_model(lang_code: str, models_dir: Path) -> Optional[Path]:
 
 async def generate_piper(subs, model_path: Path, concat_list: list, temp_files: list,
                          work_dir: Path, enable_stretch: bool, lang_code: str = "",
-                         quality_gate: bool = False, asr_model=None):
+                         quality_gate: bool = False, asr_model=None,
+                         media_ms: Optional[float] = None):
     """Offline speech via the Piper binary. Timeline, placement and scoring come from
     synthesize_timeline; this only turns one line of text into one WAV."""
     piper_cmd = shutil.which("piper")
@@ -1297,7 +1309,8 @@ async def generate_piper(subs, model_path: Path, concat_list: list, temp_files: 
         concat_list=concat_list, temp_files=temp_files, render=_render,
         text_of=lambda s: normalize_tts_text(s.text).replace('"', "").replace("'", ""),
         desc="Piper Synthesis", unit="phrase",
-        quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code or None)
+        quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code or None,
+        media_ms=media_ms)
 async def get_edge_voice(lang_code: str, emotion: Optional[str] = None) -> Tuple[str, bool]:
     try:
         voices = await edge_tts.VoicesManager.create()
@@ -2220,7 +2233,7 @@ async def _maybe_await(value):
 
 
 async def _prerender_parallel(subs, *, render, text_of, prefix, work_dir, min_bytes,
-                              concurrency, engine, desc):
+                              concurrency, engine, desc, media_ms=None):
     """Synthesise every segment up front with bounded concurrency, writing each
     <prefix>_fin_<i>.wav. Network TTS engines spend almost all their wall-time awaiting the
     API, so overlapping those waits is a near-linear speedup. A sync render (OpenAI's
@@ -2239,8 +2252,9 @@ async def _prerender_parallel(subs, *, render, text_of, prefix, work_dir, min_by
         if text and not _has_content(final_file, min_bytes):
             start_ms = _sub_start_ms(sub)
             next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
+            target_next = next_start_ms if next_start_ms is not None else media_ms
             target_duration = _dub_target_ms(_sub_end_ms(sub) - start_ms,
-                                              start_ms, next_start_ms) / 1000.0
+                                              start_ms, target_next) / 1000.0
             async with sem:
                 try:
                     if render_is_async:
@@ -2262,6 +2276,7 @@ async def synthesize_timeline(subs, *, engine: str, prefix: str, sample_rate: in
                               render, text_of, desc: str, unit: str = "segment",
                               min_bytes: int = 1000, quality_gate: bool = False,
                               asr_model=None, gate_lang=None, on_ready=None,
+                              media_ms: Optional[float] = None,
                               concurrency: int = 1) -> int:
     """Drive one TTS engine across the subtitle timeline (Template Method).
 
@@ -2283,7 +2298,8 @@ async def synthesize_timeline(subs, *, engine: str, prefix: str, sample_rate: in
     if concurrency > 1 and subs:
         await _prerender_parallel(subs, render=render, text_of=text_of, prefix=prefix,
                                   work_dir=work_dir, min_bytes=min_bytes,
-                                  concurrency=concurrency, engine=engine, desc=desc)
+                                  concurrency=concurrency, engine=engine, desc=desc,
+                                  media_ms=media_ms)
 
     scores: List[Dict] = []
     generated = 0
@@ -2297,7 +2313,11 @@ async def synthesize_timeline(subs, *, engine: str, prefix: str, sample_rate: in
         if not text:
             continue
         next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
-        target_duration = _dub_target_ms(end_ms - start_ms, start_ms, next_start_ms) / 1000.0
+        # The final line has no next line to protect, so it may breathe out to the end of the
+        # media rather than be compressed to its own spoken window. Placement still uses
+        # next_start_ms (None here), whose last-segment branch lets the clip extend without trim.
+        target_next = next_start_ms if next_start_ms is not None else media_ms
+        target_duration = _dub_target_ms(end_ms - start_ms, start_ms, target_next) / 1000.0
 
         # ── Silence up to this segment's source onset ───────
         sil_ms = start_ms - cursor_ms
@@ -2617,7 +2637,8 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
                                   rate_adjust: bool, has_emotion_support: bool = False,
                                   quality_gate: bool = False, asr_model=None,
                                   gate_lang=None, concurrency: int = 1,
-                                  speaker_voices: Optional[Dict[str, str]] = None
+                                  speaker_voices: Optional[Dict[str, str]] = None,
+                                  media_ms: Optional[float] = None
                                   ) -> Tuple[List[str], List[str]]:
     """Speech via Microsoft Edge voices. Timeline, placement and scoring come from
     synthesize_timeline; this only turns one line of text into one WAV."""
@@ -2672,7 +2693,7 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
         text_of=lambda s: normalize_tts_text(s.text),
         desc="Edge TTS", unit="sentence", min_bytes=100,
         quality_gate=quality_gate, asr_model=asr_model, gate_lang=gate_lang,
-        concurrency=concurrency)
+        media_ms=media_ms, concurrency=concurrency)
 
     if emotion_stats:
         _LOG.info(f"🎭 Emotion usage: {emotion_stats}")
@@ -2884,7 +2905,7 @@ async def _tts_edge(subs, args, work_dir, video_path, gate_asr, logger):
             logger.info(f"🗣️  Per-speaker voices: "
                         f"{', '.join(f'{k}→{v}' for k, v in speaker_voices.items())}")
     return await synthesize_speech_batch(
-        subs, voice, work_dir,
+        subs, voice, work_dir, media_ms=_media_ms(video_path),
         enable_stretch=not args.no_stretch,
         emotion_detection=args.detect_emotion,
         rate_adjust=args.auto_rate,
@@ -2906,7 +2927,8 @@ async def _tts_piper(subs, args, work_dir, video_path, gate_asr, logger):
     await generate_piper(subs, model_path, concat_list, temp_files, work_dir,
                    enable_stretch=not args.no_stretch,
                    lang_code=args.target_lang[:2].lower(),
-                   quality_gate=args.quality_gate, asr_model=gate_asr)
+                   quality_gate=args.quality_gate, asr_model=gate_asr,
+                   media_ms=_media_ms(video_path))
     return concat_list, temp_files
 
 
@@ -2940,7 +2962,7 @@ async def _tts_xtts(subs, args, work_dir, video_path, gate_asr, logger):
     concat_list, temp_files = [], []
     await generate_xtts(
         subs, tts_model, speaker_wav, lang_code,
-        concat_list, temp_files, work_dir,
+        concat_list, temp_files, work_dir, media_ms=_media_ms(video_path),
         enable_stretch=not args.no_stretch,
         quality_gate=args.quality_gate, asr_model=gate_asr
     )
@@ -2974,7 +2996,7 @@ async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
     await generate_openai_tts(
         subs, client, args.openai_voice, args.openai_tts_model,
         args.openai_tts_instructions, args.target_lang[:2].lower(),
-        concat_list, temp_files, work_dir,
+        concat_list, temp_files, work_dir, media_ms=_media_ms(video_path),
         enable_stretch=not args.no_stretch,
         quality_gate=args.quality_gate, asr_model=gate_asr,
         emotion_detection=args.detect_emotion,

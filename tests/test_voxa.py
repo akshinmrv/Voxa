@@ -1168,6 +1168,31 @@ def test_prerender_target_borrows_the_following_pause(tmp_path):
     assert captured[1] == pytest.approx(1.0)
 
 
+def test_prerender_last_line_breathes_to_media_end(tmp_path):
+    """The final line has nothing after it to overlap, so with a known media duration it fits
+    to the end of the clip instead of being compressed to its own spoken window."""
+    import asyncio
+    from pathlib import Path
+    captured = {}
+
+    def _render(i, text, final_file, target_duration):
+        captured[i] = target_duration
+        Path(final_file).write_bytes(b"FIN".ljust(1500, b"0"))
+        return True
+
+    subs = [_fake_sub("son söz", 0, 1000)]   # own window 1000ms, in a 5s clip
+    asyncio.run(voxa._prerender_parallel(
+        subs, render=_render, text_of=lambda s: s.text, prefix="m1", work_dir=tmp_path,
+        min_bytes=100, concurrency=2, engine="edge", desc="t", media_ms=5000))
+    assert captured[0] == pytest.approx((5000 - voxa.MIN_INTER_LINE_GAP_MS) / 1000.0)
+    # No media duration → fall back to the line's own window (never past what we can place).
+    captured.clear()
+    asyncio.run(voxa._prerender_parallel(
+        subs, render=_render, text_of=lambda s: s.text, prefix="m2", work_dir=tmp_path,
+        min_bytes=100, concurrency=2, engine="edge", desc="t"))
+    assert captured[0] == pytest.approx(1.0)
+
+
 # ── T1: Piper brought up to the S0/SY2 standard ──────────
 class _FakePiperPopen:
     """Stand-in for the piper binary: writes a non-empty WAV to --output_file."""
