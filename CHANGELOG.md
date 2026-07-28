@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-07-28
+
+### Changed
+
+- **The final line now finishes at a natural pace.** The last line has nothing after it to overlap,
+  so it is no longer compressed to its own spoken window — it plays out to the end of the media
+  (its start still anchored to the source), which keeps a wordier final line from sounding rushed.
+  Earlier lines already breathe into the pause that follows them, added in 1.6.0.
+
+### Documentation
+
+- The README (all three languages) now documents speaker diarization (`--diarize`) and its
+  per-speaker voices, and notes that the most natural pacing comes from an LLM translator.
+  `NOTICE.md` records the pyannote diarization model: MIT, gated on Hugging Face, no commercial
+  restriction.
+
 ## [1.6.0] - 2026-07-28
 
 ### Added
@@ -212,7 +228,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/akshinmrv/Voxa/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/akshinmrv/Voxa/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/akshinmrv/Voxa/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/akshinmrv/Voxa/compare/v1.3.1...v1.4.0
