@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A closing line that breathes past the source audio is no longer cut off.** The last-line pacing
+  (1.6.1) can extend the final line to the end of the *video*, but the mix ended it at the source
+  *audio* stream — which can be shorter than the video — truncating the sentence. The mix now runs
+  to the longer of the two, so the closing line always finishes.
+
 ### Added
 
 - **Per-speaker voices for XTTS and Piper, plus a `--speaker-voices` override.** Under `--diarize`,

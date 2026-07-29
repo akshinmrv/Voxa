@@ -3524,7 +3524,9 @@ async def process_video(video_path: str, args, logger: Logger):
         "-i", str(voiceover_norm),
         "-filter_complex",
         f"[0:a]volume={args.background_volume}[bg];[1:a]volume={args.voice_volume}[fg];"
-        f"[bg][fg]amix=inputs=2:duration=first:dropout_transition=2",
+        # duration=longest, not first: when a final line breathes past the end of the source
+        # *audio* stream (which can be shorter than the video), the mix must not cut it off.
+        f"[bg][fg]amix=inputs=2:duration=longest:dropout_transition=2",
         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-map", "0:v:0",
         str(output_file)
     ], "Final video assembly")
