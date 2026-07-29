@@ -603,6 +603,32 @@ def test_merge_similar_speakers_keeps_distinct_and_is_safe():
     assert voxa._merge_similar_speakers(turns, ["A", "B", "C"], emb) == turns
 
 
+# ── Configured per-speaker voices (--speaker-voices, P3) ──
+def test_parse_speaker_voices():
+    assert voxa._parse_speaker_voices("A=x, B=y") == {"A": "x", "B": "y"}
+    assert voxa._parse_speaker_voices("") == {}
+    assert voxa._parse_speaker_voices(None) == {}
+    assert voxa._parse_speaker_voices("A=x,broken,B=") == {"A": "x"}   # malformed pairs skipped
+
+
+def test_resolve_speaker_voices_overrides_pool():
+    speakers = ["A", "B", "A"]
+    # No config → the automatic pool assignment.
+    assert voxa._resolve_speaker_voices(speakers, ["v1", "v2"], None) == {"A": "v1", "B": "v2"}
+    # A configured name wins for its speaker; the rest keep the auto voice.
+    assert voxa._resolve_speaker_voices(speakers, ["v1", "v2"], {"B": "c"}) == {"A": "v1", "B": "c"}
+    # Empty pool + config → config only (the Piper case, which has no auto pool).
+    assert voxa._resolve_speaker_voices(speakers, [], {"A": "m1", "B": "m2"}) == \
+        {"A": "m1", "B": "m2"}
+
+
+def test_resolve_piper_model_path_and_missing(tmp_path):
+    p = tmp_path / "voice.onnx"
+    p.write_bytes(b"x")
+    assert voxa._resolve_piper_model(str(p)) == str(p)          # an existing path is returned as-is
+    assert voxa._resolve_piper_model(str(tmp_path / "absent.onnx")) is None
+
+
 # ── Per-speaker voices (--diarize, P1) ───────────────────
 def test_assign_speaker_voices_distinct_and_cycling():
     # Two speakers, three voices -> the first two, in first-appearance order.

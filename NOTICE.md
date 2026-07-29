@@ -104,6 +104,10 @@ Coqui Inc. **ceased operations in January 2024**. Consequences:
 2. The XTTS-v2 **model weights remain under CPML, which permits non-commercial use only**, and
    because the company no longer exists, **there is no party from whom a commercial license can
    be obtained.**
+3. Its declared dependency bounds are loose, so `pip` can pick a `transformers` that `coqui-tts`
+   does not work with — the tell is an `ImportError` on `import TTS` (e.g. `isin_mps_friendly` or
+   `is_torchcodec_available`). Pin a compatible one; `pip install "transformers==4.53.0"` worked at
+   the time of writing, and it coexists with the `[diarize]` extra's `pyannote`.
 
 If you need voice cloning for a commercial product, XTTS is not a viable path. Consider an
 MIT-licensed alternative such as [Chatterbox](https://github.com/resemble-ai/chatterbox), served

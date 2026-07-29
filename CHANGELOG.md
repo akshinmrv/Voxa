@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Per-speaker voices for XTTS and Piper, plus a `--speaker-voices` override.** Under `--diarize`,
+  XTTS now clones each speaker from where they talk in the source, so every dubbed speaker keeps the
+  original speaker's voice. `--speaker-voices "SPEAKER_00=voice,SPEAKER_01=voice"` pins a voice per
+  speaker for any engine — Edge/OpenAI voice names, Piper model files (the only way to get
+  per-speaker Piper, whose pool is one voice per language), or XTTS reference wavs. Unlisted
+  speakers keep the automatic voice.
+
 ## [1.6.3] - 2026-07-28
 
 ### Added

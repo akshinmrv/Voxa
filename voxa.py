@@ -524,6 +524,40 @@ def extract_voice_sample(video_path: str, output_wav: str,
         return False
 
 
+def _extract_reference_window(video_path: str, out_wav: str, start: float, dur: float) -> bool:
+    """Cut a cleaned mono reference clip [start, start+dur] from the source for voice cloning."""
+    try:
+        subprocess.run(["ffmpeg", "-y", "-ss", str(max(0.0, start)), "-i", video_path, "-vn",
+                        "-af", _voice_sample_filter(), "-ar", "22050", "-ac", "1",
+                        "-t", str(max(1.0, dur)), out_wav],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        return sf.info(out_wav).duration >= 1.0
+    except Exception:
+        return False
+
+
+def _extract_speaker_samples(video_path: str, subs, work_dir: Path) -> Dict[str, str]:
+    """For --diarize with XTTS: one cloning reference per speaker, cut from the source where that
+    speaker actually talks (its longest turn, capped so it stays that one speaker). Each dubbed
+    speaker then keeps the *original* speaker's voice. Returns {speaker: wav_path}; a speaker whose
+    extraction fails is simply left to the default reference."""
+    best: Dict[str, Tuple[float, float]] = {}   # speaker -> (start_s, dur_s) of its longest turn
+    for s in subs:
+        spk = getattr(s, "speaker", None)
+        if not spk:
+            continue
+        start = _sub_start_ms(s) / 1000.0
+        dur = (_sub_end_ms(s) - _sub_start_ms(s)) / 1000.0
+        if spk not in best or dur > best[spk][1]:
+            best[spk] = (start, dur)
+    refs: Dict[str, str] = {}
+    for spk, (start, dur) in best.items():
+        out = work_dir / f"xtts_ref_{re.sub(r'[^A-Za-z0-9_]', '_', spk)}.wav"
+        if _extract_reference_window(video_path, str(out), start, min(dur, 15.0)):
+            refs[spk] = str(out)
+    return refs
+
+
 def _xtts_call(tts_model, text: str, speaker_wav: str, lang: str, out_path: str):
     """One XTTS synthesis call with stability-tuned parameters, falling back to plain
     defaults if the installed Coqui version doesn't accept the kwargs. Lower temperature
@@ -611,9 +645,11 @@ async def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
                         concat_list: list, temp_files: list,
                         work_dir: Path, enable_stretch: bool,
                         quality_gate: bool = False, asr_model=None,
-                        media_ms: Optional[float] = None):
+                        media_ms: Optional[float] = None,
+                        speaker_refs: Optional[Dict[str, str]] = None):
     """Cloned speech with XTTS v2. Timeline, placement and scoring come from
-    synthesize_timeline; A3 quality-gate regeneration runs in the on_ready hook."""
+    synthesize_timeline; A3 quality-gate regeneration runs in the on_ready hook. With
+    speaker_refs (from --diarize), each segment clones its own speaker's reference."""
     sample_rate = 24000
     xtts_lang = lang_code[:2].lower()
     if xtts_lang not in XTTS_SUPPORTED_LANGS:
@@ -625,9 +661,15 @@ async def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
     _LOG.info(f"🎙️  XTTS voice cloning from: {speaker_wav}")
     _LOG.info(f"🌍 Target language: {xtts_lang}")
 
+    def _ref_for(i: int) -> str:
+        # Per-speaker reference under --diarize, else the one shared reference.
+        if speaker_refs:
+            return speaker_refs.get(getattr(subs[i], "speaker", None), speaker_wav)
+        return speaker_wav
+
     def _render(i, text, final_file, target_duration):
         raw_file = work_dir / f"xtts_raw_{i}.wav"
-        if not _xtts_synthesize_segment(tts_model, text, speaker_wav, xtts_lang,
+        if not _xtts_synthesize_segment(tts_model, text, _ref_for(i), xtts_lang,
                                         raw_file, work_dir, i, sample_rate):
             _LOG.warning(f"XTTS produced empty output for segment {i}: {text[:40]}")
             return False
@@ -647,7 +689,7 @@ async def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
             attempt += 1
             cand_raw = work_dir / f"xtts_rawcand_{i}_{attempt}.wav"
             cand_fin = work_dir / f"xtts_fincand_{i}_{attempt}.wav"
-            if not _xtts_fit_candidate(tts_model, text, speaker_wav, xtts_lang,
+            if not _xtts_fit_candidate(tts_model, text, _ref_for(i), xtts_lang,
                                        cand_raw, cand_fin, work_dir, f"{i}c{attempt}",
                                        sample_rate, target_duration, enable_stretch):
                 _safe_unlink(cand_raw, cand_fin)
@@ -1073,14 +1115,18 @@ def _stage_own_params(stage: str, args) -> Dict:
                 "model": model, "speech_rate": args.speech_rate,
                 "llm_batch_size": args.llm_batch_size, "parallel": args.parallel}
     if stage == "synthesis":
-        return {"target_lang": args.target_lang, "tts": args.tts,
-                "no_stretch": args.no_stretch, "detect_emotion": args.detect_emotion,
-                "auto_rate": args.auto_rate, "voice_sample": args.voice_sample,
-                "quality_gate": args.quality_gate, "gate_model": args.gate_model,
-                "openai_voice": getattr(args, "openai_voice", None),
-                "openai_tts_model": getattr(args, "openai_tts_model", None),
-                "openai_tts_base_url": getattr(args, "openai_tts_base_url", None),
-                "openai_tts_instructions": getattr(args, "openai_tts_instructions", None)}
+        params = {"target_lang": args.target_lang, "tts": args.tts,
+                  "no_stretch": args.no_stretch, "detect_emotion": args.detect_emotion,
+                  "auto_rate": args.auto_rate, "voice_sample": args.voice_sample,
+                  "quality_gate": args.quality_gate, "gate_model": args.gate_model,
+                  "openai_voice": getattr(args, "openai_voice", None),
+                  "openai_tts_model": getattr(args, "openai_tts_model", None),
+                  "openai_tts_base_url": getattr(args, "openai_tts_base_url", None),
+                  "openai_tts_instructions": getattr(args, "openai_tts_instructions", None)}
+        # Only recorded when set, so a run without it keeps its exact previous signature.
+        if getattr(args, "speaker_voices", None):
+            params["speaker_voices"] = args.speaker_voices
+        return params
     return {}
 
 
@@ -1276,12 +1322,27 @@ def download_piper_model(lang_code: str, models_dir: Path) -> Optional[Path]:
         return None
 
 
+def _resolve_piper_model(name: str) -> Optional[str]:
+    """Resolve a --speaker-voices Piper value to a model file: an existing path, or a name looked
+    up under ~/.piper_models (a `.onnx` suffix is added when missing). None when it can't be found —
+    Piper models are downloaded manually, so a per-speaker voice must already be on disk."""
+    if Path(name).exists():
+        return name
+    base = Path.home() / ".piper_models"
+    for cand in (base / name, base / f"{name}.onnx"):
+        if cand.exists():
+            return str(cand)
+    return None
+
+
 async def generate_piper(subs, model_path: Path, concat_list: list, temp_files: list,
                          work_dir: Path, enable_stretch: bool, lang_code: str = "",
                          quality_gate: bool = False, asr_model=None,
-                         media_ms: Optional[float] = None):
+                         media_ms: Optional[float] = None,
+                         speaker_models: Optional[Dict[str, str]] = None):
     """Offline speech via the Piper binary. Timeline, placement and scoring come from
-    synthesize_timeline; this only turns one line of text into one WAV."""
+    synthesize_timeline; this only turns one line of text into one WAV. With speaker_models
+    (from --diarize + --speaker-voices) each segment is spoken by its own speaker's Piper model."""
     piper_cmd = shutil.which("piper")
     if not piper_cmd:
         possible_path = Path(sys.executable).parent / "piper"
@@ -1297,7 +1358,9 @@ async def generate_piper(subs, model_path: Path, concat_list: list, temp_files: 
 
     def _render(i, text, final_file, target_duration):
         raw_file = work_dir / f"piper_raw_{i}.wav"
-        cmd = [piper_cmd, "--model", str(model_path), "--output_file", str(raw_file)]
+        model = speaker_models.get(getattr(subs[i], "speaker", None), model_path) \
+            if speaker_models else model_path
+        cmd = [piper_cmd, "--model", str(model), "--output_file", str(raw_file)]
         process = subprocess.Popen(cmd, stdin=subprocess.PIPE,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         _, stderr = process.communicate(input=text.encode("utf-8"))
@@ -1451,6 +1514,29 @@ def assign_speaker_voices(speakers: Sequence[Optional[str]],
     if not voice_pool:
         return {}
     return {spk: voice_pool[i % len(voice_pool)] for i, spk in enumerate(order)}
+
+
+def _parse_speaker_voices(spec: Optional[str]) -> Dict[str, str]:
+    """Parse a --speaker-voices spec ('SPEAKER_00=voice_a, SPEAKER_01=voice_b') into a mapping.
+    Whitespace-tolerant; malformed pairs are skipped. Lets an operator pin a specific voice per
+    speaker — the only way to get per-speaker Piper, whose pool is one voice per language. Pure."""
+    out: Dict[str, str] = {}
+    for pair in (spec or "").split(","):
+        if "=" in pair:
+            k, v = pair.split("=", 1)
+            if k.strip() and v.strip():
+                out[k.strip()] = v.strip()
+    return out
+
+
+def _resolve_speaker_voices(speakers: Sequence[Optional[str]], voice_pool: Sequence[str],
+                            configured: Optional[Dict[str, str]]) -> Dict[str, str]:
+    """Per-speaker voices: the automatic pool assignment first, then any explicit --speaker-voices
+    entries laid on top (configured names win; unlisted speakers keep the auto voice). Pure."""
+    mapping = assign_speaker_voices(speakers, voice_pool)
+    for spk, voice in (configured or {}).items():
+        mapping[spk] = voice
+    return mapping
 
 
 _EMOTION_WORDS = {
@@ -3010,7 +3096,8 @@ async def _tts_edge(subs, args, work_dir, video_path, gate_asr, logger):
     speaker_voices = None
     if getattr(args, "diarize", False):
         pool = await get_edge_voices(args.target_lang)
-        speaker_voices = assign_speaker_voices([s.speaker for s in subs], pool)
+        configured = _parse_speaker_voices(getattr(args, "speaker_voices", None))
+        speaker_voices = _resolve_speaker_voices([s.speaker for s in subs], pool, configured)
         if speaker_voices:
             logger.info(f"🗣️  Per-speaker voices: "
                         f"{', '.join(f'{k}→{v}' for k, v in speaker_voices.items())}")
@@ -3033,12 +3120,26 @@ async def _tts_piper(subs, args, work_dir, video_path, gate_asr, logger):
     if not model_path:
         raise TTSError("Failed to download Piper model")
     logger.info("🎙️  Using Piper (offline mode)")
+    # Per-speaker Piper (--diarize): Piper's pool is one voice per language, so distinct voices come
+    # from --speaker-voices, whose values name model files under ~/.piper_models. Unmapped speakers
+    # (and a missing model) fall back to the default voice.
+    speaker_models = None
+    if getattr(args, "diarize", False):
+        configured = _parse_speaker_voices(getattr(args, "speaker_voices", None))
+        speaker_models = {spk: mp for spk, name in configured.items()
+                          if (mp := _resolve_piper_model(name))}
+        if speaker_models:
+            logger.info("🗣️  Per-speaker Piper voices: "
+                        f"{', '.join(f'{k}→{Path(v).stem}' for k, v in speaker_models.items())}")
+        else:
+            logger.warning("⚠️  --diarize with Piper needs --speaker-voices "
+                           "(SPEAKER_00=model.onnx,...); using one voice for all speakers.")
     concat_list, temp_files = [], []
     await generate_piper(subs, model_path, concat_list, temp_files, work_dir,
                    enable_stretch=not args.no_stretch,
                    lang_code=args.target_lang[:2].lower(),
                    quality_gate=args.quality_gate, asr_model=gate_asr,
-                   media_ms=_media_ms(video_path))
+                   media_ms=_media_ms(video_path), speaker_models=speaker_models)
     return concat_list, temp_files
 
 
@@ -3064,6 +3165,18 @@ async def _tts_xtts(subs, args, work_dir, video_path, gate_asr, logger):
             raise TTSError(f"❌ Voice sample not found: {speaker_wav}")
         logger.info(f"🎤 Using provided voice sample: {speaker_wav}")
 
+    # Per-speaker references (--diarize): clone each speaker from where they talk in the source,
+    # so every dubbed speaker keeps the original speaker's voice. --speaker-voices values, if given,
+    # are reference wav paths that override the auto extraction for those speakers.
+    speaker_refs = None
+    if getattr(args, "diarize", False):
+        speaker_refs = _extract_speaker_samples(str(video_path), subs, work_dir)
+        for spk, path in _parse_speaker_voices(getattr(args, "speaker_voices", None)).items():
+            if Path(path).exists():
+                speaker_refs[spk] = path
+        if speaker_refs:
+            logger.info(f"🗣️  Per-speaker XTTS references: {', '.join(sorted(speaker_refs))}")
+
     # Load model
     tts_model = load_xtts_model()
     if tts_model is None:
@@ -3074,7 +3187,8 @@ async def _tts_xtts(subs, args, work_dir, video_path, gate_asr, logger):
         subs, tts_model, speaker_wav, lang_code,
         concat_list, temp_files, work_dir, media_ms=_media_ms(video_path),
         enable_stretch=not args.no_stretch,
-        quality_gate=args.quality_gate, asr_model=gate_asr
+        quality_gate=args.quality_gate, asr_model=gate_asr,
+        speaker_refs=speaker_refs
     )
     return concat_list, temp_files
 
@@ -3098,7 +3212,9 @@ async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
                        f"source — that part of the style will not take effect.")
     speaker_voices = None
     if getattr(args, "diarize", False):
-        speaker_voices = assign_speaker_voices([s.speaker for s in subs], OPENAI_TTS_VOICE_POOL)
+        configured = _parse_speaker_voices(getattr(args, "speaker_voices", None))
+        speaker_voices = _resolve_speaker_voices([s.speaker for s in subs],
+                                                 OPENAI_TTS_VOICE_POOL, configured)
         if speaker_voices:
             logger.info(f"🗣️  Per-speaker voices: "
                         f"{', '.join(f'{k}→{v}' for k, v in speaker_voices.items())}")
@@ -3643,6 +3759,11 @@ Examples:
                         help="Upper bound on the speaker count for --diarize — curbs "
                              "over-splitting when the exact count is unknown (ignored when "
                              "--num-speakers is set).")
+    parser.add_argument("--speaker-voices", default=None, metavar="SPEC",
+                        help="Pin a voice per speaker for --diarize, e.g. "
+                             "'SPEAKER_00=en-US-GuyNeural,SPEAKER_01=en-US-JennyNeural'. Values "
+                             "are engine voices for Edge/OpenAI, model files for Piper, or "
+                             "reference wavs for XTTS. Unlisted speakers keep the automatic voice.")
     parser.add_argument("--hf-token", default=None,
                         help="Hugging Face token for --diarize (falls back to the HF_TOKEN env "
                              "var). Accept the model terms on its Hugging Face page first.")

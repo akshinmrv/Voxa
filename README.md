@@ -294,7 +294,9 @@ callers and a port-mapped request does not qualify — run the console natively 
 > `voxa-dub[xtts]` installs [`coqui-tts`](https://github.com/idiap/coqui-ai-TTS), the maintained
 > community fork. The **XTTS-v2 model weights are non-commercial** (CPML), and Coqui Inc. no
 > longer exists to sell a commercial licence. For commercial voice cloning, drive an
-> MIT-licensed engine through `--openai-tts-base-url`.
+> MIT-licensed engine through `--openai-tts-base-url`. If `import TTS` fails after install, `pip`
+> picked a `transformers` `coqui-tts` can't use — pin a compatible one, e.g.
+> `pip install "transformers==4.53.0"`.
 
 **4. GPU acceleration** — optional, NVIDIA only.
 
