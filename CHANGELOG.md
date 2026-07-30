@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Dub from a URL in the operator console.** The `voxa serve` job form now has an "Upload
+  file / From URL" switch: paste a video link and the backend runs the CLI's URL pipeline
+  (yt-dlp download, then the normal dub) instead of an upload. It appears only when the `url`
+  extra is installed, and carries the same Terms-of-Service notice as the CLI — you are
+  responsible for having the right to the content. This closes the gap where the URL input
+  shipped in 1.4.0 for the CLI only.
+
 ## [1.7.0] - 2026-07-30
 
 ### Added

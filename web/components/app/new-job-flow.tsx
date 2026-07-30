@@ -24,13 +24,21 @@ export function NewJobFlow() {
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings });
 
   const [file, setFile] = useState<File | null>(null);
+  const [sourceMode, setSourceMode] = useState<"file" | "url">("file");
+  const [url, setUrl] = useState("");
   const [sel, setSel] = useState<Partial<JobConfig>>({});
 
   const submit = useMutation({
     mutationFn: async (config: JobConfig) => {
+      if (sourceMode === "url") {
+        const trimmed = url.trim();
+        if (!trimmed) throw new Error("No URL");
+        const { jobId } = await createJob({ sourceUrl: trimmed }, config);
+        return jobId;
+      }
       if (!file) throw new Error("No file");
       const { fileId } = await uploadVideo(file);
-      const { jobId } = await createJob(fileId, config);
+      const { jobId } = await createJob({ fileId }, config);
       return jobId;
     },
     onSuccess: (jobId) => router.push(`/app/jobs/${jobId}`),
@@ -61,11 +69,59 @@ export function NewJobFlow() {
   const selectedTts = options.ttsEngines.find((e) => e.id === config.tts);
   const selectedTranslator = options.translators.find((e) => e.id === config.translator);
   const needsVoiceSample = selectedTts?.requiresVoiceSample ?? false;
+  const urlMode = sourceMode === "url" && !!options.urlAvailable;
+  const hasSource = urlMode ? url.trim().length > 0 : !!file;
 
   return (
     <div className="grid max-w-4xl gap-6 lg:grid-cols-5">
-      <div className="lg:col-span-3">
-        <UploadDropzone file={file} onFile={setFile} />
+      <div className="space-y-3 lg:col-span-3">
+        {options.urlAvailable && (
+          <div className="inline-flex rounded-sm border border-input bg-surface-1 p-0.5 text-sm">
+            <button
+              type="button"
+              onClick={() => setSourceMode("file")}
+              className={`rounded-[3px] px-3 py-1.5 transition-colors ${
+                sourceMode === "file"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t("sourceFile")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceMode("url")}
+              className={`rounded-[3px] px-3 py-1.5 transition-colors ${
+                sourceMode === "url"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t("sourceUrl")}
+            </button>
+          </div>
+        )}
+
+        {urlMode ? (
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <Field id="sourceUrl" label={t("urlLabel")} hint={t("urlHint")}>
+                <input
+                  id="sourceUrl"
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://…"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="h-10 w-full rounded-sm border border-input bg-surface-1 px-3 text-sm text-foreground transition-colors hover:border-primary/40 placeholder:text-fg-subtle"
+                />
+              </Field>
+              <p className="text-xs text-muted-foreground">{t("urlTos")}</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <UploadDropzone file={file} onFile={setFile} />
+        )}
       </div>
 
       <Card className="lg:col-span-2">
@@ -222,15 +278,15 @@ export function NewJobFlow() {
           <div className="pt-1">
             <Button
               className="w-full"
-              disabled={!file || submit.isPending}
+              disabled={!hasSource || submit.isPending}
               onClick={() => submit.mutate(config)}
             >
               {submit.isPending ? <Loader2 className="animate-spin" /> : <Play />}
               {t("run")}
             </Button>
-            {!file && (
+            {!hasSource && (
               <p className="mt-2 text-center text-xs text-muted-foreground">
-                {t("runHint")}
+                {urlMode ? t("runHintUrl") : t("runHint")}
               </p>
             )}
             {submit.isError && (

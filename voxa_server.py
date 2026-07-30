@@ -120,6 +120,8 @@ def build_options() -> dict:
                           for k in SPEECH_STYLE_PRESETS],
         # So the job form can offer diarization only when the optional extra is installed.
         "diarizeAvailable": voxa._pyannote_available(),
+        # So the job form can offer a URL source only when the yt-dlp extra is installed.
+        "urlAvailable": voxa._ytdlp_available(),
     }
 
 
@@ -160,7 +162,9 @@ class JobConfigModel(BaseModel):
 
 
 class CreateJobModel(BaseModel):
-    fileId: str
+    # Exactly one source: an uploaded file, or a URL to download (yt-dlp extra).
+    fileId: Optional[str] = None
+    sourceUrl: Optional[str] = None
     config: JobConfigModel
 
 
@@ -170,6 +174,9 @@ class Job:
     file_name: str
     config: JobConfigModel
     work_dir: Path
+    # Set for a URL job: passed to voxa as the positional input, which downloads it
+    # (via yt-dlp) into work_dir. None for an uploaded-file job.
+    source_url: Optional[str] = None
     status: str = "queued"  # queued | running | done | failed
     step: int = 0
     events: List[dict] = field(default_factory=list)
@@ -230,8 +237,11 @@ async def _run_job(job: Job) -> None:
         await _emit(job, {"type": "status", "status": "running"})
 
         cfg = job.config
+        # A URL is passed straight through: voxa downloads it into the run's cwd
+        # (the work dir) before the pipeline. An uploaded file is a local name in work_dir.
+        source_arg = job.source_url or job.file_name
         cmd = [
-            sys.executable, voxa.__file__, job.file_name,
+            sys.executable, voxa.__file__, source_arg,
             "--target_lang", cfg.targetLang,
             "--translator", cfg.translator,
             "--tts", cfg.tts,
@@ -292,11 +302,17 @@ async def _run_job(job: Job) -> None:
 
         code = await proc.wait()
         if code == 0:
-            stem = Path(job.file_name).stem
-            video = job.work_dir / f"{stem}_dubbed_{cfg.targetLang}.mp4"
-            srt = job.work_dir / f"{stem}_work" / f"subtitles_{cfg.targetLang}.srt"
-            job.result_video = video if video.exists() else None
-            job.result_srt = srt if srt.exists() else None
+            # Locate outputs by glob, not by name: a URL download lands under a
+            # yt-dlp-chosen filename the server can't predict. The content-keyed work dir
+            # holds one source video and outputs are language-suffixed, so each pattern
+            # matches exactly one file for this target language.
+            lang = cfg.targetLang
+            videos = sorted(job.work_dir.glob(f"*_dubbed_{lang}.mp4"),
+                            key=lambda p: p.stat().st_mtime)
+            srts = sorted(job.work_dir.glob(f"*_work/subtitles_{lang}.srt"),
+                          key=lambda p: p.stat().st_mtime)
+            job.result_video = videos[-1] if videos else None
+            job.result_srt = srts[-1] if srts else None
             job.status = "done"
             await _emit(job, {"type": "status", "status": "done"})
         else:
@@ -720,22 +736,36 @@ async def upload(file: UploadFile = File(...)) -> dict:
 
 @app.post("/api/jobs")
 async def create_job(body: CreateJobModel) -> dict:
-    src = UPLOADS.get(body.fileId)
-    if not src or not src.exists():
-        raise HTTPException(status_code=404, detail="Uploaded file not found")
-
     job_id = uuid.uuid4().hex[:12]
-    # Content-keyed work dir: a second dub of the same video reuses its cached transcription.
+    # Content-keyed work dir: a second dub of the same source reuses its cached transcription.
     # The single job lock serialises runs and outputs are language-suffixed, so jobs sharing
     # a dir never collide.
-    work_dir = _video_work_dir(UPLOAD_HASHES.get(body.fileId))
-    work_dir.mkdir(parents=True, exist_ok=True)
-    file_name = _safe_name(Path(src.name).name.split("_", 1)[-1])
-    dest_video = work_dir / file_name
-    if not dest_video.exists() or dest_video.stat().st_size != src.stat().st_size:
-        shutil.copy2(src, dest_video)
+    if body.sourceUrl:
+        url = body.sourceUrl.strip()
+        if not voxa._looks_like_url(url):
+            raise HTTPException(status_code=400, detail="sourceUrl must be an http(s) URL")
+        if not voxa._ytdlp_available():
+            raise HTTPException(status_code=400, detail=voxa._YTDLP_HINT)
+        # Key the work dir by the URL so re-dubbing it reuses the download + transcription.
+        content_key = hashlib.sha256(url.encode("utf-8")).hexdigest()
+        work_dir = _video_work_dir(content_key)
+        work_dir.mkdir(parents=True, exist_ok=True)
+        job = Job(id=job_id, file_name=url, config=body.config,
+                  work_dir=work_dir, source_url=url)
+    elif body.fileId:
+        src = UPLOADS.get(body.fileId)
+        if not src or not src.exists():
+            raise HTTPException(status_code=404, detail="Uploaded file not found")
+        work_dir = _video_work_dir(UPLOAD_HASHES.get(body.fileId))
+        work_dir.mkdir(parents=True, exist_ok=True)
+        file_name = _safe_name(Path(src.name).name.split("_", 1)[-1])
+        dest_video = work_dir / file_name
+        if not dest_video.exists() or dest_video.stat().st_size != src.stat().st_size:
+            shutil.copy2(src, dest_video)
+        job = Job(id=job_id, file_name=file_name, config=body.config, work_dir=work_dir)
+    else:
+        raise HTTPException(status_code=400, detail="Provide either fileId or sourceUrl")
 
-    job = Job(id=job_id, file_name=file_name, config=body.config, work_dir=work_dir)
     JOBS[job_id] = job
     asyncio.create_task(_run_job(job))
     return {"jobId": job_id}

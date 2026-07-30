@@ -246,6 +246,12 @@
       "keyBadge": "Needs API key",
       "run": "Start dubbing",
       "runHint": "Select a video to enable.",
+      "runHintUrl": "Paste a video URL to enable.",
+      "sourceFile": "Upload file",
+      "sourceUrl": "From URL",
+      "urlLabel": "Video URL",
+      "urlHint": "A link yt-dlp can download (YouTube, Vimeo, a direct .mp4, …).",
+      "urlTos": "You are responsible for having the right to this content; downloading may breach the source platform's Terms of Service.",
       "queuedTitle": "Job queued (demo)",
       "queuedBody": "The operator backend isn't wired yet — this is the command Voxa would run:",
       "reset": "Start another"

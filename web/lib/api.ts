@@ -41,14 +41,14 @@ export async function uploadVideo(
 }
 
 export async function createJob(
-  fileId: string,
+  source: { fileId?: string; sourceUrl?: string },
   config: JobConfig,
 ): Promise<{ jobId: string }> {
   return asJson(
     await fetch(`${API_BASE}/api/jobs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fileId, config }),
+      body: JSON.stringify({ ...source, config }),
     }),
   );
 }

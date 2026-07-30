@@ -472,3 +472,49 @@ def test_diarize_args_builds_flags():
 def test_build_options_reports_diarize_availability():
     # The job form uses this flag to offer diarization only when the extra is installed.
     assert "diarizeAvailable" in srv.build_options()
+
+
+# ── Operator console URL source ──────────────────────────
+_URL_CFG = {"targetLang": "tr", "translator": "google", "tts": "edge"}
+
+
+def test_build_options_reports_url_availability():
+    # The job form uses this flag to offer a URL source only when yt-dlp is installed.
+    assert "urlAvailable" in srv.build_options()
+
+
+def test_create_job_rejects_missing_source(client):
+    # Neither an uploaded file nor a URL was given.
+    r = client.post("/api/jobs", json={"config": _URL_CFG})
+    assert r.status_code == 400
+
+
+def test_create_job_rejects_non_url_source(client):
+    r = client.post("/api/jobs", json={"sourceUrl": "not a url", "config": _URL_CFG})
+    assert r.status_code == 400
+
+
+def test_create_job_url_requires_ytdlp(client, monkeypatch):
+    import voxa
+    monkeypatch.setattr(voxa, "_ytdlp_available", lambda: False)
+    r = client.post("/api/jobs",
+                    json={"sourceUrl": "https://example.com/v.mp4", "config": _URL_CFG})
+    assert r.status_code == 400
+    assert "yt-dlp" in r.json()["detail"]
+
+
+def test_create_job_by_url_creates_job(client, monkeypatch, tmp_path):
+    import voxa
+
+    async def _noop(job):  # don't actually download or spawn the voxa subprocess
+        return None
+
+    monkeypatch.setattr(voxa, "_ytdlp_available", lambda: True)
+    monkeypatch.setattr(srv, "_run_job", _noop)
+    monkeypatch.setattr(srv, "JOBS_DIR", tmp_path / "jobs")
+    url = "https://example.com/v.mp4"
+    r = client.post("/api/jobs", json={"sourceUrl": url, "config": _URL_CFG})
+    assert r.status_code == 200
+    job = srv.JOBS[r.json()["jobId"]]
+    assert job.source_url == url
+    assert job.file_name == url

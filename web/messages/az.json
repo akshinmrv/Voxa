@@ -246,6 +246,12 @@
       "keyBadge": "API açarı lazımdır",
       "run": "Dublyaja başla",
       "runHint": "Aktivləşdirmək üçün video seçin.",
+      "runHintUrl": "Aktivləşdirmək üçün video URL-i yapışdırın.",
+      "sourceFile": "Fayl yüklə",
+      "sourceUrl": "URL-dən",
+      "urlLabel": "Video URL",
+      "urlHint": "yt-dlp-nin yükləyə biləcəyi keçid (YouTube, Vimeo, birbaşa .mp4, …).",
+      "urlTos": "Bu məzmuna hüququnuzun olması sizin məsuliyyətinizdədir; yükləmə mənbə platformanın İstifadə Şərtlərini poza bilər.",
       "queuedTitle": "İş növbəyə alındı (demo)",
       "queuedBody": "Operator backend hələ qoşulmayıb — Voxa-nın işlədəcəyi əmr budur:",
       "reset": "Başqasını başlat"

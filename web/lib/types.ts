@@ -30,6 +30,8 @@ export type VoxaOptions = {
   speechPresets: SpeechPreset[];
   /** Whether the optional pyannote extra is installed, so the form can offer diarization. */
   diarizeAvailable?: boolean;
+  /** Whether the optional yt-dlp extra is installed, so the form can offer a URL source. */
+  urlAvailable?: boolean;
 };
 
 export type JobConfig = {
