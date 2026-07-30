@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (a JSON object of `model → [input, output]` USD per 1M tokens, usually set once in a `--config`
   file) covers any model on your plan. An unpriced model still reports token counts.
 
+### Changed
+
+- **A running clock on a single-video run.** The source media length is logged up front and each
+  long step prints the elapsed time — `[6/7] (2m10s) Synthesizing speech...` — so a long dub isn't
+  a silent wait. The fine-grained "time remaining" stays on the per-segment progress bars, since
+  step cost depends on the engine and hardware.
+
 ## [1.6.4] - 2026-07-29
 
 ### Fixed

@@ -3305,6 +3305,15 @@ async def process_video(video_path: str, args, logger: Logger):
 
     start_time = time.time()
 
+    def _elapsed() -> str:
+        return _format_hms(time.time() - start_time)
+
+    # A single long video shows per-step progress but no overall clock; this gives one. A true
+    # "time remaining" is left to the per-segment bars, since step cost varies by engine/hardware.
+    src_dur = probe_duration(video_path)
+    if src_dur:
+        logger.info(f"📹 Source media: {_format_hms(src_dur)}")
+
     # Step 1: Extract audio (only needed for transcription — skipped when subtitles are given)
     using_subtitles = bool(getattr(args, "subtitles", None))
     if using_subtitles:
@@ -3351,7 +3360,7 @@ async def process_video(video_path: str, args, logger: Logger):
             json.dump(segments, f, ensure_ascii=False, indent=2)
         state.mark_completed('transcription', transcription_sig)
     else:
-        logger.info(f"[3/7] Transcribing with Whisper ({args.whisper_model}, "
+        logger.info(f"[3/7] ({_elapsed()}) Transcribing with Whisper ({args.whisper_model}, "
                     f"backend: {args.whisper_backend})...")
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"⚙️  Using device: {device.upper()}")
@@ -3410,7 +3419,8 @@ async def process_video(video_path: str, args, logger: Logger):
         with open(translated_json, 'r', encoding='utf-8') as f:
             translated_segments = json.load(f)
     else:
-        logger.info(f"[5/7] Translating to {args.target_lang} with {args.translator}...")
+        logger.info(f"[5/7] ({_elapsed()}) Translating to {args.target_lang} "
+                    f"with {args.translator}...")
         if args.translator in LLM_PROVIDERS:
             llm_model = getattr(args, f"{args.translator}_model")
             llm_api_key = getattr(args, f"{args.translator}_api_key")
@@ -3487,7 +3497,7 @@ async def process_video(video_path: str, args, logger: Logger):
                 logger.info(f"🧹 Run parameters changed — cleared {cleared} stale speech "
                             f"file(s) before re-synthesizing")
         state.set_signature('synthesis', synthesis_sig)
-        logger.info("[6/7] Synthesizing speech...")
+        logger.info(f"[6/7] ({_elapsed()}) Synthesizing speech...")
         if getattr(args, "diarize", False):
             # Build subs straight from the translated segments so the speaker tag survives to
             # synthesis (the SRT has no speaker field). Same content the SRT was written from.
@@ -3539,7 +3549,7 @@ async def process_video(video_path: str, args, logger: Logger):
         state.mark_completed('synthesis', synthesis_sig)
 
     # Step 7: Final video assembly
-    logger.info("[7/7] Assembling final video...")
+    logger.info(f"[7/7] ({_elapsed()}) Assembling final video...")
     run_ffmpeg([
         "ffmpeg", "-y",
         "-i", str(video_path),
