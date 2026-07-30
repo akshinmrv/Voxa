@@ -646,6 +646,13 @@ def test_estimate_llm_cost_uses_prefix_table():
     assert voxa._estimate_llm_cost("some-unpriced-model", 1000, 1000) is None
 
 
+def test_record_tts_usage_accumulates(monkeypatch):
+    monkeypatch.setattr(voxa, "_tts_usage", {"calls": 0, "chars": 0})
+    voxa._record_tts_usage(100)
+    voxa._record_tts_usage(50)
+    assert voxa._tts_usage == {"calls": 2, "chars": 150}
+
+
 # ── Per-speaker voices (--diarize, P1) ───────────────────
 def test_assign_speaker_voices_distinct_and_cycling():
     # Two speakers, three voices -> the first two, in first-appearance order.

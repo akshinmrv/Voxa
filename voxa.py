@@ -846,11 +846,13 @@ def _openai_speech_create(client, kwargs, max_retries: int = 5):
     for attempt in range(max_retries):
         try:
             try:
-                return client.audio.speech.create(**kwargs)
+                resp = client.audio.speech.create(**kwargs)
             except TypeError:
                 k = dict(kwargs)
                 k.pop("instructions", None)
-                return client.audio.speech.create(**k)
+                resp = client.audio.speech.create(**k)
+            _record_tts_usage(len(kwargs.get("input", "") or ""))
+            return resp
         except Exception as e:
             if _is_transient_error(e) and attempt < max_retries - 1:
                 time.sleep(backoff + random.uniform(0, 1))
@@ -1776,6 +1778,28 @@ def log_llm_usage_summary(provider: str, model: str):
                 else f" (add {model} to --llm-prices for a cost estimate)")
     _LOG.info(f"💰 {provider} usage: {u['calls']} calls, {total} tokens "
                  f"(input {u['input_tokens']}, output {u['output_tokens']}){cost_str}")
+
+
+# Characters sent to OpenAI TTS this run (the free engines cost nothing, so only this is tracked).
+_tts_usage: Dict[str, int] = {"calls": 0, "chars": 0}
+
+
+def _record_tts_usage(chars: int):
+    _tts_usage["calls"] += 1
+    _tts_usage["chars"] += chars or 0
+
+
+def log_tts_usage_summary(model: str, price_per_million: Optional[float]):
+    """Report OpenAI TTS characters spoken and, when --tts-price is set, an estimated cost.
+    Priced per 1M characters, since TTS list prices change and vary by model/plan."""
+    if _tts_usage["calls"] == 0:
+        return
+    chars = _tts_usage["chars"]
+    if price_per_million:
+        cost_str = f", est. cost ${(chars / 1e6) * price_per_million:.4f}"
+    else:
+        cost_str = " (set --tts-price for a cost estimate)"
+    _LOG.info(f"💰 OpenAI TTS ({model}): {_tts_usage['calls']} calls, {chars} characters{cost_str}")
 
 
 # ── OpenAI request helper: param degradation + exponential backoff ──
@@ -3251,6 +3275,7 @@ async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
         concurrency=max(1, getattr(args, "tts_workers", 4)),
         speaker_voices=speaker_voices
     )
+    log_tts_usage_summary(args.openai_tts_model, getattr(args, "tts_price", None))
     return concat_list, temp_files
 
 
@@ -3820,6 +3845,9 @@ Examples:
                         help="JSON of model->[input, output] USD per 1M tokens, for the "
                              "translation cost estimate, e.g. '{\"gpt-5\": [1.25, 10]}'. Usually "
                              "set once in a --config file.")
+    parser.add_argument("--tts-price", type=float, default=None, metavar="USD",
+                        help="USD per 1M characters for OpenAI TTS, for the speech cost estimate "
+                             "(usage is always reported; the price is your plan's).")
     parser.add_argument("--env-file", default=".env",
                         help="Path to a .env file with API keys (default: .env)")
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True,

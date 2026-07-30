@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Translation cost estimates.** The per-job usage summary now reports an estimated cost when the
-  translator's model has a price. A couple of low-cost defaults are built in, and `--llm-prices`
+- **Translation and speech cost estimates.** The per-job summary now reports an estimated cost, not
+  just token counts. For translation, a couple of low-cost defaults are built in and `--llm-prices`
   (a JSON object of `model → [input, output]` USD per 1M tokens, usually set once in a `--config`
-  file) covers any model on your plan. An unpriced model still reports token counts.
+  file) covers any model on your plan. For OpenAI TTS, the characters spoken are always reported and
+  `--tts-price` (USD per 1M characters) turns that into a cost. Free engines and unpriced models
+  still just report usage.
 
 ### Changed
 
