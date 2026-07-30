@@ -3262,6 +3262,24 @@ TTS_PROVIDERS: Dict[str, Dict] = {
 }
 
 
+def _assemble_final_video(video_path, voiceover_path, output_file,
+                          background_volume: float, voice_volume: float) -> None:
+    """Mix the dubbed voiceover over the source as a faint bed and mux it onto the copied video.
+    amix duration=longest (not first): a final line that runs past the source *audio* stream —
+    which can be shorter than the video — must not be truncated. Extracted so the smoke test can
+    exercise the real mux without the whole pipeline."""
+    run_ffmpeg([
+        "ffmpeg", "-y",
+        "-i", str(video_path),
+        "-i", str(voiceover_path),
+        "-filter_complex",
+        f"[0:a]volume={background_volume}[bg];[1:a]volume={voice_volume}[fg];"
+        f"[bg][fg]amix=inputs=2:duration=longest:dropout_transition=2",
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-map", "0:v:0",
+        str(output_file)
+    ], "Final video assembly")
+
+
 async def process_video(video_path: str, args, logger: Logger):
     """Main video processing pipeline"""
     video_path = Path(video_path)
@@ -3550,18 +3568,8 @@ async def process_video(video_path: str, args, logger: Logger):
 
     # Step 7: Final video assembly
     logger.info(f"[7/7] ({_elapsed()}) Assembling final video...")
-    run_ffmpeg([
-        "ffmpeg", "-y",
-        "-i", str(video_path),
-        "-i", str(voiceover_norm),
-        "-filter_complex",
-        f"[0:a]volume={args.background_volume}[bg];[1:a]volume={args.voice_volume}[fg];"
-        # duration=longest, not first: when a final line breathes past the end of the source
-        # *audio* stream (which can be shorter than the video), the mix must not cut it off.
-        f"[bg][fg]amix=inputs=2:duration=longest:dropout_transition=2",
-        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-map", "0:v:0",
-        str(output_file)
-    ], "Final video assembly")
+    _assemble_final_video(video_path, voiceover_norm, output_file,
+                          args.background_volume, args.voice_volume)
 
     if not args.keep_temp:
         logger.info("🧹 Cleaning up temporary files...")

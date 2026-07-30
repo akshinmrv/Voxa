@@ -57,6 +57,28 @@ jobs:
       - name: Run tests
         run: pytest
 
+  smoke:
+    name: smoke (real ffmpeg)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # These run the real ffmpeg assembly the other jobs skip — the final mix in particular,
+      # where the "closing line truncated" bug hid. ffmpeg only; no torch, models, or network.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install test dependencies
+        run: pip install pytest numpy soundfile openai
+
+      - name: Run smoke tests
+        run: pytest tests/test_smoke.py -v
+
   web:
     name: web (lint + build)
     runs-on: ubuntu-latest
