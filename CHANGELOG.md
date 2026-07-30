@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-07-30
+
 ### Added
 
 - **Translation and speech cost estimates.** The per-job summary now reports an estimated cost, not
