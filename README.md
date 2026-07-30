@@ -365,6 +365,14 @@ voxa video.mp4 --config examples/config.json
 **Logging.** `--log-format json` emits one JSON object per line. `--verbose` raises the level
 to DEBUG and also surfaces third-party libraries.
 
+**Cost estimates.** With an LLM translator, the per-job summary reports token usage and — when the
+model has a price — an estimated cost. A couple of low-cost defaults are built in; set prices for
+the models you use with `--llm-prices` (best kept in the config file), since list prices change:
+
+```json
+{ "llm_prices": { "gpt-5": [1.25, 10], "claude-opus-4-8": [15, 75] } }
+```
+
 **All options:** `voxa --help`. It is generated from the code, so unlike a README table it can
 never go stale.
 

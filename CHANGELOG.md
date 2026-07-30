@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Translation cost estimates.** The per-job usage summary now reports an estimated cost when the
+  translator's model has a price. A couple of low-cost defaults are built in, and `--llm-prices`
+  (a JSON object of `model → [input, output]` USD per 1M tokens, usually set once in a `--config`
+  file) covers any model on your plan. An unpriced model still reports token counts.
+
 ## [1.6.4] - 2026-07-29
 
 ### Fixed

@@ -1722,13 +1722,34 @@ def get_anthropic_client(api_key: Optional[str] = None):
 # ── Usage / cost tracking (per provider) ─────────────────
 _llm_usage: Dict[str, Dict[str, int]] = {}
 
-# Optional price table: model prefix -> ($ per 1M input tokens, $ per 1M output tokens).
-# Left empty by default because pricing changes over time — fill in the models you use to
-# get cost estimates. When a model is not listed, only token counts are reported.
+# Price table: model prefix -> ($ per 1M input tokens, $ per 1M output tokens). Extend or override
+# it at runtime with --llm-prices (a JSON object, e.g. inside a --config file) since list prices
+# change and vary by plan. The built-ins cover the low-cost default OpenRouter model; an unlisted
+# model reports token counts only.
 LLM_PRICING: Dict[str, Tuple[float, float]] = {
-    # "gpt-5": (1.25, 10.0),
-    # "claude-opus-4-8": (5.0, 25.0),
+    "gpt-4o-mini": (0.15, 0.60),
+    "openai/gpt-4o-mini": (0.15, 0.60),
 }
+
+
+def _parse_llm_prices(value) -> Dict[str, Tuple[float, float]]:
+    """Normalise a --llm-prices value (a JSON string, or an object already parsed from a --config
+    file) into {model_prefix: (input_per_1M, output_per_1M)}. Bad entries are skipped, not fatal."""
+    if not value:
+        return {}
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            return {}
+    out: Dict[str, Tuple[float, float]] = {}
+    if isinstance(value, dict):
+        for k, v in value.items():
+            try:
+                out[str(k)] = (float(v[0]), float(v[1]))
+            except Exception:
+                continue
+    return out
 
 
 def _record_llm_usage(provider: str, input_tokens: int, output_tokens: int):
@@ -1751,7 +1772,8 @@ def log_llm_usage_summary(provider: str, model: str):
         return
     total = u["input_tokens"] + u["output_tokens"]
     cost = _estimate_llm_cost(model, u["input_tokens"], u["output_tokens"])
-    cost_str = f", est. cost ${cost:.4f}" if cost is not None else " (set LLM_PRICING for cost)"
+    cost_str = (f", est. cost ${cost:.4f}" if cost is not None
+                else f" (add {model} to --llm-prices for a cost estimate)")
     _LOG.info(f"💰 {provider} usage: {u['calls']} calls, {total} tokens "
                  f"(input {u['input_tokens']}, output {u['output_tokens']}){cost_str}")
 
@@ -3776,6 +3798,10 @@ Examples:
     parser.add_argument("--config", default=None,
                         help="JSON config file providing default option values "
                              "(argparse dest names, e.g. {\"translator\": \"openai\"})")
+    parser.add_argument("--llm-prices", default=None,
+                        help="JSON of model->[input, output] USD per 1M tokens, for the "
+                             "translation cost estimate, e.g. '{\"gpt-5\": [1.25, 10]}'. Usually "
+                             "set once in a --config file.")
     parser.add_argument("--env-file", default=".env",
                         help="Path to a .env file with API keys (default: .env)")
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True,
@@ -3789,6 +3815,10 @@ Examples:
         known = {a.dest for a in parser._actions}
         parser.set_defaults(**{k: v for k, v in cfg.items() if k in known})
     args = parser.parse_args()
+
+    # Merge any operator-supplied prices (a JSON string on the CLI, or an object from --config)
+    # so the usage summary can estimate translation cost for the models they actually use.
+    LLM_PRICING.update(_parse_llm_prices(getattr(args, "llm_prices", None)))
 
     # Load API keys / settings from a .env file (existing env vars take precedence).
     load_dotenv(args.env_file)

@@ -629,6 +629,23 @@ def test_resolve_piper_model_path_and_missing(tmp_path):
     assert voxa._resolve_piper_model(str(tmp_path / "absent.onnx")) is None
 
 
+# ── LLM cost estimate (--llm-prices, issue #3) ───────────
+def test_parse_llm_prices():
+    # A JSON string (CLI form) and a dict (config form) normalise the same way.
+    assert voxa._parse_llm_prices('{"gpt-5": [1.25, 10]}') == {"gpt-5": (1.25, 10.0)}
+    assert voxa._parse_llm_prices({"claude-x": [15, 75]}) == {"claude-x": (15.0, 75.0)}
+    # None / empty / malformed → empty, never raises; a bad entry is skipped, a good one kept.
+    assert voxa._parse_llm_prices(None) == {}
+    assert voxa._parse_llm_prices("not json") == {}
+    assert voxa._parse_llm_prices({"bad": [1], "ok": [2, 3]}) == {"ok": (2.0, 3.0)}
+
+
+def test_estimate_llm_cost_uses_prefix_table():
+    # gpt-4o-mini is a built-in price; cost = tokens/1e6 * (in + out).
+    assert voxa._estimate_llm_cost("gpt-4o-mini", 1_000_000, 1_000_000) == pytest.approx(0.75)
+    assert voxa._estimate_llm_cost("some-unpriced-model", 1000, 1000) is None
+
+
 # ── Per-speaker voices (--diarize, P1) ───────────────────
 def test_assign_speaker_voices_distinct_and_cycling():
     # Two speakers, three voices -> the first two, in first-appearance order.
