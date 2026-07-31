@@ -584,8 +584,11 @@ Yes, with FFmpeg on your PATH. CI runs on Linux, and the tool is developed on Wi
 
 ## Contributing
 
-Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the test suite,
-how to re-record the golden files, and the two dependency rules that matter: no GPL-licensed
+Issues and pull requests are welcome, and **a first pull request gets a response within 24
+hours** — even if that response is a request for changes. A
+[good first issue](https://github.com/akshinmrv/Voxa/labels/good%20first%20issue) is the
+easiest place to start. [CONTRIBUTING.md](CONTRIBUTING.md) covers the test suite, how to
+re-record the golden files, and the two dependency rules that matter: no GPL-licensed
 required dependency, and engine-specific packages belong in extras.
 
 Adding a speech engine is one adapter plus one registry line — the timeline, placement, drift

@@ -531,9 +531,12 @@ Bəli, FFmpeg PATH-də olduqda. CI Linux-da qaçır, alət isə Windows-da inki�
 
 ## Töhfə vermək
 
-Issue və pull request-lər qəbul olunur. [CONTRIBUTING.md](CONTRIBUTING.md) test paketini,
-golden faylların yenilənməsini və iki vacib asılılıq qaydasını izah edir: **GPL lisenziyalı
-məcburi asılılıq olmamalıdır**, mühərriyə xas paketlər **extras**-a getməlidir.
+Issue və pull request-lər qəbul olunur, və **ilk pull request 24 saat ərzində cavab alır** —
+hətta bu cavab dəyişiklik istəyi olsa belə. Başlamaq üçün ən asan yer bir
+[good first issue](https://github.com/akshinmrv/Voxa/labels/good%20first%20issue)-dur.
+[CONTRIBUTING.md](CONTRIBUTING.md) test paketini, golden faylların yenilənməsini və iki vacib
+asılılıq qaydasını izah edir: **GPL lisenziyalı məcburi asılılıq olmamalıdır**, mühərrikə xas
+paketlər **extras**-a getməlidir.
 
 Nitq mühərriki əlavə etmək = 1 adapter + 1 registry sətri.
 

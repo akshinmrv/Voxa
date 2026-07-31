@@ -525,9 +525,12 @@ geliştirilir.
 
 ## Katkıda bulunma
 
-Issue ve pull request'ler memnuniyetle karşılanır. [CONTRIBUTING.md](CONTRIBUTING.md) test
-paketini, golden dosyaların yeniden kaydını ve iki önemli bağımlılık kuralını açıklar: **GPL
-lisanslı zorunlu bağımlılık olmamalı**, motora özgü paketler **extras**'a girmeli.
+Issue ve pull request'ler memnuniyetle karşılanır ve **ilk pull request 24 saat içinde yanıt
+alır** — bu yanıt bir değişiklik isteği olsa bile. Başlamak için en kolay yer bir
+[good first issue](https://github.com/akshinmrv/Voxa/labels/good%20first%20issue)'dır.
+[CONTRIBUTING.md](CONTRIBUTING.md) test paketini, golden dosyaların yeniden kaydını ve iki
+önemli bağımlılık kuralını açıklar: **GPL lisanslı zorunlu bağımlılık olmamalı**, motora özgü
+paketler **extras**'a girmeli.
 
 Bir konuşma motoru eklemek = 1 adaptör + 1 registry satırı.
 
