@@ -26,6 +26,7 @@
     "title": "İş başında gör",
     "subtitle": "Aynı klip, üç dile dublajlandı — her biri konuşmacıya kilitli.",
     "driftTitle": "Sabitlenmiş — birleştirilmiş değil",
+    "driftExample": "Örnek: İngilizce → Türkçe · sayaç dili değil, zamanlamayı ölçer",
     "driftCaption": "Duyduğun Voxa'nın dublajı — kaynağa 0.0s'de kilitli. Kırmızı sayaç, naif bir aracın (her klibi öncekinin ardına ekleyen) nerede olacağını gösterir: konuşmacının saniyelerce gerisinde ve artıyor.",
     "otherLangs": "Ya da aynı klibi üç dilde karşılaştır:",
     "captionsNote": "Tek kaynak video, Voxa ile dublajlandı. Bir dil seç.",

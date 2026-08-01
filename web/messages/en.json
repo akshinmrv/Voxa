@@ -26,6 +26,7 @@
     "title": "See it in action",
     "subtitle": "The same clip, dubbed into three languages — each locked to the speaker.",
     "driftTitle": "Anchored, not concatenated",
+    "driftExample": "Example: English → Turkish · the counter measures timing, not the dub's language",
     "driftCaption": "You're hearing Voxa's dub, locked to the source at 0.0s. The red counter tracks where a naive tool — one that just plays each clip after the last — would be: seconds behind the speaker, and climbing.",
     "otherLangs": "Or compare the same clip across three languages:",
     "captionsNote": "One source video, dubbed by Voxa. Pick a language.",

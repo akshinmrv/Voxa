@@ -23,8 +23,13 @@ export function Demo() {
 
         {/* Featured: the anchored-vs-naive drift comparison — Voxa's core property. */}
         <div className="mt-10">
-          <p className="mb-3 text-center text-sm font-medium text-foreground">
+          <p className="mb-1 text-center text-sm font-medium text-foreground">
             {t("driftTitle")}
+          </p>
+          <p className="mb-3 text-center">
+            <span className="inline-block rounded-full border border-border bg-surface-1 px-3 py-1 text-xs text-muted-foreground">
+              {t("driftExample")}
+            </span>
           </p>
           <div className="overflow-hidden rounded-lg border border-primary/30 bg-surface-1">
             <video
