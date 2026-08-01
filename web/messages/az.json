@@ -25,6 +25,9 @@
     "label": "Demo",
     "title": "İş başında gör",
     "subtitle": "Eyni klip, üç dilə dublyaj — hər biri danışana kilidli.",
+    "driftTitle": "Anchored — birləşdirilmiş deyil",
+    "driftCaption": "Eşitdiyin Voxa-nın dublyajıdır — mənbəyə 0.0s-də kilidli. Qırmızı sayğac naive alətin (hər klipi sadəcə ardınca oynadan) harada olacağını göstərir: danışandan saniyələrlə geri, artmaqda.",
+    "otherLangs": "Yaxud eyni klipi üç dildə müqayisə et:",
     "captionsNote": "Bir mənbə video, Voxa ilə dublyaj. Dil seç.",
     "placeholder": "Demo video tezliklə.",
     "langs": {

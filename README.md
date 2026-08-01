@@ -15,6 +15,11 @@ away from the speaker.
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
+[![The dub stays in sync: a naive tool drifts +18s behind while Voxa holds at 0.0s](docs/assets/drift-poster.jpg)](https://voxa.servoogle.com/#demo)
+
+**[▶ Watch the drift comparison](https://voxa.servoogle.com/#demo)** — you hear Voxa's dub locked to
+the speaker at 0.0s, while a naive concatenation drifts seconds behind. Same dub, measured not claimed.
+
 </div>
 
 ```bash

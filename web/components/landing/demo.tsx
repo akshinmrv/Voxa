@@ -21,12 +21,35 @@ export function Demo() {
           subtitle={t("subtitle")}
         />
 
+        {/* Featured: the anchored-vs-naive drift comparison — Voxa's core property. */}
+        <div className="mt-10">
+          <p className="mb-3 text-center text-sm font-medium text-foreground">
+            {t("driftTitle")}
+          </p>
+          <div className="overflow-hidden rounded-lg border border-primary/30 bg-surface-1">
+            <video
+              controls
+              preload="none"
+              playsInline
+              poster="/demo/drift-poster.jpg"
+              className="aspect-video w-full bg-black"
+              src="/demo/drift_comparison.mp4"
+            />
+          </div>
+          <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-muted-foreground">
+            {t("driftCaption")}
+          </p>
+        </div>
+
         {DEMOS.length > 0 ? (
           <>
+            <p className="mt-14 text-center text-sm text-muted-foreground">
+              {t("otherLangs")}
+            </p>
             <div
               role="tablist"
               aria-label={t("title")}
-              className="mt-10 flex flex-wrap justify-center gap-2"
+              className="mt-4 flex flex-wrap justify-center gap-2"
             >
               {DEMOS.map((clip, i) => (
                 <button
