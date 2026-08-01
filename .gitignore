@@ -60,6 +60,7 @@ SAAS_MASTER_STRATEGY.md
 SPEECH_SYNC_STRATEGY.md
 NEXT_GENERATION_SPEECH_PIPELINE_STRATEGY.md
 DRIFT_VIDEO_SCRIPT_DRAFT.md
+PEP_541_REQUEST_DRAFT.md
 
 # Installed agent skills (ui-ux-pro-max etc.) — local tooling, not project source
 .agents/
