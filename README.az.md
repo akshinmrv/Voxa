@@ -14,7 +14,7 @@ backend-i və bir güzəştsiz xüsusiyyət: dublyaj danışandan sürüşmür.
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-[![Dublyaj sinxron qalır: naive alət +18s geri sürüşür, Voxa 0.0s-də saxlayır](docs/assets/drift-poster.jpg)](https://voxa.servoogle.com/#demo)
+[![Dublyaj sinxron qalır: naive alət +18s geri sürüşür, Voxa 0.0s-də saxlayır](docs/assets/voxa_drift.gif)](https://voxa.servoogle.com/#demo)
 
 **[▶ Drift müqayisəsinə bax](https://voxa.servoogle.com/#demo)** — Voxa-nın dublyajını danışana
 0.0s-də kilidli eşidirsən, naive birləşdirmə isə saniyələrlə geri sürüşür. Eyni dublyaj — iddia yox, ölçmə.
