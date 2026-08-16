@@ -26,6 +26,7 @@ import shutil
 import sys
 import time
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -136,9 +137,21 @@ WORKSPACE = Path.cwd() / ".voxa_serve"
 UPLOAD_DIR = WORKSPACE / "uploads"
 JOBS_DIR = WORKSPACE / "jobs"
 
-# Dubbing is heavy (a Whisper model + ffmpeg); run one job at a time so a second
-# request queues instead of thrashing the machine.
-_JOB_LOCK = asyncio.Lock()
+# Dubbing is heavy (each job is a separate process with its own Whisper model), so the number
+# of dubs running at once is bounded. The default is one — the machine isn't thrashed unless
+# the operator opts in — and the ceiling is deliberately low, since raising it trades memory
+# and CPU for throughput. The limit is read when a job starts, so a change in Settings applies
+# to the next job without restarting the server.
+CONCURRENT_JOBS_MIN = 1
+CONCURRENT_JOBS_MAX = 4
+CONCURRENT_JOBS_DEFAULT = 1
+
+_JOB_SLOTS = asyncio.Condition()
+_running_jobs = 0
+
+# Jobs on the same source share a content-keyed work dir and its resume state, so two of them
+# must never run at the same time — even when the concurrency limit would allow it.
+_WORKDIR_LOCKS: Dict[str, asyncio.Lock] = {}
 
 _SAFE = re.compile(r"[^A-Za-z0-9._-]+")
 
@@ -230,9 +243,54 @@ async def _emit(job: Job, event: dict) -> None:
         q.put_nowait(event)
 
 
+def max_concurrent_jobs(settings: Optional[dict] = None) -> int:
+    """How many dubs may run at once (Settings → Advanced), clamped to a safe range.
+    Each concurrent job is a separate process loading its own Whisper model, so the ceiling is
+    low on purpose: concurrency pays off when the engines wait on the network (cloud
+    translation and speech) and costs memory when they don't (local Whisper, Piper, XTTS)."""
+    src = settings if settings is not None else read_settings()
+    raw = (src.get("advanced") or {}).get("maxConcurrentJobs")
+    if raw is None:
+        return CONCURRENT_JOBS_DEFAULT
+    try:
+        limit = int(raw)
+    except (TypeError, ValueError):
+        return CONCURRENT_JOBS_DEFAULT
+    return max(CONCURRENT_JOBS_MIN, min(CONCURRENT_JOBS_MAX, limit))
+
+
+def _workdir_lock(work_dir: Path) -> asyncio.Lock:
+    """One lock per work dir, created on first use. Safe without a guard: the event loop is
+    single-threaded and there is no await between the lookup and the insert."""
+    key = str(work_dir)
+    lock = _WORKDIR_LOCKS.get(key)
+    if lock is None:
+        lock = _WORKDIR_LOCKS[key] = asyncio.Lock()
+    return lock
+
+
+@asynccontextmanager
+async def _job_gate(job: Job):
+    """Admit a job to run. Its work dir must be free first — a second dub of the same video
+    waits rather than racing on the shared resume state — and only then does it take one of
+    the concurrency slots. Taking the work-dir lock first means a queued same-source job
+    doesn't hold a slot that an unrelated video could be using."""
+    global _running_jobs
+    async with _workdir_lock(job.work_dir):
+        async with _JOB_SLOTS:
+            await _JOB_SLOTS.wait_for(lambda: _running_jobs < max_concurrent_jobs())
+            _running_jobs += 1
+        try:
+            yield
+        finally:
+            async with _JOB_SLOTS:
+                _running_jobs -= 1
+                _JOB_SLOTS.notify_all()
+
+
 async def _run_job(job: Job) -> None:
     """Run one dubbing job as a subprocess and stream its [N/7] progress."""
-    async with _JOB_LOCK:
+    async with _job_gate(job):
         job.status = "running"
         await _emit(job, {"type": "status", "status": "running"})
 
@@ -355,7 +413,8 @@ def default_settings() -> dict:
         "providers": {pid: {"model": None} for pid in voxa.LLM_PROVIDERS},
         "translation": {"prompt": None, "fallback": None},
         "speech": {"instructions": None, "presets": []},
-        "advanced": {"speechRate": None, "qualityGate": False, "ttsWorkers": None},
+        "advanced": {"speechRate": None, "qualityGate": False, "ttsWorkers": None,
+                     "maxConcurrentJobs": None},
     }
 
 
@@ -665,6 +724,18 @@ async def put_settings(patch: SettingsPatch, _: None = Depends(require_local)) -
                 raise HTTPException(
                     status_code=422,
                     detail=f"ttsWorkers must be between {TTS_WORKERS_MIN} and {TTS_WORKERS_MAX}.")
+        concurrent = (data["advanced"] or {}).get("maxConcurrentJobs")
+        if concurrent is not None:
+            try:
+                concurrent = int(concurrent)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422,
+                                    detail="maxConcurrentJobs must be an integer.")
+            if not (CONCURRENT_JOBS_MIN <= concurrent <= CONCURRENT_JOBS_MAX):
+                raise HTTPException(
+                    status_code=422,
+                    detail=(f"maxConcurrentJobs must be between {CONCURRENT_JOBS_MIN} "
+                            f"and {CONCURRENT_JOBS_MAX}."))
     if "speech" in data:
         speech = data["speech"] or {}
         presets = speech.get("presets")

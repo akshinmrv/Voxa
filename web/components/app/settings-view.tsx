@@ -44,6 +44,7 @@ export function SettingsView() {
   const [fallbackDraft, setFallbackDraft] = useState<string | null>(null);
   const [rateDraft, setRateDraft] = useState<string | null>(null);
   const [workersDraft, setWorkersDraft] = useState<string | null>(null);
+  const [concurrentDraft, setConcurrentDraft] = useState<string | null>(null);
 
   const save = useMutation({
     mutationFn: (patch: SettingsPatch) => updateSettings(patch),
@@ -77,6 +78,7 @@ export function SettingsView() {
       setFallbackDraft(null);
       setRateDraft(null);
       setWorkersDraft(null);
+      setConcurrentDraft(null);
     },
   });
 
@@ -134,11 +136,16 @@ export function SettingsView() {
   const savedWorkers = settings.advanced?.ttsWorkers;
   const fallbackValue = fallbackDraft ?? savedFallback;
   const rateValue = rateDraft ?? (savedRate != null ? String(savedRate) : "");
+  const savedConcurrent = settings.advanced?.maxConcurrentJobs;
   const workersValue = workersDraft ?? (savedWorkers != null ? String(savedWorkers) : "");
+  const concurrentValue =
+    concurrentDraft ?? (savedConcurrent != null ? String(savedConcurrent) : "");
   const advancedDirty =
     (fallbackDraft !== null && fallbackDraft !== savedFallback) ||
     (rateDraft !== null && rateDraft !== (savedRate != null ? String(savedRate) : "")) ||
-    (workersDraft !== null && workersDraft !== (savedWorkers != null ? String(savedWorkers) : ""));
+    (workersDraft !== null && workersDraft !== (savedWorkers != null ? String(savedWorkers) : "")) ||
+    (concurrentDraft !== null &&
+      concurrentDraft !== (savedConcurrent != null ? String(savedConcurrent) : ""));
   const qualityGate = settings.advanced?.qualityGate ?? false;
 
   return (
@@ -396,6 +403,23 @@ export function SettingsView() {
             />
           </Field>
 
+          <Field
+            id="maxConcurrentJobs"
+            label={t("advanced.concurrentLabel")}
+            hint={t("advanced.concurrentHint")}
+          >
+            <Input
+              id="maxConcurrentJobs"
+              type="number"
+              min={1}
+              max={4}
+              step={1}
+              placeholder="1"
+              value={concurrentValue}
+              onChange={(e) => setConcurrentDraft(e.target.value)}
+            />
+          </Field>
+
           <div className="flex items-center gap-3">
             <Button
               disabled={!advancedDirty || saveAdvanced.isPending}
@@ -405,6 +429,9 @@ export function SettingsView() {
                   advanced: {
                     speechRate: rateValue.trim() ? Number(rateValue) : null,
                     ttsWorkers: workersValue.trim() ? Number(workersValue) : null,
+                    maxConcurrentJobs: concurrentValue.trim()
+                      ? Number(concurrentValue)
+                      : null,
                   },
                 })
               }

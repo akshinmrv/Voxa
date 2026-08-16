@@ -335,6 +335,8 @@
         "rateHint": "How much translated text is budgeted per second. Default 15; range 8–30. Lower condenses more, higher rushes delivery.",
         "workersLabel": "Parallel speech requests",
         "workersHint": "How many segments the cloud engines (OpenAI, Edge) synthesize at once. Default 4; range 1–16. Higher is faster but may hit your API rate limit. Offline engines ignore it.",
+        "concurrentLabel": "Videos dubbed at once",
+        "concurrentHint": "How many jobs run in parallel instead of queueing. Default 1; range 1–4. Raising it helps when the engines wait on the network (cloud translation and speech) and costs memory when they don't — each job loads its own Whisper model. Two dubs of the same video always run one after the other.",
         "save": "Save advanced",
         "saved": "Saved",
         "qualityGateLabel": "Quality gate (score & retry speech)",

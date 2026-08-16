@@ -82,7 +82,13 @@ export type VoxaSettings = {
   providers: Record<string, ProviderSettings>;
   translation: { prompt: string | null; fallback: string | null };
   speech: { instructions: string | null; presets: string[] };
-  advanced: { speechRate: number | null; qualityGate: boolean; ttsWorkers: number | null };
+  advanced: {
+    speechRate: number | null;
+    qualityGate: boolean;
+    ttsWorkers: number | null;
+    /** How many dubbing jobs may run at once (1 = one at a time). */
+    maxConcurrentJobs: number | null;
+  };
 };
 
 /** Partial update sent to PUT /api/settings — only changed fields. */
@@ -92,7 +98,12 @@ export type SettingsPatch = {
   providers?: Record<string, ProviderSettings>;
   translation?: { prompt?: string | null; fallback?: string | null };
   speech?: { instructions?: string | null; presets?: string[] };
-  advanced?: { speechRate?: number | null; qualityGate?: boolean; ttsWorkers?: number | null };
+  advanced?: {
+    speechRate?: number | null;
+    qualityGate?: boolean;
+    ttsWorkers?: number | null;
+    maxConcurrentJobs?: number | null;
+  };
 };
 
 /** Masked API-key status for one provider (the raw key never reaches the browser). */

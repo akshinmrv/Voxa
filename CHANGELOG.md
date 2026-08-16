@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Dub several videos at once in the operator console.** `voxa serve` ran one job at a time, so
+  a second upload just queued. Settings → Advanced now has "Videos dubbed at once" (1–4,
+  default 1, so nothing changes unless you ask for it). Raising it pays off when the engines
+  spend their time waiting on the network — cloud translation and speech — and costs memory
+  when they don't, since each job is a separate process loading its own Whisper model. Two dubs
+  of the *same* video still run one after the other: they share a content-keyed work dir and its
+  resume state, so overlapping them would race. The limit is read when a job starts, so changing
+  it applies to the next job without restarting the server.
+
 ## [1.8.0] - 2026-07-30
 
 ### Added

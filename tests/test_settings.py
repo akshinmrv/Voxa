@@ -7,6 +7,8 @@ a tmp dir so nothing touches the developer's own .voxa_serve/ or .env.
 
 Run:  pytest -q tests/test_settings.py
 """
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -61,7 +63,8 @@ def test_missing_keys_backfilled_from_defaults(store):
     (store / "settings.json").write_text('{"defaultTranslator": "openai"}', encoding="utf-8")
     s = srv.read_settings()
     assert s["defaultTts"] == "edge"
-    assert s["advanced"] == {"speechRate": None, "qualityGate": False, "ttsWorkers": None}
+    assert s["advanced"] == {"speechRate": None, "qualityGate": False, "ttsWorkers": None,
+                             "maxConcurrentJobs": None}
 
 
 def test_invalid_file_falls_back_to_defaults(store):
@@ -472,6 +475,76 @@ def test_diarize_args_builds_flags():
 def test_build_options_reports_diarize_availability():
     # The job form uses this flag to offer diarization only when the extra is installed.
     assert "diarizeAvailable" in srv.build_options()
+
+
+# ── Concurrent dubbing jobs ──────────────────────────────
+def test_max_concurrent_jobs_defaults_and_clamps():
+    assert srv.max_concurrent_jobs({}) == srv.CONCURRENT_JOBS_DEFAULT
+    assert srv.max_concurrent_jobs({"advanced": {"maxConcurrentJobs": 3}}) == 3
+    # Out-of-range and junk values fall back to something safe rather than raising.
+    assert srv.max_concurrent_jobs({"advanced": {"maxConcurrentJobs": 99}}) == \
+        srv.CONCURRENT_JOBS_MAX
+    assert srv.max_concurrent_jobs({"advanced": {"maxConcurrentJobs": 0}}) == \
+        srv.CONCURRENT_JOBS_MIN
+    assert srv.max_concurrent_jobs({"advanced": {"maxConcurrentJobs": "x"}}) == \
+        srv.CONCURRENT_JOBS_DEFAULT
+
+
+def _peak_in_flight(work_dirs, limit, monkeypatch):
+    """Run one gated task per work dir at the same time; return how many ever overlapped."""
+    monkeypatch.setattr(srv, "max_concurrent_jobs", lambda settings=None: limit)
+    # Fresh primitives: each asyncio.run() below is a new event loop.
+    monkeypatch.setattr(srv, "_WORKDIR_LOCKS", {})
+    monkeypatch.setattr(srv, "_JOB_SLOTS", asyncio.Condition())
+    monkeypatch.setattr(srv, "_running_jobs", 0)
+    cfg = srv.JobConfigModel(targetLang="tr", translator="google", tts="edge")
+    jobs = [srv.Job(id=str(i), file_name="v.mp4", config=cfg, work_dir=d)
+            for i, d in enumerate(work_dirs)]
+    state = {"now": 0, "peak": 0}
+
+    async def run(job):
+        async with srv._job_gate(job):
+            state["now"] += 1
+            state["peak"] = max(state["peak"], state["now"])
+            await asyncio.sleep(0.02)
+            state["now"] -= 1
+
+    async def main():
+        await asyncio.wait_for(asyncio.gather(*(run(j) for j in jobs)), timeout=10)
+
+    asyncio.run(main())
+    return state["peak"]
+
+
+def test_jobs_on_different_videos_run_concurrently(tmp_path, monkeypatch):
+    dirs = [tmp_path / "a", tmp_path / "b", tmp_path / "c"]
+    assert _peak_in_flight(dirs, limit=2, monkeypatch=monkeypatch) == 2
+
+
+def test_default_limit_keeps_jobs_serialised(tmp_path, monkeypatch):
+    dirs = [tmp_path / "a", tmp_path / "b"]
+    assert _peak_in_flight(dirs, limit=1, monkeypatch=monkeypatch) == 1
+
+
+def test_jobs_sharing_a_work_dir_never_overlap(tmp_path, monkeypatch):
+    # Same source dubbed twice (e.g. to two languages): the content-keyed work dir and its
+    # resume state are shared, so these must serialise even with slots to spare.
+    same = tmp_path / "same"
+    assert _peak_in_flight([same, same, same], limit=3, monkeypatch=monkeypatch) == 1
+
+
+def test_put_settings_rejects_out_of_range_concurrency(client):
+    too_many = srv.CONCURRENT_JOBS_MAX + 1
+    r = client.put("/api/settings", json={"advanced": {"maxConcurrentJobs": too_many}})
+    assert r.status_code == 422
+    assert client.put("/api/settings",
+                      json={"advanced": {"maxConcurrentJobs": "two"}}).status_code == 422
+
+
+def test_put_settings_accepts_concurrency(client):
+    r = client.put("/api/settings", json={"advanced": {"maxConcurrentJobs": 2}})
+    assert r.status_code == 200
+    assert r.json()["advanced"]["maxConcurrentJobs"] == 2
 
 
 # ── Operator console URL source ──────────────────────────

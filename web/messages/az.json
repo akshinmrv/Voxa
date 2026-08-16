@@ -335,6 +335,8 @@
         "rateHint": "Saniyədə nə qədər tərcümə mətni büdcələnir. Defolt 15; aralıq 8–30. Aşağı daha çox sıxır, yuxarı tələsdirir.",
         "workersLabel": "Paralel nitq sorğuları",
         "workersHint": "Cloud engine-lər (OpenAI, Edge) eyni anda neçə seqment sintez edir. Defolt 4; aralıq 1–16. Yuxarı daha sürətlidir, amma API rate limit-inə çata bilər. Offline engine-lər nəzərə almır.",
+        "concurrentLabel": "Eyni anda dublyaj olunan videolar",
+        "concurrentHint": "Neçə iş növbəyə durmadan paralel işləyir. Defolt 1; aralıq 1–4. Artırmaq mühərriklər şəbəkəni gözləyəndə (cloud tərcümə və nitq) kömək edir, gözləməyəndə yaddaş aparır — hər iş öz Whisper modelini yükləyir. Eyni videonun iki dublyajı həmişə ardıcıl işləyir.",
         "save": "Ətraflını saxla",
         "saved": "Saxlanıldı",
         "qualityGateLabel": "Keyfiyyət nəzarəti (skorla və yenidən sintez et)",

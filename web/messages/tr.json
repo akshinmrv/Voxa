@@ -335,6 +335,8 @@
         "rateHint": "Saniyede ne kadar çeviri metni bütçelenir. Varsayılan 15; aralık 8–30. Düşük daha çok sıkıştırır, yüksek aceleye getirir.",
         "workersLabel": "Paralel konuşma istekleri",
         "workersHint": "Bulut motorlar (OpenAI, Edge) aynı anda kaç segment sentezler. Varsayılan 4; aralık 1–16. Yüksek daha hızlıdır ama API oran sınırına takılabilir. Çevrimdışı motorlar dikkate almaz.",
+        "concurrentLabel": "Aynı anda dublajlanan videolar",
+        "concurrentHint": "Kaç iş sıraya girmeden paralel çalışır. Varsayılan 1; aralık 1–4. Artırmak, motorlar ağı beklerken (bulut çeviri ve konuşma) yardımcı olur; beklemediklerinde bellek harcar — her iş kendi Whisper modelini yükler. Aynı videonun iki dublajı her zaman arka arkaya çalışır.",
         "save": "Gelişmişi kaydet",
         "saved": "Kaydedildi",
         "qualityGateLabel": "Kalite denetimi (puanla ve konuşmayı yeniden dene)",
