@@ -85,7 +85,7 @@ jobs:
 
       # ghcr.io requires a lowercase image name; the repository is akshinmrv/Voxa.
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/akshinmrv/voxa
           tags: |
