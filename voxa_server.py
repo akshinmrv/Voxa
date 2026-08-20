@@ -414,7 +414,7 @@ def default_settings() -> dict:
         "translation": {"prompt": None, "fallback": None},
         "speech": {"instructions": None, "presets": []},
         "advanced": {"speechRate": None, "qualityGate": False, "ttsWorkers": None,
-                     "maxConcurrentJobs": None},
+                     "maxConcurrentJobs": None, "autoDownload": False},
     }
 
 

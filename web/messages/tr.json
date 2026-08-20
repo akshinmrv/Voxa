@@ -228,9 +228,13 @@
     "newJob": {
       "title": "Yeni iş",
       "subtitle": "Bir video yükle, motorlarını seç ve dublaja başla.",
-      "uploadTitle": "Bir video bırak veya tıklayıp seç",
-      "uploadHint": "MP4, MOV, MKV veya WebM",
+      "uploadTitle": "Videoları bırak veya tıklayıp seç",
+      "uploadHint": "MP4, MOV, MKV veya WebM — birkaçını seçersen her biri için ayrı iş oluşur",
       "selectedFile": "Seçilen dosya",
+      "selectedFiles": "{count} video seçildi",
+      "addMore": "Daha ekle",
+      "removeAll": "Tümünü temizle",
+      "uploading": "Yükleniyor {done}/{total}…",
       "change": "Değiştir",
       "remove": "Kaldır",
       "configTitle": "Yapılandırma",
@@ -340,7 +344,9 @@
         "save": "Gelişmişi kaydet",
         "saved": "Kaydedildi",
         "qualityGateLabel": "Kalite denetimi (puanla ve konuşmayı yeniden dene)",
-        "qualityGateHint": "Her sentezlenen satırı puanlar ve bozuk olanı nötr üslupla yeniden oluşturur. Daha yavaş, OpenAI TTS. Varsayılan kapalı."
+        "qualityGateHint": "Her sentezlenen satırı puanlar ve bozuk olanı nötr üslupla yeniden oluşturur. Daha yavaş, OpenAI TTS. Varsayılan kapalı.",
+        "autoDownloadLabel": "Her dublajı otomatik kaydet",
+        "autoDownloadHint": "İş bittiğinde video, İndir düğmesine basmadan indirilenler klasörüne kaydedilir. Yalnızca konsol açıkken çalışır ve tarayıcı birkaç dosyayı aynı anda kaydetmeden önce izin isteyebilir."
       },
       "appearance": {
         "title": "Görünüm",

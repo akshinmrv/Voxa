@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { UploadCloud, FileVideo, X } from "lucide-react";
+import { UploadCloud, FileVideo, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -13,44 +13,101 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Drag-and-drop (or click) video picker. Controlled via `file` / `onFile`. */
+/** Drag-and-drop (or click) video picker. Accepts several videos — one job is queued per
+ *  file — and is controlled via `files` / `onFiles`. */
 export function UploadDropzone({
-  file,
-  onFile,
+  files,
+  onFiles,
 }: {
-  file: File | null;
-  onFile: (file: File | null) => void;
+  files: File[];
+  onFiles: (files: File[]) => void;
 }) {
   const t = useTranslations("App.newJob");
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
-  function pick(files: FileList | null) {
-    const f = files?.[0];
-    if (f && f.type.startsWith("video/")) onFile(f);
+  function add(picked: FileList | null) {
+    const videos = Array.from(picked ?? []).filter((f) => f.type.startsWith("video/"));
+    if (!videos.length) return;
+    // Same name + size twice is the same pick, not two videos.
+    const key = (f: File) => `${f.name}:${f.size}`;
+    const seen = new Set(files.map(key));
+    onFiles([...files, ...videos.filter((f) => !seen.has(key(f)))]);
   }
 
-  if (file) {
+  const hidden = (
+    <input
+      ref={inputRef}
+      type="file"
+      accept={ACCEPT}
+      multiple
+      className="hidden"
+      onChange={(e) => {
+        add(e.target.files);
+        e.target.value = ""; // let the same file be re-picked after removal
+      }}
+    />
+  );
+
+  if (files.length > 0) {
+    const total = files.reduce((n, f) => n + f.size, 0);
     return (
-      <div className="flex items-center gap-4 rounded-md border border-border bg-surface-1 p-4">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-sm border border-border bg-surface-2 text-primary">
-          <FileVideo className="size-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="type-label text-muted-foreground">{t("selectedFile")}</p>
-          <p className="truncate text-sm font-medium">{file.name}</p>
-          <p className="type-code text-xs text-muted-foreground tabular">
-            {formatSize(file.size)}
+      <div
+        className={cn(
+          "space-y-2 rounded-md border p-4 transition-colors",
+          dragging ? "border-primary bg-primary/5" : "border-border bg-surface-1",
+        )}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          add(e.dataTransfer.files);
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="type-label text-muted-foreground">
+            {t("selectedFiles", { count: files.length })} · {formatSize(total)}
           </p>
+          <Button variant="ghost" size="sm" onClick={() => onFiles([])}>
+            <X /> {t("removeAll")}
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onFile(null)}
-          aria-label={t("remove")}
-        >
-          <X /> {t("remove")}
+
+        <ul className="space-y-2">
+          {files.map((file) => (
+            <li
+              key={`${file.name}:${file.size}`}
+              className="flex items-center gap-3 rounded-sm border border-border bg-surface-2 p-2.5"
+            >
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-sm border border-border text-primary">
+                <FileVideo className="size-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{file.name}</p>
+                <p className="type-code text-xs text-muted-foreground tabular">
+                  {formatSize(file.size)}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={t("remove")}
+                onClick={() => onFiles(files.filter((f) => f !== file))}
+              >
+                <X />
+              </Button>
+            </li>
+          ))}
+        </ul>
+
+        <Button variant="ghost" size="sm" onClick={() => inputRef.current?.click()}>
+          <Plus /> {t("addMore")}
         </Button>
+        {hidden}
       </div>
     );
   }
@@ -67,7 +124,7 @@ export function UploadDropzone({
       onDrop={(e) => {
         e.preventDefault();
         setDragging(false);
-        pick(e.dataTransfer.files);
+        add(e.dataTransfer.files);
       }}
       className={cn(
         "flex w-full flex-col items-center justify-center gap-3 rounded-md border border-dashed p-10 text-center transition-colors",
@@ -83,13 +140,7 @@ export function UploadDropzone({
         <p className="text-sm font-medium">{t("uploadTitle")}</p>
         <p className="mt-1 text-xs text-muted-foreground">{t("uploadHint")}</p>
       </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={ACCEPT}
-        className="hidden"
-        onChange={(e) => pick(e.target.files)}
-      />
+      {hidden}
     </button>
   );
 }

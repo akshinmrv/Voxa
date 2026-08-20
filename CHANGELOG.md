@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Queue several videos in one go.** The job form takes more than one video now: drop or pick
+  a handful and each gets its own job, uploaded in order. A single video still opens on its own
+  page; a batch goes to the jobs list, where they can be watched together. How many of them
+  actually run at the same time is the concurrency setting below.
+- **Save each dub automatically (Settings → Advanced).** With it on, a finished job's video is
+  downloaded as soon as it completes, instead of waiting for a click. Only dubs that finish
+  while the console is open are saved — opening the jobs list doesn't re-download the history —
+  and a browser may ask permission before saving several files from one page. Off by default.
 - **Dub several videos at once in the operator console.** `voxa serve` ran one job at a time, so
   a second upload just queued. Settings → Advanced now has "Videos dubbed at once" (1–4,
   default 1, so nothing changes unless you ask for it). Raising it pays off when the engines

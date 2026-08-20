@@ -3,7 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { ListChecks, FileVideo } from "lucide-react";
-import { listJobs } from "@/lib/api";
+import { listJobs, getSettings } from "@/lib/api";
+import { useAutoDownload } from "@/lib/use-auto-download";
 import { Link } from "@/i18n/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,10 @@ export function JobsView() {
     queryFn: listJobs,
     refetchInterval: 4000, // keep the list fresh while jobs run
   });
+  const settings = useQuery({ queryKey: ["settings"], queryFn: getSettings });
+
+  // Saves a dub the moment it finishes, if the operator asked for that in Settings.
+  useAutoDownload(query.data?.jobs, settings.data?.advanced?.autoDownload ?? false);
 
   if (query.isPending) return <Loading />;
   if (query.isError || !query.data)

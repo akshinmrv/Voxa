@@ -5,7 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { ArrowLeft, Download, AlertTriangle } from "lucide-react";
 import type { JobEvent, JobStatus } from "@/lib/types";
-import { getJob, jobEventsUrl, resultVideoUrl, resultSrtUrl } from "@/lib/api";
+import { getJob, getSettings, jobEventsUrl, resultVideoUrl, resultSrtUrl } from "@/lib/api";
+import { useAutoDownload } from "@/lib/use-auto-download";
 import { Link } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
   const steps = t.raw("steps") as string[];
 
   const meta = useQuery({ queryKey: ["job", jobId], queryFn: () => getJob(jobId) });
+  const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings });
 
   const [sseStatus, setSseStatus] = useState<JobStatus | null>(null);
   const [sseStep, setSseStep] = useState<number | null>(null);
@@ -55,14 +57,20 @@ export function JobDetail({ jobId }: { jobId: string }) {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [logs]);
 
+  const status: JobStatus = sseStatus ?? meta.data?.status ?? "queued";
+  const hasVideo = status === "done" && (meta.data?.hasVideo ?? true);
+
+  // Saves the dub the moment the stream reports it finished, if Settings asks for that.
+  // Declared above the early returns below, since hooks can't run conditionally.
+  useAutoDownload([{ id: jobId, status, hasVideo }],
+                  settingsQuery.data?.advanced?.autoDownload ?? false);
+
   if (meta.isPending && logs.length === 0 && !sseStatus) return <Loading />;
   if (meta.isError && !sseStatus)
     return <BackendError onRetry={() => meta.refetch()} />;
 
-  const status: JobStatus = sseStatus ?? meta.data?.status ?? "queued";
   const step = sseStep ?? meta.data?.step ?? 0;
   const fileName = meta.data?.fileName ?? jobId;
-  const hasVideo = status === "done" && (meta.data?.hasVideo ?? true);
   const hasSrt = status === "done" && (meta.data?.hasSrt ?? false);
   // The server reports the last error line, so the reason is visible without reading logs.
   const failureReason = sseError ?? meta.data?.error ?? null;

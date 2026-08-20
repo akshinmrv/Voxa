@@ -23,7 +23,8 @@ export function NewJobFlow() {
   const optionsQuery = useQuery({ queryKey: ["options"], queryFn: getOptions });
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings });
 
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploaded, setUploaded] = useState(0);
   const [sourceMode, setSourceMode] = useState<"file" | "url">("file");
   const [url, setUrl] = useState("");
   const [sel, setSel] = useState<Partial<JobConfig>>({});
@@ -34,14 +35,26 @@ export function NewJobFlow() {
         const trimmed = url.trim();
         if (!trimmed) throw new Error("No URL");
         const { jobId } = await createJob({ sourceUrl: trimmed }, config);
-        return jobId;
+        return [jobId];
       }
-      if (!file) throw new Error("No file");
-      const { fileId } = await uploadVideo(file);
-      const { jobId } = await createJob({ fileId }, config);
-      return jobId;
+      if (!files.length) throw new Error("No file");
+      // One job per video, queued in order. They are uploaded one at a time so a large
+      // batch doesn't open a dozen parallel uploads; how many then *run* at once is the
+      // server's concurrency setting.
+      const ids: string[] = [];
+      setUploaded(0);
+      for (const file of files) {
+        const { fileId } = await uploadVideo(file);
+        const { jobId } = await createJob({ fileId }, config);
+        ids.push(jobId);
+        setUploaded(ids.length);
+      }
+      return ids;
     },
-    onSuccess: (jobId) => router.push(`/app/jobs/${jobId}`),
+    // A single job opens on its own page; a batch goes to the list, where they can be
+    // watched together.
+    onSuccess: (ids) =>
+      router.push(ids.length === 1 ? `/app/jobs/${ids[0]}` : "/app/jobs"),
   });
 
   if (optionsQuery.isPending) return <Loading />;
@@ -70,7 +83,7 @@ export function NewJobFlow() {
   const selectedTranslator = options.translators.find((e) => e.id === config.translator);
   const needsVoiceSample = selectedTts?.requiresVoiceSample ?? false;
   const urlMode = sourceMode === "url" && !!options.urlAvailable;
-  const hasSource = urlMode ? url.trim().length > 0 : !!file;
+  const hasSource = urlMode ? url.trim().length > 0 : files.length > 0;
 
   return (
     <div className="grid max-w-4xl gap-6 lg:grid-cols-5">
@@ -120,7 +133,7 @@ export function NewJobFlow() {
             </CardContent>
           </Card>
         ) : (
-          <UploadDropzone file={file} onFile={setFile} />
+          <UploadDropzone files={files} onFiles={setFiles} />
         )}
       </div>
 
@@ -282,7 +295,9 @@ export function NewJobFlow() {
               onClick={() => submit.mutate(config)}
             >
               {submit.isPending ? <Loader2 className="animate-spin" /> : <Play />}
-              {t("run")}
+              {submit.isPending && !urlMode && files.length > 1
+                ? t("uploading", { done: uploaded, total: files.length })
+                : t("run")}
             </Button>
             {!hasSource && (
               <p className="mt-2 text-center text-xs text-muted-foreground">

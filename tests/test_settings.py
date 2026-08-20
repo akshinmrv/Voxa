@@ -64,7 +64,7 @@ def test_missing_keys_backfilled_from_defaults(store):
     s = srv.read_settings()
     assert s["defaultTts"] == "edge"
     assert s["advanced"] == {"speechRate": None, "qualityGate": False, "ttsWorkers": None,
-                             "maxConcurrentJobs": None}
+                             "maxConcurrentJobs": None, "autoDownload": False}
 
 
 def test_invalid_file_falls_back_to_defaults(store):
@@ -545,6 +545,15 @@ def test_put_settings_accepts_concurrency(client):
     r = client.put("/api/settings", json={"advanced": {"maxConcurrentJobs": 2}})
     assert r.status_code == 200
     assert r.json()["advanced"]["maxConcurrentJobs"] == 2
+
+
+def test_auto_download_defaults_off_and_roundtrips(client):
+    # Saving a dub automatically is opt-in; the console reads this flag to decide.
+    assert client.get("/api/settings").json()["advanced"]["autoDownload"] is False
+    r = client.put("/api/settings", json={"advanced": {"autoDownload": True}})
+    assert r.status_code == 200
+    assert r.json()["advanced"]["autoDownload"] is True
+    assert client.get("/api/settings").json()["advanced"]["autoDownload"] is True
 
 
 # ── Operator console URL source ──────────────────────────

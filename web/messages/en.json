@@ -228,9 +228,13 @@
     "newJob": {
       "title": "New job",
       "subtitle": "Upload a video, choose your engines, and start dubbing.",
-      "uploadTitle": "Drop a video or click to browse",
-      "uploadHint": "MP4, MOV, MKV, or WebM",
+      "uploadTitle": "Drop videos or click to browse",
+      "uploadHint": "MP4, MOV, MKV, or WebM — pick several to queue one job each",
       "selectedFile": "Selected file",
+      "selectedFiles": "{count, plural, one {# video selected} other {# videos selected}}",
+      "addMore": "Add more",
+      "removeAll": "Clear all",
+      "uploading": "Uploading {done}/{total}…",
       "change": "Change",
       "remove": "Remove",
       "configTitle": "Configuration",
@@ -340,7 +344,9 @@
         "save": "Save advanced",
         "saved": "Saved",
         "qualityGateLabel": "Quality gate (score & retry speech)",
-        "qualityGateHint": "Scores each synthesized line and re-renders a garbled one with neutral delivery. Slower, OpenAI TTS. Off by default."
+        "qualityGateHint": "Scores each synthesized line and re-renders a garbled one with neutral delivery. Slower, OpenAI TTS. Off by default.",
+        "autoDownloadLabel": "Save each dub automatically",
+        "autoDownloadHint": "When a job finishes, its video is saved to your downloads folder without clicking Download. Only works while the console is open, and your browser may ask permission before saving several files at once."
       },
       "appearance": {
         "title": "Appearance",

@@ -228,9 +228,13 @@
     "newJob": {
       "title": "Yeni iş",
       "subtitle": "Video yüklə, mühərrikləri seç və dublyaja başla.",
-      "uploadTitle": "Video buraxın və ya klikləyib seçin",
-      "uploadHint": "MP4, MOV, MKV və ya WebM",
+      "uploadTitle": "Videoları buraxın və ya klikləyib seçin",
+      "uploadHint": "MP4, MOV, MKV və ya WebM — bir neçəsini seçsəniz hər biri üçün ayrıca iş yaranır",
       "selectedFile": "Seçilmiş fayl",
+      "selectedFiles": "{count} video seçildi",
+      "addMore": "Daha əlavə et",
+      "removeAll": "Hamısını sil",
+      "uploading": "Yüklənir {done}/{total}…",
       "change": "Dəyiş",
       "remove": "Sil",
       "configTitle": "Konfiqurasiya",
@@ -340,7 +344,9 @@
         "save": "Ətraflını saxla",
         "saved": "Saxlanıldı",
         "qualityGateLabel": "Keyfiyyət nəzarəti (skorla və yenidən sintez et)",
-        "qualityGateHint": "Hər sintez olunmuş sətri skorlaşdırır və pozulmuşu neytral üslubla yenidən render edir. Daha yavaş, OpenAI TTS. Defolt söndürülü."
+        "qualityGateHint": "Hər sintez olunmuş sətri skorlaşdırır və pozulmuşu neytral üslubla yenidən render edir. Daha yavaş, OpenAI TTS. Defolt söndürülü.",
+        "autoDownloadLabel": "Hər dublyajı avtomatik yadda saxla",
+        "autoDownloadHint": "İş bitəndə video Endir düyməsinə basmadan endirmələr qovluğuna yazılır. Yalnız konsol açıq olanda işləyir və brauzer bir neçə faylı eyni anda saxlamazdan əvvəl icazə soruşa bilər."
       },
       "appearance": {
         "title": "Görünüş",

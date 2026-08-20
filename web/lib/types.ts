@@ -88,6 +88,8 @@ export type VoxaSettings = {
     ttsWorkers: number | null;
     /** How many dubbing jobs may run at once (1 = one at a time). */
     maxConcurrentJobs: number | null;
+    /** Save each dub automatically as soon as it finishes. */
+    autoDownload: boolean;
   };
 };
 
@@ -103,6 +105,7 @@ export type SettingsPatch = {
     qualityGate?: boolean;
     ttsWorkers?: number | null;
     maxConcurrentJobs?: number | null;
+    autoDownload?: boolean;
   };
 };
 

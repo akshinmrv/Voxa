@@ -147,6 +147,7 @@ export function SettingsView() {
     (concurrentDraft !== null &&
       concurrentDraft !== (savedConcurrent != null ? String(savedConcurrent) : ""));
   const qualityGate = settings.advanced?.qualityGate ?? false;
+  const autoDownload = settings.advanced?.autoDownload ?? false;
 
   return (
     <Shell>
@@ -465,6 +466,26 @@ export function SettingsView() {
               </span>
               <span className="block text-xs text-muted-foreground">
                 {t("advanced.qualityGateHint")}
+              </span>
+            </span>
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-3 border-t border-border pt-4">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-primary"
+              checked={autoDownload}
+              disabled={toggleQualityGate.isPending}
+              onChange={(e) =>
+                toggleQualityGate.mutate({ advanced: { autoDownload: e.target.checked } })
+              }
+            />
+            <span>
+              <span className="block text-sm font-medium text-foreground">
+                {t("advanced.autoDownloadLabel")}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {t("advanced.autoDownloadHint")}
               </span>
             </span>
           </label>
