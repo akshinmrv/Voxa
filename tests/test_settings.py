@@ -495,7 +495,7 @@ def _peak_in_flight(work_dirs, limit, monkeypatch):
     monkeypatch.setattr(srv, "max_concurrent_jobs", lambda settings=None: limit)
     # Fresh primitives: each asyncio.run() below is a new event loop.
     monkeypatch.setattr(srv, "_WORKDIR_LOCKS", {})
-    monkeypatch.setattr(srv, "_JOB_SLOTS", asyncio.Condition())
+    monkeypatch.setattr(srv, "_JOB_SLOTS", None)
     monkeypatch.setattr(srv, "_running_jobs", 0)
     cfg = srv.JobConfigModel(targetLang="tr", translator="google", tts="edge")
     jobs = [srv.Job(id=str(i), file_name="v.mp4", config=cfg, work_dir=d)

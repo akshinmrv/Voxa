@@ -146,7 +146,7 @@ CONCURRENT_JOBS_MIN = 1
 CONCURRENT_JOBS_MAX = 4
 CONCURRENT_JOBS_DEFAULT = 1
 
-_JOB_SLOTS = asyncio.Condition()
+_JOB_SLOTS: Optional[asyncio.Condition] = None
 _running_jobs = 0
 
 # Jobs on the same source share a content-keyed work dir and its resume state, so two of them
@@ -269,6 +269,16 @@ def _workdir_lock(work_dir: Path) -> asyncio.Lock:
     return lock
 
 
+def _job_slots() -> asyncio.Condition:
+    """Created on first use, inside the server's event loop. On Python 3.9 an asyncio primitive
+    binds to whatever loop is current when it is constructed, and at import time that isn't the
+    one uvicorn runs — a queued job would then fail with "attached to a different loop"."""
+    global _JOB_SLOTS
+    if _JOB_SLOTS is None:
+        _JOB_SLOTS = asyncio.Condition()
+    return _JOB_SLOTS
+
+
 @asynccontextmanager
 async def _job_gate(job: Job):
     """Admit a job to run. Its work dir must be free first — a second dub of the same video
@@ -276,16 +286,17 @@ async def _job_gate(job: Job):
     the concurrency slots. Taking the work-dir lock first means a queued same-source job
     doesn't hold a slot that an unrelated video could be using."""
     global _running_jobs
+    slots = _job_slots()
     async with _workdir_lock(job.work_dir):
-        async with _JOB_SLOTS:
-            await _JOB_SLOTS.wait_for(lambda: _running_jobs < max_concurrent_jobs())
+        async with slots:
+            await slots.wait_for(lambda: _running_jobs < max_concurrent_jobs())
             _running_jobs += 1
         try:
             yield
         finally:
-            async with _JOB_SLOTS:
+            async with slots:
                 _running_jobs -= 1
-                _JOB_SLOTS.notify_all()
+                slots.notify_all()
 
 
 async def _run_job(job: Job) -> None:
