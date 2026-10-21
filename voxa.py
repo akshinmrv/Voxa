@@ -101,12 +101,28 @@ try:
 except ImportError:
     GoogleTranslator = None
     _MISSING_DEPS.append("deep-translator")
+class _NoProgress:
+    """Silent stand-in for tqdm: iterates what it wraps and accepts update()/close(), so both
+    `for x in tqdm(items)` and a manual `pbar = tqdm(total=n)` keep working without it."""
+
+    def __init__(self, iterable=None, **kwargs):
+        self._iterable = iterable if iterable is not None else ()
+
+    def __iter__(self):
+        return iter(self._iterable)
+
+    def update(self, n=1):
+        pass
+
+    def close(self):
+        pass
+
+
 try:
     from tqdm import tqdm
 except ImportError:
     _MISSING_DEPS.append("tqdm")
-    def tqdm(iterable=None, **kwargs):   # no-op fallback keeps loops working
-        return iterable if iterable is not None else []
+    tqdm = _NoProgress
 
 # ─────────────────────────────────────────────
 #  OpenAI translation config

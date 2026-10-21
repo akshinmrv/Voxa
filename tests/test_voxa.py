@@ -1189,6 +1189,21 @@ def test_prerender_parallel_renders_all_missing(tmp_path):
     assert all((tmp_path / f"t_fin_{i}.wav").exists() for i in range(5))
 
 
+def test_prerender_parallel_works_without_tqdm(tmp_path, monkeypatch):
+    # The fallback must cover the manual `pbar = tqdm(total=n)` form, not just iteration.
+    monkeypatch.setattr(voxa, "tqdm", voxa._NoProgress)
+    calls = []
+
+    def _render(i, text, final_file, target):
+        calls.append(i)
+        final_file.write_bytes(b"x" * 2000)
+        return True
+
+    _run_prerender(_prerender_subs(3), _render, tmp_path, concurrency=2)
+    assert sorted(calls) == [0, 1, 2]
+    assert list(voxa.tqdm(range(3), desc="x")) == [0, 1, 2]
+
+
 def test_prerender_parallel_skips_cached(tmp_path):
     (tmp_path / "t_fin_1.wav").write_bytes(b"x" * 2000)  # already synthesised
     calls = []
