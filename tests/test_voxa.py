@@ -2111,3 +2111,45 @@ def test_every_piper_voice_exists_upstream():
         except Exception:
             missing.append(lang)
     assert not missing, f"no such Piper voice upstream for: {missing}"
+
+
+# ── Translation that silently didn't happen ──────────────
+def test_is_untranslated():
+    assert voxa._is_untranslated("Hello", "Hallo") is False
+    assert voxa._is_untranslated("Hello", "  Hello ") is True     # echoed back
+    assert voxa._is_untranslated("Hello", "") is True
+    assert voxa._is_untranslated("Hello", None) is True
+
+
+def test_untranslated_lines_matches_outputs_to_sources_by_timestamp():
+    merged = [{"start": 0.0, "end": 1.0, "text": "Hello there"},
+              {"start": 1.0, "end": 2.0, "text": "   "},           # nothing to translate
+              {"start": 2.0, "end": 3.0, "text": "How are you"}]
+    out = [{"start": 2.0, "end": 3.0, "text": "How are you"},     # order needn't match
+           {"start": 0.0, "end": 1.0, "text": "Hallo zusammen"}]
+    assert voxa._untranslated_lines(merged, out) == (["How are you"], 2)
+
+
+@pytest.mark.parametrize("checked, untranslated, stops", [
+    (1, 1, True),     # a one-line clip with nothing translated
+    (2, 1, False),    # "OK." left as-is on a short clip must not block the run
+    (2, 2, True),
+    (3, 1, False),
+    (3, 2, True),
+    (10, 1, False),   # a name or a number
+    (10, 4, False),
+    (10, 5, True),    # half the dub in the source language — e.g. a rate limit mid-run
+    (10, 10, True),   # the outage case this guards against
+    (0, 0, False),
+])
+def test_translation_unusable(checked, untranslated, stops):
+    assert voxa._translation_unusable(untranslated, checked) is stops
+
+
+def test_stopping_the_run_implies_the_fallback_would_have_run():
+    # The hard stop is the stricter rule: a configured fallback translator always gets its
+    # chance before a run is refused.
+    for checked in range(1, 25):
+        for untranslated in range(checked + 1):
+            if voxa._translation_unusable(untranslated, checked):
+                assert voxa._translation_failed(untranslated, checked)

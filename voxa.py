@@ -2206,6 +2206,46 @@ def translate_llm_batch(texts: List[str], target_lang: str, provider: str,
                                 p["chat"], api_key, batch_size, max_chars, style)
 
 
+def _is_untranslated(source: str, output: Optional[str]) -> bool:
+    """A translator that fails — a rate limit, an unreachable Ollama, a bad key — hands the source
+    text back, so an empty or unchanged line counts as untranslated. Pure."""
+    out = (output or "").strip()
+    return not out or out == (source or "").strip()
+
+
+def _translation_failed(untranslated: int, checked: int) -> bool:
+    """True when the translator failed outright, rather than leaving a few lines that legitimately
+    stay the same (names, numbers): at least half of them untranslated. Pure."""
+    return checked > 0 and untranslated >= max(1, (checked + 1) // 2)
+
+
+def _translation_unusable(untranslated: int, checked: int) -> bool:
+    """True when a run must stop rather than dub: nothing was translated, or at least two lines
+    and half of them weren't. Stricter than _translation_failed on short clips — there the cost
+    of a false alarm is a blocked run, not a harmless retry — so a lone "OK." that a translator
+    rightly leaves alone never stops one. Whenever this fires, the fallback would have too. Pure."""
+    if checked == 0:
+        return False
+    return untranslated == checked or (untranslated >= 2 and untranslated * 2 >= checked)
+
+
+def _untranslated_lines(merged_segments: List[Dict],
+                        translated_segments: List[Dict]) -> Tuple[List[str], int]:
+    """(source lines that came back untranslated, lines checked). Each output is matched to its
+    source by timestamps, which translation copies unchanged. Pure."""
+    source = {(seg["start"], seg["end"]): seg["text"].strip()
+              for seg in merged_segments if (seg.get("text") or "").strip()}
+    untranslated, checked = [], 0
+    for seg in translated_segments:
+        src = source.get((seg["start"], seg["end"]))
+        if src is None:
+            continue
+        checked += 1
+        if _is_untranslated(src, seg.get("text")):
+            untranslated.append(src)
+    return untranslated, checked
+
+
 def _apply_translation_fallback(texts: List[str], translated: List[str], args, logger) -> List[str]:
     """If the primary LLM translator left most lines untranslated — an outage or an invalid
     key makes _llm_translate_* echo the source — re-translate those lines with the configured
@@ -2215,9 +2255,8 @@ def _apply_translation_fallback(texts: List[str], translated: List[str], args, l
     fb = getattr(args, "fallback_translator", None)
     if not fb or not texts:
         return translated
-    failed = [i for i, (s, t) in enumerate(zip(texts, translated))
-              if not (t or "").strip() or (t or "").strip() == (s or "").strip()]
-    if len(failed) < max(1, (len(texts) + 1) // 2):
+    failed = [i for i, (s, t) in enumerate(zip(texts, translated)) if _is_untranslated(s, t)]
+    if not _translation_failed(len(failed), len(texts)):
         return translated
     logger.warning(f"⚠️  {args.translator} left {len(failed)}/{len(texts)} lines untranslated "
                    f"— falling back to {fb} for those lines")
@@ -3563,6 +3602,23 @@ async def process_video(video_path: str, args, logger: Logger):
                 translated_segments.append(
                     {'text': translated, 'start': seg['start'], 'end': seg['end'],
                      **({'speaker': seg['speaker']} if 'speaker' in seg else {})})
+        # A failing translator returns the source text, which would otherwise be spoken and
+        # reported as a finished dub in the wrong language. Stop before anything is cached,
+        # so a re-run tries the translation again.
+        untranslated, checked = _untranslated_lines(merged_segments, translated_segments)
+        if _translation_unusable(len(untranslated), checked):
+            logger.error(
+                f"❌ Translation failed: {len(untranslated)}/{checked} lines came back "
+                f"untranslated, so the dub would be in the source language. See the "
+                f"{args.translator} warnings above (or set --fallback-translator); nothing "
+                f"was saved, so running again retries it. If the video is already in "
+                f"'{args.target_lang}', there is nothing to translate.")
+            return 1
+        if untranslated:
+            shown = "; ".join(f'"{t[:40]}"' for t in untranslated[:3])
+            more = " …" if len(untranslated) > 3 else ""
+            logger.warning(f"⚠️  {len(untranslated)}/{checked} lines were left as they were "
+                           f"(usually names or numbers): {shown}{more}")
         with open(translated_json, 'w', encoding='utf-8') as f:
             json.dump(translated_segments, f, ensure_ascii=False, indent=2)
         state.mark_completed('translation', translation_sig)

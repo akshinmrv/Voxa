@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   at voices that don't exist (Japanese, Dutch) and were corrected. Measured on the same German
   sentence: Whisper hears the new voice as German (p=1.00) and transcribes it almost verbatim;
   the old one came out as unintelligible English. Reported by @deelipsolanki-DSML in #6.
+- **A translation that didn't happen no longer finishes as a dub.** When the translator failed —
+  Google rate-limiting the machine, an unreachable Ollama, a bad key — each engine handed the
+  source text back, and that flowed on into synthesis: the run reported success with a "German"
+  dub spoken in English, and cached it, so running again changed nothing. Voxa now checks the
+  translation before using it. If nothing came back translated, or at least two lines and half of
+  them didn't, it stops with a clear error, saves nothing, and the next run retries. A few lines
+  left as they were — names, numbers, a lone "OK." — only produce a warning. Found while testing
+  the Piper fix above.
 
 ### Added
 
