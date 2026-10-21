@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-21
+
 ### Fixed
 
 - **Piper now speaks the target language — and fetches its own voice.** Every language except
@@ -346,7 +348,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/akshinmrv/Voxa/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/akshinmrv/Voxa/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/akshinmrv/Voxa/compare/v1.6.4...v1.7.0
 [1.6.4]: https://github.com/akshinmrv/Voxa/compare/v1.6.3...v1.6.4
