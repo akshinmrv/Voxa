@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -147,7 +148,10 @@ XTTS_SUPPORTED_LANGS = {
     'cs', 'ar', 'zh', 'hu', 'ko', 'ja', 'hi'
 }
 
-# Piper voice models mapping
+# Piper voice per target language: lang → (locale, voice, quality), laid out as in
+# rhasspy/piper-voices, which download_piper_model fetches from on first use. Every entry has
+# been checked to exist there. To add a language, pick a voice from
+# https://huggingface.co/rhasspy/piper-voices and add one line.
 PIPER_VOICES = {
     'ru': ('ru_RU', 'ruslan', 'medium'),
     'en': ('en_US', 'lessac', 'medium'),
@@ -159,12 +163,14 @@ PIPER_VOICES = {
     'pl': ('pl_PL', 'darkman', 'medium'),
     'uk': ('uk_UA', 'ukrainian_tts', 'medium'),
     'zh': ('zh_CN', 'huayan', 'x_low'),
-    'ja': ('ja_JP', 'hikari', 'medium'),
+    'ja': ('ja_JP', 'hi_fi_captain', 'medium'),
     'ko': ('ko_KR', 'kss', 'medium'),
-    'nl': ('nl_NL', 'rdh', 'medium'),
+    'nl': ('nl_NL', 'pim', 'medium'),
     'tr': ('tr_TR', 'dfki', 'medium'),
     'vi': ('vi_VN', 'vivos', 'x_low'),
 }
+
+PIPER_VOICES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 
 EMOTION_STYLES = ['angry', 'cheerful', 'excited', 'friendly', 'hopeful', 'sad',
                   'shouting', 'terrified', 'unfriendly', 'whispering']
@@ -1220,6 +1226,9 @@ def plan_blockers(args) -> List[str]:
     sample = getattr(args, "voice_sample", None)
     if args.tts == "xtts" and sample and not Path(sample).exists():
         problems.append(f"voice sample not found: {sample}")
+    if args.tts == "piper" and _piper_voice(getattr(args, "target_lang", "")) is None:
+        problems.append(f"no Piper voice is mapped for '{args.target_lang}' — add one to "
+                        "PIPER_VOICES or choose another --tts")
     if any(_looks_like_url(v) for v in getattr(args, "videos", [])) and not _ytdlp_available():
         problems.append(_YTDLP_HINT)
     srt = getattr(args, "subtitles", None)
@@ -1309,25 +1318,75 @@ def create_silence_wav(duration_seconds: float, output_file: str, sample_rate: i
         return False
 
 
+def _piper_voice(lang_code: str) -> Optional[Tuple[str, str, str]]:
+    """The (locale, voice, quality) Piper voice mapped to a target language, or None. Takes a
+    bare or a regional code ("pt", "pt-BR", "pt_BR"). Pure."""
+    base = (lang_code or "").replace("_", "-").split("-")[0].lower()
+    return PIPER_VOICES.get(base)
+
+
+def _piper_model_name(locale: str, voice: str, quality: str) -> str:
+    return f"{locale}-{voice}-{quality}.onnx"
+
+
+def _piper_model_url(locale: str, voice: str, quality: str) -> str:
+    """Where rhasspy/piper-voices keeps a voice's model; its config is this URL plus `.json`."""
+    family = locale.split("_")[0]
+    return (f"{PIPER_VOICES_URL}/{family}/{locale}/{voice}/{quality}/"
+            f"{_piper_model_name(locale, voice, quality)}")
+
+
+def _download_file(url: str, dest: Path) -> None:
+    """Fetch `url` into `dest` atomically: written to a .part file and renamed only once the
+    transfer completes, so an interrupted download never leaves a truncated model behind."""
+    part = dest.with_name(dest.name + ".part")
+    try:
+        with urllib.request.urlopen(url, timeout=60) as resp, part.open("wb") as out:
+            shutil.copyfileobj(resp, out)
+        part.replace(dest)
+    finally:
+        part.unlink(missing_ok=True)
+
+
 def download_piper_model(lang_code: str, models_dir: Path) -> Optional[Path]:
-    if 'ru' in lang_code:
-        model_name = "ru_RU-ruslan-medium.onnx"
-    else:
-        model_name = "en_US-lessac-medium.onnx"
-    manual_path = Path.home() / ".piper_models" / model_name
-    if manual_path.exists():
-        _LOG.info(f"✓ Found manual model: {manual_path}")
-        return manual_path
-    else:
-        _LOG.error(f"❌ Model file missing: {manual_path}")
-        _LOG.error("👉 Download the model manually using the wget commands in the docs")
+    """The Piper model for `lang_code`, fetched with its .json config from rhasspy/piper-voices
+    into `models_dir` on first use. A model already on disk is used as-is, so once a voice has
+    been downloaded the run is fully offline.
+
+    None — with the reason logged — when no voice is mapped for the language or the download
+    fails. It never substitutes another language's voice: that speaks the dub in the wrong
+    language (what this replaced did for every language but Russian)."""
+    voice = _piper_voice(lang_code)
+    if voice is None:
+        _LOG.error(f"❌ No Piper voice is mapped for '{lang_code}'. Add one to PIPER_VOICES "
+                   "(https://huggingface.co/rhasspy/piper-voices) or choose another --tts.")
         return None
+    name = _piper_model_name(*voice)
+    model = models_dir / name
+    config = models_dir / f"{name}.json"
+    if model.exists() and config.exists():
+        _LOG.info(f"✓ Piper voice on disk: {name}")
+        return model
+    url = _piper_model_url(*voice)
+    try:
+        models_dir.mkdir(parents=True, exist_ok=True)
+        for src, dest in ((f"{url}.json", config), (url, model)):
+            if not dest.exists():
+                _LOG.info(f"⬇️  Downloading Piper voice {dest.name} (first use only)")
+                _download_file(src, dest)
+    except Exception as e:
+        _LOG.error(f"❌ Could not download the Piper voice {name}: {e}")
+        _LOG.error(f"👉 Put both files in {models_dir} and run again:")
+        _LOG.error(f"   {url}")
+        _LOG.error(f"   {url}.json")
+        return None
+    return model
 
 
 def _resolve_piper_model(name: str) -> Optional[str]:
     """Resolve a --speaker-voices Piper value to a model file: an existing path, or a name looked
     up under ~/.piper_models (a `.onnx` suffix is added when missing). None when it can't be found —
-    Piper models are downloaded manually, so a per-speaker voice must already be on disk."""
+    unlike the default voice, a per-speaker voice isn't fetched for you, so it must be on disk."""
     if Path(name).exists():
         return name
     base = Path.home() / ".piper_models"
@@ -3164,7 +3223,7 @@ async def _tts_piper(subs, args, work_dir, video_path, gate_asr, logger):
     logger.info(f"🔎 Loading Piper model for: {args.target_lang}")
     model_path = download_piper_model(args.target_lang, Path.home() / ".piper_models")
     if not model_path:
-        raise TTSError("Failed to download Piper model")
+        raise TTSError(f"No usable Piper voice for '{args.target_lang}' (see the error above)")
     logger.info("🎙️  Using Piper (offline mode)")
     # Per-speaker Piper (--diarize): Piper's pool is one voice per language, so distinct voices come
     # from --speaker-voices, whose values name model files under ~/.piper_models. Unmapped speakers

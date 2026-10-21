@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Piper now speaks the target language — and fetches its own voice.** Every language except
+  Russian was being spoken with the English voice (`en_US-lessac`), and the model was never
+  downloaded: `--tts piper` only worked if the right file was already in `~/.piper_models`. The
+  per-language voice table existed but wasn't used. Voxa now picks the voice from that table and
+  downloads it, with its config, from rhasspy/piper-voices on first use; after that the run is
+  fully offline. A language with no voice mapped fails with a clear message — and `--dry-run`
+  reports it up front — instead of falling back to another language's voice. Two entries pointed
+  at voices that don't exist (Japanese, Dutch) and were corrected. Measured on the same German
+  sentence: Whisper hears the new voice as German (p=1.00) and transcribes it almost verbatim;
+  the old one came out as unintelligible English. Reported by @deelipsolanki-DSML in #6.
+
 ### Added
 
 - **Queue several videos in one go.** The job form takes more than one video now: drop or pick

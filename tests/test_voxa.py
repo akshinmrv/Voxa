@@ -9,6 +9,7 @@ Run:  pytest -q
 """
 import asyncio
 import logging
+import os
 import re
 from pathlib import Path
 from types import SimpleNamespace
@@ -2006,3 +2007,107 @@ def test_reusable_stages_drops_a_stage_whose_parameters_changed(tmp_path):
 
 def test_reusable_stages_empty_when_nothing_ran(tmp_path):
     assert voxa.reusable_stages(voxa.StateManager(tmp_path), _plan_args()) == []
+
+
+# ── Piper voice selection & download (issue #6) ──────────
+def test_piper_voices_are_well_formed():
+    # Each entry is (locale, voice, quality) and its locale belongs to the language key.
+    for lang, (locale, voice, quality) in voxa.PIPER_VOICES.items():
+        assert locale.split("_")[0] == lang
+        assert voice and quality in {"x_low", "low", "medium", "high"}
+
+
+def test_piper_voice_lookup_and_regional_codes():
+    assert voxa._piper_voice("de") == ("de_DE", "thorsten", "medium")
+    assert voxa._piper_voice("pt-BR") == voxa._piper_voice("pt") == voxa._piper_voice("PT_br")
+    assert voxa._piper_voice("xx") is None
+    assert voxa._piper_voice("") is None
+
+
+def test_piper_never_falls_back_to_another_languages_voice():
+    # Issue #6: every language but Russian used to resolve to the English voice.
+    for lang, (locale, _, _) in voxa.PIPER_VOICES.items():
+        assert voxa._piper_voice(lang)[0] == locale
+    assert voxa._piper_voice("de")[0] != "en_US"
+
+
+def test_piper_model_url_layout():
+    assert voxa._piper_model_url("de_DE", "thorsten", "medium") == (
+        "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+        "de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx")
+
+
+def test_download_piper_model_uses_files_already_on_disk(tmp_path, monkeypatch):
+    def no_network(url, dest):
+        raise AssertionError("must not download a voice that is already on disk")
+    monkeypatch.setattr(voxa, "_download_file", no_network)
+    (tmp_path / "de_DE-thorsten-medium.onnx").write_bytes(b"model")
+    (tmp_path / "de_DE-thorsten-medium.onnx.json").write_text("{}")
+    assert voxa.download_piper_model("de", tmp_path) == tmp_path / "de_DE-thorsten-medium.onnx"
+
+
+def test_download_piper_model_fetches_config_and_model(tmp_path, monkeypatch):
+    fetched = []
+
+    def fake(url, dest):
+        fetched.append(url)
+        dest.write_bytes(b"x")
+    monkeypatch.setattr(voxa, "_download_file", fake)
+    path = voxa.download_piper_model("fr", tmp_path / "models")
+    url = voxa._piper_model_url("fr_FR", "siwis", "medium")
+    assert fetched == [url + ".json", url]       # piper needs the .json beside the model
+    assert path == tmp_path / "models" / "fr_FR-siwis-medium.onnx" and path.exists()
+
+
+def test_download_piper_model_unmapped_language_never_downloads(tmp_path, monkeypatch):
+    def no_network(url, dest):
+        raise AssertionError("an unmapped language must not trigger a download")
+    monkeypatch.setattr(voxa, "_download_file", no_network)
+    assert voxa.download_piper_model("xx", tmp_path) is None
+
+
+def test_download_piper_model_failure_returns_none(tmp_path, monkeypatch):
+    def offline(url, dest):
+        raise OSError("network down")
+    monkeypatch.setattr(voxa, "_download_file", offline)
+    assert voxa.download_piper_model("de", tmp_path) is None
+
+
+def test_download_file_leaves_nothing_behind_on_failure(tmp_path, monkeypatch):
+    class Dropped:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self, *a):
+            raise OSError("connection reset")
+    monkeypatch.setattr(voxa.urllib.request, "urlopen", lambda *a, **k: Dropped())
+    dest = tmp_path / "voice.onnx"
+    with pytest.raises(OSError):
+        voxa._download_file("https://example.invalid/voice.onnx", dest)
+    assert not dest.exists() and not (tmp_path / "voice.onnx.part").exists()
+
+
+def test_dry_run_flags_an_unmapped_piper_language():
+    args = SimpleNamespace(translator="google", tts="piper", target_lang="xx", videos=[],
+                           voice_sample=None, subtitles=None, diarize=False)
+    assert any("Piper voice" in p for p in voxa.plan_blockers(args))
+    args.target_lang = "de"
+    assert not any("Piper voice" in p for p in voxa.plan_blockers(args))
+
+
+@pytest.mark.skipif(not os.environ.get("VOXA_NETWORK_TESTS"),
+                    reason="hits huggingface.co; set VOXA_NETWORK_TESTS=1 to run")
+def test_every_piper_voice_exists_upstream():
+    # Two of the original fifteen (ja, nl) named voices that don't exist; this catches that.
+    import urllib.request
+    missing = []
+    for lang, voice in voxa.PIPER_VOICES.items():
+        req = urllib.request.Request(voxa._piper_model_url(*voice) + ".json", method="HEAD")
+        try:
+            urllib.request.urlopen(req, timeout=20)
+        except Exception:
+            missing.append(lang)
+    assert not missing, f"no such Piper voice upstream for: {missing}"
