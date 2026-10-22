@@ -8,24 +8,38 @@ permissions:
   contents: write
 
 jobs:
+  # A tag that can't pass its own tests should not become a release — on every Python we
+  # support, as CI does. Testing 3.12 alone let a 3.9-only bug reach PyPI in 1.9.0.
+  verify:
+    name: Verify (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        run: pip install pytest ruff numpy soundfile openai fastapi httpx python-multipart
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest
+
   release:
     name: Publish GitHub release
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      # A tag that can't build or pass its own tests should not become a release.
-      - name: Verify the tagged commit
-        run: |
-          pip install pytest ruff numpy soundfile openai fastapi httpx python-multipart
-          ruff check .
-          pytest
 
       - name: Create the release
         env:
