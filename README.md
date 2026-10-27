@@ -540,9 +540,10 @@ Voxa itself is MIT and requires no GPL-licensed dependency (the default speech e
 `edge-tts`, is LGPL-3.0). The engines and models it drives have their own licences.
 `--tts openai` with `--translator openai` runs under OpenAI's commercial terms. `--tts piper` with
 `--translator ollama` runs fully offline, but it is only as permissive as the voice and the LLM:
-8 of the 15 Piper voices allow commercial use — the English, Russian, Japanese, Korean, Turkish
-and Vietnamese ones do not, and the Chinese one's licence is unknown — and the default `llama3`
-comes with Meta's licence conditions.
+11 of the 15 Piper voices allow commercial use (the Japanese, Korean and Turkish ones do not, and
+the Chinese one's licence is unknown), and the default `llama3` comes with Meta's licence
+conditions. Most Piper voices were fine-tuned from an English voice licensed for research only;
+[NOTICE](NOTICE.md#41-piper-voices) explains what that means.
 `--tts xtts` is **not** commercially usable. See [NOTICE.md](NOTICE.md).
 </details>
 
@@ -626,7 +627,7 @@ bundles system packages, FFmpeg among them, under their own licences. Read
 | Configuration | Commercial use |
 |---|:---:|
 | `--tts openai` + `--translator openai` (paid APIs) | ✅ |
-| `--tts piper` (fully offline) | ⚠️ depends on the voice — 8 of 15 languages |
+| `--tts piper` (fully offline) | ⚠️ depends on the voice — 11 of 15 languages |
 | `--translator ollama` (fully offline) | ⚠️ depends on the model |
 | `--tts edge` / `--translator google` (defaults, unofficial endpoints) | ⚠️ grey area |
 | `--tts xtts` (XTTS-v2 weights are CPML) | ❌ non-commercial only |

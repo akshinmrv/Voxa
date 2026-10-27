@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Piper says what each voice's licence allows.** Every voice in the table now carries the
+  licence from its model card, and Voxa reports it when it picks the voice — as a warning when
+  the voice isn't cleared for commercial use — and in `--dry-run`. Until now the README called
+  `--tts piper` "fully permissive", but several of its voices are licensed for non-commercial
+  or research use only, and nothing at run time said so. A network test
+  (`VOXA_NETWORK_TESTS=1`) checks each label against the voice's model card.
+
+### Changed
+
+- **Piper's English, Russian and Vietnamese voices are now cleared for commercial use.** English
+  moves from `en_US-lessac` (research licence) to `en_US-kristin` (public domain), Russian from
+  `ru_RU-ruslan` to `ru_RU-denis` (CC BY-NC-SA 4.0 → CC0), and Vietnamese from
+  `vi_VN-vivos-x_low` to `vi_VN-vais1000-medium` (CC BY-NC-SA 4.0 → CC BY 4.0), so 11 of the 15
+  voices now allow commercial use, up from 8. Measured by transcribing the same three sentences
+  per voice with Whisper large-v3 and no language hint: the Vietnamese character error rate drops
+  from 11.2% to 1.3%, Russian is unchanged at 0.9%, and English goes from 0.4% to 0.9%, with
+  every English error, old voice and new, on the word "Voxa". The new English voice speaks a
+  little slower (17.5 characters a second, against 20.3). It downloads on the first run after the
+  update. NOTICE.md now also lists the voice each one was fine-tuned from.
+
 ## [1.9.1] - 2026-10-22
 
 ### Fixed

@@ -486,10 +486,11 @@ Voxa'nın kendisi MIT'tir ve GPL lisanslı zorunlu bağımlılığı yoktur (var
 `edge-tts` LGPL-3.0'dır). Sürdüğü motorların ve modellerin kendi lisansları vardır.
 `--tts openai` + `--translator openai` OpenAI'ın ticari koşullarıyla çalışır.
 `--tts piper` + `--translator ollama` tamamen çevrimdışı çalışır, ancak ses ve LLM ne kadar
-serbestse o kadar serbesttir: 15 Piper sesinden 8'i ticari kullanıma izin verir. **Türkçe Piper
-sesi (`tr_TR-dfki`) CC BY-NC-SA 4.0'dır, yani ticari kullanıma uygun değildir**; İngilizce, Rusça,
-Japonca, Korece ve Vietnamca sesler de öyle; Çince sesin lisansı ise bilinmiyor. Varsayılan
-`llama3` ise Meta'nın lisans koşullarıyla
+serbestse o kadar serbesttir: 15 Piper sesinden 11'i ticari kullanıma izin verir. **Türkçe Piper
+sesi (`tr_TR-dfki`) CC BY-NC-SA 4.0'dır, yani ticari kullanıma uygun değildir**; Japonca ve Korece
+sesler de öyle; Çince sesin lisansı ise bilinmiyor. Piper seslerinin çoğu, yalnızca araştırma
+amaçlı lisanslı bir İngilizce sesten ince ayarla eğitilmiştir; bunun ne anlama geldiğini
+[NOTICE](NOTICE.md#41-piper-voices) açıklar. Varsayılan `llama3` ise Meta'nın lisans koşullarıyla
 gelir. `--tts xtts` ticari kullanıma **uygun değildir**. Bkz. [NOTICE.md](NOTICE.md).
 </details>
 
@@ -570,7 +571,7 @@ kullanımdan önce [NOTICE.md](NOTICE.md) dosyasını okuyun.
 | Yapılandırma | Ticari kullanım |
 |---|:---:|
 | `--tts openai` + `--translator openai` (ücretli API'ler) | ✅ |
-| `--tts piper` (tamamen çevrimdışı) | ⚠️ sese bağlı, 15 dilin 8'i; Türkçe ❌ |
+| `--tts piper` (tamamen çevrimdışı) | ⚠️ sese bağlı, 15 dilin 11'i; Türkçe ❌ |
 | `--translator ollama` (tamamen çevrimdışı) | ⚠️ modele bağlı |
 | `--tts edge` / `--translator google` (varsayılan, resmî olmayan uç noktalar) | ⚠️ gri alan |
 | `--tts xtts` (XTTS-v2 ağırlıkları CPML) | ❌ yalnızca ticari olmayan |

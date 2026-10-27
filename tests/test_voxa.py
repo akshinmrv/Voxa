@@ -2026,14 +2026,16 @@ def test_reusable_stages_empty_when_nothing_ran(tmp_path):
 
 # ── Piper voice selection & download (issue #6) ──────────
 def test_piper_voices_are_well_formed():
-    # Each entry is (locale, voice, quality) and its locale belongs to the language key.
-    for lang, (locale, voice, quality) in voxa.PIPER_VOICES.items():
+    # Each entry is (locale, voice, quality, licence), its locale belongs to the language key,
+    # and its licence is one PIPER_LICENCE_USE knows what to say about.
+    for lang, (locale, voice, quality, licence) in voxa.PIPER_VOICES.items():
         assert locale.split("_")[0] == lang
         assert voice and quality in {"x_low", "low", "medium", "high"}
+        assert licence in voxa.PIPER_LICENCE_USE, f"{lang}: unknown licence label {licence!r}"
 
 
 def test_piper_voice_lookup_and_regional_codes():
-    assert voxa._piper_voice("de") == ("de_DE", "thorsten", "medium")
+    assert voxa._piper_voice("de") == ("de_DE", "thorsten", "medium", "CC0")
     assert voxa._piper_voice("pt-BR") == voxa._piper_voice("pt") == voxa._piper_voice("PT_br")
     assert voxa._piper_voice("xx") is None
     assert voxa._piper_voice("") is None
@@ -2041,9 +2043,59 @@ def test_piper_voice_lookup_and_regional_codes():
 
 def test_piper_never_falls_back_to_another_languages_voice():
     # Issue #6: every language but Russian used to resolve to the English voice.
-    for lang, (locale, _, _) in voxa.PIPER_VOICES.items():
+    for lang, (locale, *_) in voxa.PIPER_VOICES.items():
         assert voxa._piper_voice(lang)[0] == locale
     assert voxa._piper_voice("de")[0] != "en_US"
+
+
+def test_piper_licence_note_and_restriction():
+    assert voxa._piper_licence_note("CC0") is None
+    assert voxa._piper_licence_note("Public domain") is None
+    assert "credit" in voxa._piper_licence_note("CC BY 4.0")
+    assert "not for commercial use" in voxa._piper_licence_note("CC BY-NC-SA 4.0")
+    assert "unknown" in voxa._piper_licence_note("Unknown")
+    assert "unknown" in voxa._piper_licence_note("something new")    # never read as permissive
+    assert not voxa._piper_licence_is_restricted("CC0")
+    assert not voxa._piper_licence_is_restricted("CC BY 4.0")
+    assert voxa._piper_licence_is_restricted("Research only")
+    assert voxa._piper_licence_is_restricted("Unknown")
+    assert voxa._piper_licence_is_restricted("something new")
+
+
+def _piper_log(lang, tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(voxa._LOG, "propagate", True)   # a Logger built earlier turns it off
+    locale, voice, quality, _ = voxa.PIPER_VOICES[lang]
+    name = voxa._piper_model_name(locale, voice, quality)
+    (tmp_path / name).write_bytes(b"model")
+    (tmp_path / f"{name}.json").write_text("{}")
+    with caplog.at_level(logging.INFO, logger="voxa"):
+        voxa.download_piper_model(lang, tmp_path)
+    return [r for r in caplog.records if "Piper voice" in r.getMessage()
+            and "on disk" not in r.getMessage()]
+
+
+def test_download_piper_model_warns_about_a_non_commercial_voice(tmp_path, monkeypatch, caplog):
+    monkeypatch.setitem(voxa.PIPER_VOICES, "tr", ("tr_TR", "dfki", "medium", "CC BY-NC-SA 4.0"))
+    (record,) = _piper_log("tr", tmp_path, monkeypatch, caplog)
+    assert record.levelno == logging.WARNING
+    assert "CC BY-NC-SA 4.0" in record.getMessage()
+    assert "not for commercial use" in record.getMessage()
+
+
+def test_download_piper_model_states_a_permissive_voices_licence(tmp_path, monkeypatch, caplog):
+    (record,) = _piper_log("de", tmp_path, monkeypatch, caplog)
+    assert record.levelno == logging.INFO and "(CC0)" in record.getMessage()
+
+
+def test_plan_shows_the_piper_voice_and_its_licence(monkeypatch):
+    monkeypatch.setitem(voxa.PIPER_VOICES, "tr", ("tr_TR", "dfki", "medium", "CC BY-NC-SA 4.0"))
+    plan = _plan(_plan_args(tts="piper", target_lang="tr"))
+    assert "piper tr_TR-dfki-medium  (CC BY-NC-SA 4.0)" in plan
+    assert "⚠️  not for commercial use — see NOTICE.md" in plan
+    plan = _plan(_plan_args(tts="piper", target_lang="fr"))
+    assert "(CC BY 4.0)" in plan and "credit the voice" in plan and "⚠️" not in plan
+    plan = _plan(_plan_args(tts="piper", target_lang="de"))
+    assert "(CC0)" in plan and "NOTICE" not in plan
 
 
 def test_piper_model_url_layout():
@@ -2120,12 +2172,44 @@ def test_every_piper_voice_exists_upstream():
     import urllib.request
     missing = []
     for lang, voice in voxa.PIPER_VOICES.items():
-        req = urllib.request.Request(voxa._piper_model_url(*voice) + ".json", method="HEAD")
+        req = urllib.request.Request(voxa._piper_model_url(*voice[:3]) + ".json", method="HEAD")
         try:
             urllib.request.urlopen(req, timeout=20)
         except Exception:
             missing.append(lang)
     assert not missing, f"no such Piper voice upstream for: {missing}"
+
+
+def _model_card_licence(card: str) -> str:
+    """Map the free-text licence line of a piper-voices MODEL_CARD onto a PIPER_LICENCE_USE key."""
+    line = next(ln for ln in card.splitlines() if "License:" in ln).split("License:", 1)[1]
+    line = line.strip().lower()
+    if "by-nc-sa" in line or "by nc-sa" in line:
+        return "CC BY-NC-SA 4.0"
+    if "cc0" in line:
+        return "CC0"
+    if "public domain" in line:
+        return "Public domain"
+    if "licenses/by/4.0" in line or re.search(r"cc[- ]by 4\.0", line):
+        return "CC BY 4.0"
+    if "lessac" in line:
+        return "Research only"
+    if "see url" in line and "m-ailabs" in card.lower():
+        return "M-AILABS"
+    return "Unknown"
+
+
+@pytest.mark.skipif(not os.environ.get("VOXA_NETWORK_TESTS"),
+                    reason="hits huggingface.co; set VOXA_NETWORK_TESTS=1 to run")
+def test_every_piper_voice_licence_matches_its_model_card():
+    import urllib.request
+    wrong = {}
+    for lang, (locale, voice, quality, licence) in voxa.PIPER_VOICES.items():
+        url = voxa._piper_model_url(locale, voice, quality).rsplit("/", 1)[0] + "/MODEL_CARD"
+        card = urllib.request.urlopen(url, timeout=20).read().decode("utf-8", "replace")
+        if _model_card_licence(card) != licence:
+            wrong[lang] = (licence, _model_card_licence(card))
+    assert not wrong, f"PIPER_VOICES licence differs from the model card: {wrong}"
 
 
 # ── Translation that silently didn't happen ──────────────

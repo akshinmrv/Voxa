@@ -164,26 +164,41 @@ XTTS_SUPPORTED_LANGS = {
     'cs', 'ar', 'zh', 'hu', 'ko', 'ja', 'hi'
 }
 
-# Piper voice per target language: lang → (locale, voice, quality), laid out as in
+# Piper voice per target language: lang → (locale, voice, quality, licence), laid out as in
 # rhasspy/piper-voices, which download_piper_model fetches from on first use. Every entry has
-# been checked to exist there. To add a language, pick a voice from
-# https://huggingface.co/rhasspy/piper-voices and add one line.
+# been checked to exist there. The licence is the one the voice's MODEL_CARD gives — that of
+# the recordings it was trained on — and is a key of PIPER_LICENCE_USE. Most voices were
+# fine-tuned from another one; NOTICE.md lists which. To add a language, pick a voice from
+# https://huggingface.co/rhasspy/piper-voices (one that allows commercial use, if the language
+# has one), add one line, and add its row to NOTICE.md.
 PIPER_VOICES = {
-    'ru': ('ru_RU', 'ruslan', 'medium'),
-    'en': ('en_US', 'lessac', 'medium'),
-    'es': ('es_ES', 'davefx', 'medium'),
-    'fr': ('fr_FR', 'siwis', 'medium'),
-    'de': ('de_DE', 'thorsten', 'medium'),
-    'it': ('it_IT', 'riccardo', 'x_low'),
-    'pt': ('pt_BR', 'edresson', 'low'),
-    'pl': ('pl_PL', 'darkman', 'medium'),
-    'uk': ('uk_UA', 'ukrainian_tts', 'medium'),
-    'zh': ('zh_CN', 'huayan', 'x_low'),
-    'ja': ('ja_JP', 'hi_fi_captain', 'medium'),
-    'ko': ('ko_KR', 'kss', 'medium'),
-    'nl': ('nl_NL', 'pim', 'medium'),
-    'tr': ('tr_TR', 'dfki', 'medium'),
-    'vi': ('vi_VN', 'vivos', 'x_low'),
+    'ru': ('ru_RU', 'denis', 'medium', 'CC0'),
+    'en': ('en_US', 'kristin', 'medium', 'Public domain'),
+    'es': ('es_ES', 'davefx', 'medium', 'CC0'),
+    'fr': ('fr_FR', 'siwis', 'medium', 'CC BY 4.0'),
+    'de': ('de_DE', 'thorsten', 'medium', 'CC0'),
+    'it': ('it_IT', 'riccardo', 'x_low', 'M-AILABS'),
+    'pt': ('pt_BR', 'edresson', 'low', 'CC BY 4.0'),
+    'pl': ('pl_PL', 'darkman', 'medium', 'CC0'),
+    'uk': ('uk_UA', 'ukrainian_tts', 'medium', 'CC0'),
+    'zh': ('zh_CN', 'huayan', 'x_low', 'Unknown'),
+    'ja': ('ja_JP', 'hi_fi_captain', 'medium', 'CC BY-NC-SA 4.0'),
+    'ko': ('ko_KR', 'kss', 'medium', 'CC BY-NC-SA 4.0'),
+    'nl': ('nl_NL', 'pim', 'medium', 'CC0'),
+    'tr': ('tr_TR', 'dfki', 'medium', 'CC BY-NC-SA 4.0'),
+    'vi': ('vi_VN', 'vais1000', 'medium', 'CC BY 4.0'),
+}
+
+# What each licence in PIPER_VOICES allows commercially: "yes"; "credit" — allowed if the voice
+# is credited (CC BY; M-AILABS asks for its notice to be kept); "no"; or "unknown".
+PIPER_LICENCE_USE = {
+    'CC0': 'yes',
+    'Public domain': 'yes',
+    'CC BY 4.0': 'credit',
+    'M-AILABS': 'credit',
+    'CC BY-NC-SA 4.0': 'no',
+    'Research only': 'no',
+    'Unknown': 'unknown',
 }
 
 PIPER_VOICES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
@@ -1301,7 +1316,14 @@ def build_run_plan(video_name: str, args, *, work_dir: Path, output_file: Path,
             speak += f" {args.openai_tts_model} / voice {args.openai_voice}"
         elif args.tts == "xtts":
             speak += f"  (voice sample: {args.voice_sample or 'auto-extracted from the video'})"
+        piper_voice = _piper_voice(args.target_lang) if args.tts == "piper" else None
+        if piper_voice:
+            locale, speaker, quality, licence = piper_voice
+            speak += f" {locale}-{speaker}-{quality}  ({licence})"
         lines.append(row("speak", speak))
+        if piper_voice and _piper_licence_note(licence):
+            warn = "⚠️  " if _piper_licence_is_restricted(licence) else ""
+            lines.append(row("", f"{warn}{_piper_licence_note(licence)} — see NOTICE.md"))
         if args.tts == "openai" and (getattr(args, "openai_tts_instructions", "") or "").strip():
             lines.append(row("", f"style: {args.openai_tts_instructions[:58]}"))
 
@@ -1334,11 +1356,26 @@ def create_silence_wav(duration_seconds: float, output_file: str, sample_rate: i
         return False
 
 
-def _piper_voice(lang_code: str) -> Optional[Tuple[str, str, str]]:
-    """The (locale, voice, quality) Piper voice mapped to a target language, or None. Takes a
-    bare or a regional code ("pt", "pt-BR", "pt_BR"). Pure."""
+def _piper_voice(lang_code: str) -> Optional[Tuple[str, str, str, str]]:
+    """The (locale, voice, quality, licence) Piper voice mapped to a target language, or None.
+    Takes a bare or a regional code ("pt", "pt-BR", "pt_BR"). Pure."""
     base = (lang_code or "").replace("_", "-").split("-")[0].lower()
     return PIPER_VOICES.get(base)
+
+
+def _piper_licence_note(licence: str) -> Optional[str]:
+    """What a Piper voice's licence asks of a commercial user, or None when it asks nothing.
+    An unrecognised licence is treated as unknown. Pure."""
+    return {
+        "credit": "commercial use is allowed if you credit the voice",
+        "no": "not for commercial use",
+        "unknown": "licence unknown, so not cleared for commercial use",
+    }.get(PIPER_LICENCE_USE.get(licence, "unknown"))
+
+
+def _piper_licence_is_restricted(licence: str) -> bool:
+    """True when a Piper voice's licence rules out commercial use or doesn't say. Pure."""
+    return PIPER_LICENCE_USE.get(licence, "unknown") in ("no", "unknown")
 
 
 def _piper_model_name(locale: str, voice: str, quality: str) -> str:
@@ -1371,19 +1408,29 @@ def download_piper_model(lang_code: str, models_dir: Path) -> Optional[Path]:
 
     None — with the reason logged — when no voice is mapped for the language or the download
     fails. It never substitutes another language's voice: that speaks the dub in the wrong
-    language (what this replaced did for every language but Russian)."""
+    language (what this replaced did for every language but Russian).
+
+    The voice's licence is logged either way, as a warning when it isn't cleared for
+    commercial use."""
     voice = _piper_voice(lang_code)
     if voice is None:
         _LOG.error(f"❌ No Piper voice is mapped for '{lang_code}'. Add one to PIPER_VOICES "
                    "(https://huggingface.co/rhasspy/piper-voices) or choose another --tts.")
         return None
-    name = _piper_model_name(*voice)
+    locale, speaker, quality, licence = voice
+    name = _piper_model_name(locale, speaker, quality)
+    note = _piper_licence_note(licence)
+    if _piper_licence_is_restricted(licence):
+        _LOG.warning(f"⚠️  Piper voice {name} ({licence}): {note} — "
+                     "see NOTICE.md, \"Piper voices\"")
+    else:
+        _LOG.info(f"📜 Piper voice {name} ({licence}){f': {note}' if note else ''}")
     model = models_dir / name
     config = models_dir / f"{name}.json"
     if model.exists() and config.exists():
         _LOG.info(f"✓ Piper voice on disk: {name}")
         return model
-    url = _piper_model_url(*voice)
+    url = _piper_model_url(locale, speaker, quality)
     try:
         models_dir.mkdir(parents=True, exist_ok=True)
         for src, dest in ((f"{url}.json", config), (url, model)):

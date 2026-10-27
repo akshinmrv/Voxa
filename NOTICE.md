@@ -17,7 +17,7 @@ Read this file before using Voxa commercially.
 | Configuration | Commercially usable? | Why |
 |---|:---:|---|
 | `--tts openai` + `--translator openai` / `anthropic` | ✅ Yes | Paid APIs under the provider's commercial terms |
-| `--tts piper` | ⚠️ **Depends on the voice** | 8 of the 15 default voices allow it; the English, Russian, Japanese, Korean, Turkish and Vietnamese voices do not, and the Chinese one is unknown (see §4.1) |
+| `--tts piper` | ⚠️ **Depends on the voice** | 11 of the 15 default voices allow it; the Japanese, Korean and Turkish voices do not, and the Chinese one is unknown. Most were fine-tuned from a voice licensed for research only (see §4.1) |
 | `--translator ollama` | ⚠️ **Depends on the model** | The default, `llama3`, allows it under conditions (see §4.3) |
 | `--tts edge` (default) | ⚠️ Grey area | Uses an **unofficial** Microsoft endpoint (see §3) |
 | `--translator google` (default) | ⚠️ Grey area | Uses an **unofficial** Google endpoint (see §3) |
@@ -112,30 +112,44 @@ Voxa downloads models at runtime; it never ships weights.
 [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) on first use. Each voice's
 model card gives its licence as that of the recordings it was trained on. Whether a dataset's
 licence carries over to a model trained on it — and to audio that model produces — is not settled
-law; the table takes the cautious reading and treats the voice as bound by it.
+law; the table takes the cautious reading and treats the voice as bound by it. Voxa names the
+licence when it picks the voice, and warns when the voice isn't cleared for commercial use.
 
-| Language | Voice | Licence | Commercial use |
-|---|---|---|:---:|
-| German | `de_DE-thorsten-medium` | CC0 | ✅ |
-| Spanish | `es_ES-davefx-medium` | CC0 | ✅ |
-| Dutch | `nl_NL-pim-medium` | CC0 | ✅ |
-| Polish | `pl_PL-darkman-medium` | CC0 | ✅ |
-| Ukrainian | `uk_UA-ukrainian_tts-medium` | CC0 | ✅ |
-| French | `fr_FR-siwis-medium` | CC BY 4.0 | ✅ with attribution |
-| Portuguese | `pt_BR-edresson-low` | CC BY 4.0 | ✅ with attribution |
-| Italian | `it_IT-riccardo-x_low` | M-AILABS (BSD-style, commercial use permitted) | ✅ keep the notice |
-| English | `en_US-lessac-medium` | Blizzard 2013 Lessac — research licence | ❌ research only |
-| Russian | `ru_RU-ruslan-medium` | CC BY-NC-SA 4.0 | ❌ non-commercial |
-| Japanese | `ja_JP-hi_fi_captain-medium` | CC BY-NC-SA 4.0 | ❌ non-commercial |
-| Korean | `ko_KR-kss-medium` | CC BY-NC-SA 4.0 | ❌ non-commercial |
-| Turkish | `tr_TR-dfki-medium` | CC BY-NC-SA 4.0 | ❌ non-commercial |
-| Vietnamese | `vi_VN-vivos-x_low` | CC BY-NC-SA 4.0 | ❌ non-commercial |
-| Chinese | `zh_CN-huayan-x_low` | Unknown | ❓ not cleared |
+| Language | Voice | Licence | Commercial use | Fine-tuned from |
+|---|---|---|:---:|---|
+| English | `en_US-kristin-medium` | Public domain (LibriVox) | ✅ | — trained from scratch |
+| German | `de_DE-thorsten-medium` | CC0 | ✅ | `en_US-lessac` |
+| Spanish | `es_ES-davefx-medium` | CC0 | ✅ | `en_US-lessac` |
+| Dutch | `nl_NL-pim-medium` | CC0 | ✅ | `en_US-lessac` |
+| Polish | `pl_PL-darkman-medium` | CC0 | ✅ | `en_US-lessac` |
+| Russian | `ru_RU-denis-medium` | CC0 | ✅ | `en_US-lessac` |
+| Ukrainian | `uk_UA-ukrainian_tts-medium` | CC0 | ✅ | — trained from scratch |
+| French | `fr_FR-siwis-medium` | CC BY 4.0 | ✅ with attribution | `en_US-lessac` |
+| Portuguese | `pt_BR-edresson-low` | CC BY 4.0 | ✅ with attribution | `en_US-ryan` |
+| Vietnamese | `vi_VN-vais1000-medium` | CC BY 4.0 | ✅ with attribution | `en_US-lessac` |
+| Italian | `it_IT-riccardo-x_low` | M-AILABS (BSD-style, commercial use permitted) | ✅ keep the notice | — trained from scratch |
+| Japanese | `ja_JP-hi_fi_captain-medium` | CC BY-NC-SA 4.0 | ❌ non-commercial | LibriTTS-R base model |
+| Korean | `ko_KR-kss-medium` | CC BY-NC-SA 4.0 | ❌ non-commercial | LibriTTS-R base model |
+| Turkish | `tr_TR-dfki-medium` | CC BY-NC-SA 4.0 | ❌ non-commercial | `en_US-lessac` |
+| Chinese | `zh_CN-huayan-x_low` | Unknown | ❓ not cleared | — trained from scratch |
 
-Permissively licensed Piper voices do exist for English (e.g. `ljspeech`, public domain;
-`joe`, CC0), Russian (`denis`, `dmitri`, CC0), Vietnamese (`vais1000`, CC BY 4.0) and Chinese
-(`chaowen`, CC0). There is currently none for Japanese, Korean or Turkish — for commercial work in
-those languages, use `--tts openai` or a self-hosted engine whose licence fits.
+**Fine-tuned voices.** Most of these voices were not trained from scratch: they started from an
+English Piper voice and were then trained further on recordings in their own language. The
+Licence column, like the model card, gives the licence of those recordings. The voices they
+started from are licensed more narrowly: `en_US-lessac` was trained on the Blizzard 2013 Lessac
+data, which is licensed for research only, and `en_US-ryan` on RyanSpeech, CC BY-NC-SA 4.0.
+Whether that licence also binds a voice fine-tuned from them is an open question, and the table
+does not apply it. If you need to rule that risk out, the voices trained from scratch on
+permissively licensed recordings are the English, Ukrainian and Italian ones.
+
+There is currently no permissively licensed Piper voice for Japanese, Korean or Turkish. Chinese
+has one, `zh_CN-chaowen-medium` (CC0), but it needs piper-tts's optional Chinese dependencies
+(`piper-tts[zh]`), which Voxa does not install, so Voxa keeps `huayan`. For commercial work in
+those languages — or wherever the fine-tuning question matters to you — use `--tts openai` or a
+self-hosted engine whose licence fits.
+
+Before Voxa 1.10, the English, Russian and Vietnamese voices were `en_US-lessac-medium` (research
+licence), `ru_RU-ruslan-medium` and `vi_VN-vivos-x_low` (both CC BY-NC-SA 4.0).
 
 For a CC BY voice, credit it where you publish the audio, e.g. *"Voice: Piper fr_FR-siwis (SIWIS
 dataset, CC BY 4.0)"*.

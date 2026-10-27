@@ -487,10 +487,11 @@ Voxa özü MIT-dir və GPL lisenziyalı məcburi asılılığı yoxdur (default 
 `edge-tts` LGPL-3.0-dır). İdarə etdiyi mühərriklərin və modellərin öz lisenziyaları var.
 `--tts openai` + `--translator openai` OpenAI-ın kommersiya şərtləri ilə işləyir.
 `--tts piper` + `--translator ollama` tam offline işləyir, amma səs və LLM nə qədər sərbəstdirsə,
-o qədər sərbəstdir: 15 Piper səsindən 8-i kommersiya istifadəsinə icazə verir (ingilis, rus,
-yapon, koreya, türk və vyetnam səsləri vermir, çin səsinin lisenziyası isə məlum deyil),
-default `llama3` isə Meta-nın lisenziya
-şərtləri ilə gəlir. `--tts xtts` kommersiya üçün **yararsızdır**. Bax: [NOTICE.md](NOTICE.md).
+o qədər sərbəstdir: 15 Piper səsindən 11-i kommersiya istifadəsinə icazə verir (yapon, koreya və
+türk səsləri vermir, çin səsinin lisenziyası isə məlum deyil), default `llama3` isə Meta-nın
+lisenziya şərtləri ilə gəlir. Piper səslərinin çoxu yalnız tədqiqat üçün lisenziyalı ingilis
+səsindən fine-tune olunub; bunun nə demək olduğunu [NOTICE](NOTICE.md#41-piper-voices) izah edir.
+`--tts xtts` kommersiya üçün **yararsızdır**. Bax: [NOTICE.md](NOTICE.md).
 </details>
 
 <details>
@@ -573,7 +574,7 @@ daşıyır. Kommersiya istifadəsindən əvvəl [NOTICE.md](NOTICE.md) oxuyun.
 | Konfiqurasiya | Kommersiya istifadəsi |
 |---|:---:|
 | `--tts openai` + `--translator openai` (ödənişli API) | ✅ |
-| `--tts piper` (tam offline) | ⚠️ səsdən asılıdır, 15 dildən 8-i |
+| `--tts piper` (tam offline) | ⚠️ səsdən asılıdır, 15 dildən 11-i |
 | `--translator ollama` (tam offline) | ⚠️ modeldən asılıdır |
 | `--tts edge` / `--translator google` (default, qeyri-rəsmi endpoint) | ⚠️ boz zona |
 | `--tts xtts` (XTTS-v2 çəkiləri CPML-dir) | ❌ yalnız qeyri-kommersiya |
