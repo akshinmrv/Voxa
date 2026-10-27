@@ -52,6 +52,8 @@ dependencies = [
 # declares its own transformers/omegaconf constraints — voxa no longer pins them globally.
 # NOTE: the XTTS-v2 model weights are non-commercial (CPML). See NOTICE.md.
 xtts = ["coqui-tts", "torchaudio"]
+# piper-tts is GPL-3.0-or-later since 1.3.0; voxa runs it as a separate program. Each voice has
+# its own licence and several are non-commercial — see NOTICE.md §2 and §4.1.
 piper = ["piper-tts"]
 faster = ["faster-whisper"]
 anthropic = ["anthropic"]

@@ -155,7 +155,7 @@
       {
         "name": "Çevrimdışı",
         "label": "bash",
-        "command": "voxa talk.mp4 --target_lang az --translator ollama --tts piper"
+        "command": "voxa talk.mp4 --target_lang de --translator ollama --tts piper"
       },
       {
         "name": "Kendi sunucun",
@@ -186,7 +186,7 @@
       },
       {
         "q": "Gerçekten ücretsiz mi?",
-        "a": "Evet, Voxa MIT lisanslıdır. Bazı isteğe bağlı motorların kendi lisansları vardır."
+        "a": "Evet, Voxa MIT lisanslıdır. Sürdüğü motorların ve seslerin kendi lisansları vardır, bazı çevrimdışı sesler ticari değildir. Ticari kullanımdan önce NOTICE.md dosyasını kontrol et."
       }
     ]
   },

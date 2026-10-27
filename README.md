@@ -86,8 +86,9 @@ No API key is required. The defaults work out of the box.
 | **Extensible** | New speech or translation providers are one adapter plus one registry line |
 
 > [!NOTE]
-> Voxa ships no model weights and vendors no third-party code. It orchestrates tools you
-> install yourself. See [NOTICE.md](NOTICE.md) before using it commercially.
+> The Python package ships no model weights and vendors no third-party code. It orchestrates
+> tools you install yourself — and their licences, including those of the speech voices, vary.
+> See [NOTICE.md](NOTICE.md) before using it commercially.
 
 ## Supported Languages
 
@@ -274,7 +275,7 @@ callers and a port-mapped request does not qualify — run the console natively 
 | Command | Enables |
 |---|---|
 | `pipx install "voxa-dub[faster]"` | `--whisper-backend faster` — 2–4× quicker, no torch |
-| `pipx install "voxa-dub[piper]"` | `--tts piper` — fully offline |
+| `pipx install "voxa-dub[piper]"` | `--tts piper` — fully offline (GPL-3.0 engine; voice licences vary, see [NOTICE](NOTICE.md#41-piper-voices)) |
 | `pipx install "voxa-dub[anthropic]"` | `--translator anthropic` |
 | `pipx install "voxa-dub[xtts]"` | `--tts xtts` voice cloning |
 | `pipx install "voxa-dub[url]"` | `voxa <video-url>` — download the input first (yt-dlp) |
@@ -285,7 +286,8 @@ callers and a port-mapped request does not qualify — run the console natively 
 > voice, so an interview or podcast isn't dubbed in one voice. It needs a Hugging Face token
 > (`--hf-token` or `HF_TOKEN`) and a one-time acceptance of the model terms at
 > [hf.co/pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) —
-> the model is MIT-licensed and free to ship, only gated. Pass `--num-speakers N` if you know the
+> the pipeline is MIT-licensed and only gated; the speaker-embedding model it loads is CC BY 4.0,
+> so credit it. Pass `--num-speakers N` if you know the
 > count. Edge and OpenAI TTS get per-speaker voices; Piper and XTTS stay single-voice for now, and
 > `--diarize` isn't combinable with `--subtitles` (diarization needs the source audio).
 
@@ -534,10 +536,14 @@ timing maths is pure, unit-tested, and locked by a golden regression harness.
 <details>
 <summary><strong>Can I use Voxa commercially?</strong></summary>
 
-Voxa itself is MIT and requires no copyleft dependency. The engines it drives have their own
-licences. `--tts piper` with `--translator ollama` is fully permissive; `--tts openai` with
-`--translator openai` runs under OpenAI's commercial terms. `--tts xtts` is **not** commercially
-usable. See [NOTICE.md](NOTICE.md).
+Voxa itself is MIT and requires no GPL-licensed dependency (the default speech engine,
+`edge-tts`, is LGPL-3.0). The engines and models it drives have their own licences.
+`--tts openai` with `--translator openai` runs under OpenAI's commercial terms. `--tts piper` with
+`--translator ollama` runs fully offline, but it is only as permissive as the voice and the LLM:
+8 of the 15 Piper voices allow commercial use — the English, Russian, Japanese, Korean, Turkish
+and Vietnamese ones do not, and the Chinese one's licence is unknown — and the default `llama3`
+comes with Meta's licence conditions.
+`--tts xtts` is **not** commercially usable. See [NOTICE.md](NOTICE.md).
 </details>
 
 <details>
@@ -556,7 +562,8 @@ No API key, no extra Python dependency, and no non-commercial model weights.
 <summary><strong>Can it run entirely offline?</strong></summary>
 
 Yes: `--translator ollama --tts piper`. Nothing leaves your machine after the models are
-downloaded.
+downloaded. Offline is not the same as commercially clean, though — check the voice for your
+language in [NOTICE.md](NOTICE.md#41-piper-voices).
 </details>
 
 <details>
@@ -611,14 +618,16 @@ pytest
 
 Voxa is released under the [MIT License](LICENSE).
 
-Voxa ships no model weights and vendors no third-party code, but the engines it drives have
-their own licences — some stricter than Voxa's. Read [NOTICE.md](NOTICE.md) before commercial
-use.
+The Python package ships no model weights and vendors no third-party code, but the engines and
+models it drives have their own licences — some stricter than Voxa's. The container image also
+bundles system packages, FFmpeg among them, under their own licences. Read
+[NOTICE.md](NOTICE.md) before commercial use.
 
 | Configuration | Commercial use |
 |---|:---:|
-| `--tts piper` + `--translator ollama` (fully offline) | ✅ |
 | `--tts openai` + `--translator openai` (paid APIs) | ✅ |
+| `--tts piper` (fully offline) | ⚠️ depends on the voice — 8 of 15 languages |
+| `--translator ollama` (fully offline) | ⚠️ depends on the model |
 | `--tts edge` / `--translator google` (defaults, unofficial endpoints) | ⚠️ grey area |
 | `--tts xtts` (XTTS-v2 weights are CPML) | ❌ non-commercial only |
 
@@ -631,7 +640,7 @@ Voxa stands on work done by others.
 | [OpenAI Whisper](https://github.com/openai/whisper) | Speech recognition |
 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | Faster transcription backend |
 | [edge-tts](https://github.com/rany2/edge-tts) | Microsoft neural voices |
-| [Piper](https://github.com/rhasspy/piper) | Offline neural speech |
+| [Piper](https://github.com/OHF-Voice/piper1-gpl) | Offline neural speech |
 | [coqui-tts](https://github.com/idiap/coqui-ai-TTS) | Maintained fork powering XTTS voice cloning |
 | [OpenAI](https://platform.openai.com/) · [Anthropic](https://www.anthropic.com/) | LLM translation and speech |
 | [Ollama](https://ollama.com/) | Local, private LLM translation |
@@ -648,7 +657,7 @@ on. Voxa is one of those parts. Dubbing a video should not require a studio, a l
 negotiation, or a proprietary pipeline; it should require one command and a machine you
 already own.
 
-That is why Voxa is MIT, why it carries no copyleft dependency, why its licence obligations
+That is why Voxa is MIT, why it requires no GPL dependency, why its licence obligations
 are documented rather than glossed over, and why every engine sits behind a registry that
 anyone can extend. The interesting problems in this space — keeping a dub in sync, making a
 synthetic voice sound unhurried, knowing whether the output is actually good — are worth

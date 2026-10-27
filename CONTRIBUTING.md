@@ -77,10 +77,13 @@ The same shape applies to translation backends via `LLM_PROVIDERS`.
 
 ## Dependencies
 
-Voxa is MIT and intends to stay installable without copyleft obligations.
+Voxa is MIT and intends to stay installable without GPL obligations.
 
 - **Do not add a GPL-licensed required dependency.** `pysrt` (GPL-3.0) was removed for this
   reason and replaced with a 40-line SubRip parser.
+- **Adding a Piper voice?** Copy its licence from the voice's `MODEL_CARD` into the table in
+  [NOTICE.md](NOTICE.md#41-piper-voices). When a language has a CC0, public-domain or CC BY
+  voice, prefer it — many Piper voices are non-commercial.
 - Anything only one engine needs belongs in an **extra**, not in `dependencies`.
 - If a package pins its own dependencies aggressively (Coqui did, Chatterbox does), prefer
   talking to it over HTTP — see `--openai-tts-base-url` — rather than importing it.

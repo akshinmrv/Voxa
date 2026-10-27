@@ -155,7 +155,7 @@
       {
         "name": "Offline",
         "label": "bash",
-        "command": "voxa talk.mp4 --target_lang az --translator ollama --tts piper"
+        "command": "voxa talk.mp4 --target_lang de --translator ollama --tts piper"
       },
       {
         "name": "Self-host",
@@ -186,7 +186,7 @@
       },
       {
         "q": "Doğrudanmı pulsuzdur?",
-        "a": "Bəli, Voxa MIT lisenziyalıdır. Bəzi opsional mühərriklərin öz lisenziyaları var."
+        "a": "Bəli, Voxa MIT lisenziyalıdır. İdarə etdiyi mühərriklərin və səslərin öz lisenziyaları var, bəzi offline səslər qeyri-kommersiyadır. Kommersiya istifadəsindən əvvəl NOTICE.md-ni yoxla."
       }
     ]
   },

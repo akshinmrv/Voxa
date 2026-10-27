@@ -2,9 +2,11 @@
 
 **Voxa** is released under the [MIT License](LICENSE).
 
-Voxa **does not bundle or redistribute any model weights or third-party source code**.
-It orchestrates tools and models that you install and run yourself. The licenses of those
-components are their own, and some of them are **more restrictive than Voxa's MIT license**.
+The Python package (`pip install voxa-dub`) contains only Voxa's own two modules — **no model
+weights and no third-party source code**. Voxa orchestrates tools and models that you install and
+run yourself. Their licences are their own, and some are **more restrictive than Voxa's MIT
+licence** — including several of the speech voices Voxa downloads for you. The container image is
+a different case: it bundles system packages (see §6).
 
 Read this file before using Voxa commercially.
 
@@ -14,53 +16,69 @@ Read this file before using Voxa commercially.
 
 | Configuration | Commercially usable? | Why |
 |---|:---:|---|
-| `--tts piper` + `--translator ollama` | ✅ Yes | Fully offline, permissive licenses |
-| `--tts openai` + `--translator openai` | ✅ Yes | Paid API under OpenAI's commercial terms |
+| `--tts openai` + `--translator openai` / `anthropic` | ✅ Yes | Paid APIs under the provider's commercial terms |
+| `--tts piper` | ⚠️ **Depends on the voice** | 8 of the 15 default voices allow it; the English, Russian, Japanese, Korean, Turkish and Vietnamese voices do not, and the Chinese one is unknown (see §4.1) |
+| `--translator ollama` | ⚠️ **Depends on the model** | The default, `llama3`, allows it under conditions (see §4.3) |
 | `--tts edge` (default) | ⚠️ Grey area | Uses an **unofficial** Microsoft endpoint (see §3) |
 | `--translator google` (default) | ⚠️ Grey area | Uses an **unofficial** Google endpoint (see §3) |
-| `--tts xtts` | ❌ **No** | XTTS-v2 model weights are **non-commercial only** (see §4) |
+| `--tts xtts` | ❌ **No** | XTTS-v2 model weights are **non-commercial only** (see §4.4) |
+
+> **Offline is not the same as commercially clean.** `--translator ollama --tts piper` sends
+> nothing over the network, but whether you may use the result commercially depends on the voice
+> for your target language and the LLM you run.
 
 > **The default configuration (`--tts edge --translator google`) is convenient for personal use
 > but is NOT recommended for a commercial product.** Prefer `openai`/`anthropic` translation and
-> `openai` or `piper` synthesis, or a self-hosted OpenAI-compatible endpoint.
+> `openai` synthesis, or a self-hosted OpenAI-compatible endpoint whose model licence you have
+> checked.
 
 ---
 
 ## 2. Runtime dependencies
 
-Licenses below were read from the installed package metadata.
+Licences below were read from each package's PyPI metadata and, where the two disagree, the
+licence file the package ships (October 2026).
 
-### Required
+### Required — installed by `pip install voxa-dub`
 
 | Package | Role | License |
 |---|---|---|
 | [openai-whisper](https://github.com/openai/whisper) | Speech recognition | MIT |
 | [edge-tts](https://github.com/rany2/edge-tts) | Default TTS engine | **LGPL-3.0** |
-| [deep-translator](https://github.com/nidhaloff/deep-translator) | Google translation backend | MIT |
+| [deep-translator](https://github.com/nidhaloff/deep-translator) | Google translation backend | Apache-2.0 (the licence file it ships; its metadata says MIT) |
 | [openai](https://github.com/openai/openai-python) | OpenAI API client | Apache-2.0 |
-| [anthropic](https://github.com/anthropics/anthropic-sdk-python) | Anthropic API client | MIT |
-| [torch](https://github.com/pytorch/pytorch) / torchaudio | Inference runtime | BSD-3-Clause |
+| [torch](https://github.com/pytorch/pytorch) | Inference runtime | BSD-3-Clause (bundled components under other permissive licences) |
 | [soundfile](https://github.com/bastibe/python-soundfile) | Audio I/O | BSD-3-Clause (libsndfile: LGPL) |
 | [noisereduce](https://github.com/timsainb/noisereduce) | Source-audio denoising | MIT |
 | [numpy](https://numpy.org/) | Numerics | BSD-3-Clause |
 | [tqdm](https://github.com/tqdm/tqdm) | Progress bars | MPL-2.0 AND MIT |
 | [requests](https://requests.readthedocs.io/) | Ollama HTTP calls | Apache-2.0 |
 
-### Optional
+### Optional — installed only with an extra
 
-| Package | Enables | License |
-|---|---|---|
-| [piper-tts](https://github.com/rhasspy/piper) | `--tts piper` | MIT |
-| [coqui-tts](https://github.com/idiap/coqui-ai-TTS) | `--tts xtts` | MPL-2.0 (toolkit only) |
-| [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | `--whisper-backend faster` | MIT |
-| [pyannote.audio](https://github.com/pyannote/pyannote-audio) | `--diarize` (speaker diarization) | MIT |
+| Package | Extra | Enables | License |
+|---|---|---|---|
+| [piper-tts](https://github.com/OHF-Voice/piper1-gpl) | `[piper]` | `--tts piper` | **GPL-3.0-or-later** |
+| [coqui-tts](https://github.com/idiap/coqui-ai-TTS) | `[xtts]` | `--tts xtts` | MPL-2.0 (toolkit only — see §4.4 for the weights) |
+| [torchaudio](https://github.com/pytorch/audio) | `[xtts]` | `--tts xtts` | BSD-2-Clause |
+| [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | `[faster]` | `--whisper-backend faster` | MIT |
+| [anthropic](https://github.com/anthropics/anthropic-sdk-python) | `[anthropic]` | `--translator anthropic` | Apache-2.0 |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | `[url]` | Dubbing from a URL | Unlicense |
+| [pyannote.audio](https://github.com/pyannote/pyannote-audio) | `[diarize]` | `--diarize` | MIT (see §4.5 for the models) |
+| [fastapi](https://github.com/fastapi/fastapi) · [uvicorn](https://github.com/Kludex/uvicorn) · [python-multipart](https://github.com/Kludex/python-multipart) | `[serve]` | `voxa serve` | MIT · BSD-3-Clause · Apache-2.0 |
 
 ### ⚠️ Copyleft dependencies you should know about
 
-- **`edge-tts` is LGPL-3.0.** Importing it without modification is generally compatible with an
-  MIT application, provided users remain able to replace the library. Do not vendor a modified
-  copy without complying with the LGPL. To ship a fully permissive bundle, use `--tts openai`
-  or `--tts piper` and do not install `edge-tts`.
+- **`edge-tts` is LGPL-3.0** and is a required dependency. Importing it without modification is
+  generally compatible with an MIT application, provided users remain able to replace the library.
+  Do not vendor a modified copy without complying with the LGPL.
+- **`piper-tts` is GPL-3.0-or-later** (since 1.3.0, when development moved to
+  [OHF-Voice/piper1-gpl](https://github.com/OHF-Voice/piper1-gpl); versions up to 1.2.0 were MIT).
+  Voxa runs the `piper` program as a separate process and neither imports nor links it, so Voxa's
+  own code stays MIT. The GPL governs `piper-tts` itself: if you redistribute an environment that
+  includes it, that copy comes with the GPL's obligations. The older MIT releases are not a
+  practical alternative — they depend on `piper-phonemize`, which has no Windows wheels and no Linux
+  wheels for Python 3.12 or later.
 
 > **Removed:** Voxa used to require `pysrt` (GPL-3.0) for a single call — reading back the
 > subtitle file it had just written itself. That call was replaced with a small built-in SubRip
@@ -77,25 +95,72 @@ Two default backends talk to endpoints that are **not officially published APIs*
   already rejected with HTTP 403. For a supported, commercially licensed equivalent, use
   Azure Cognitive Services Speech.
 - **`deep-translator`'s Google backend** scrapes the public Google Translate web endpoint. It is
-  not the paid Google Cloud Translation API.
+  not the paid Google Cloud Translation API, and it rate-limits heavy use.
 
 Using them is your decision and your risk. For production or commercial work, prefer an official,
 paid API (OpenAI / Anthropic for translation; OpenAI TTS or Azure Speech for synthesis).
 
 ---
 
-## 4. Models
+## 4. Models and voices
 
 Voxa downloads models at runtime; it never ships weights.
 
-| Model | License | Commercial use |
-|---|---|---|
-| Whisper weights (OpenAI) | MIT | ✅ Allowed |
-| Piper voices | Per-voice (commonly MIT / CC-BY) | ✅ Check the individual voice |
-| **XTTS-v2 weights (Coqui)** | **Coqui Public Model License (CPML) 1.0** | ❌ **Non-commercial only** |
-| **pyannote `speaker-diarization-3.1`** | MIT (access-gated on Hugging Face) | ✅ Allowed — accept the terms and pass a token |
+### 4.1 Piper voices
 
-### About XTTS
+`--tts piper` picks one voice per target language and downloads it from
+[rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) on first use. Each voice's
+model card gives its licence as that of the recordings it was trained on. Whether a dataset's
+licence carries over to a model trained on it — and to audio that model produces — is not settled
+law; the table takes the cautious reading and treats the voice as bound by it.
+
+| Language | Voice | Licence | Commercial use |
+|---|---|---|:---:|
+| German | `de_DE-thorsten-medium` | CC0 | ✅ |
+| Spanish | `es_ES-davefx-medium` | CC0 | ✅ |
+| Dutch | `nl_NL-pim-medium` | CC0 | ✅ |
+| Polish | `pl_PL-darkman-medium` | CC0 | ✅ |
+| Ukrainian | `uk_UA-ukrainian_tts-medium` | CC0 | ✅ |
+| French | `fr_FR-siwis-medium` | CC BY 4.0 | ✅ with attribution |
+| Portuguese | `pt_BR-edresson-low` | CC BY 4.0 | ✅ with attribution |
+| Italian | `it_IT-riccardo-x_low` | M-AILABS (BSD-style, commercial use permitted) | ✅ keep the notice |
+| English | `en_US-lessac-medium` | Blizzard 2013 Lessac — research licence | ❌ research only |
+| Russian | `ru_RU-ruslan-medium` | CC BY-NC-SA 4.0 | ❌ non-commercial |
+| Japanese | `ja_JP-hi_fi_captain-medium` | CC BY-NC-SA 4.0 | ❌ non-commercial |
+| Korean | `ko_KR-kss-medium` | CC BY-NC-SA 4.0 | ❌ non-commercial |
+| Turkish | `tr_TR-dfki-medium` | CC BY-NC-SA 4.0 | ❌ non-commercial |
+| Vietnamese | `vi_VN-vivos-x_low` | CC BY-NC-SA 4.0 | ❌ non-commercial |
+| Chinese | `zh_CN-huayan-x_low` | Unknown | ❓ not cleared |
+
+Permissively licensed Piper voices do exist for English (e.g. `ljspeech`, public domain;
+`joe`, CC0), Russian (`denis`, `dmitri`, CC0), Vietnamese (`vais1000`, CC BY 4.0) and Chinese
+(`chaowen`, CC0). There is currently none for Japanese, Korean or Turkish — for commercial work in
+those languages, use `--tts openai` or a self-hosted engine whose licence fits.
+
+For a CC BY voice, credit it where you publish the audio, e.g. *"Voice: Piper fr_FR-siwis (SIWIS
+dataset, CC BY 4.0)"*.
+
+### 4.2 Speech recognition
+
+| Model | Licence | Commercial use |
+|---|---|:---:|
+| Whisper weights (OpenAI) | MIT | ✅ |
+| faster-whisper conversions (`Systran/faster-whisper-*`) | MIT | ✅ |
+
+### 4.3 Translation with Ollama
+
+Ollama itself is MIT, but each model has its own licence. The default, `--ollama_model llama3`, is
+under the **Meta Llama 3 Community License**: commercial use is allowed (unless your products
+exceed 700 million monthly active users), on condition that you follow Meta's Acceptable Use
+Policy and display "Built with Meta Llama 3" in a product built with it. That is a licence with
+conditions, not a permissive one. To use a different model, pass `--ollama_model` and check its
+licence on its Ollama or Hugging Face page.
+
+### 4.4 XTTS
+
+| Model | Licence | Commercial use |
+|---|---|:---:|
+| **XTTS-v2 weights (Coqui)** | **Coqui Public Model License (CPML) 1.0** | ❌ **Non-commercial only** |
 
 Coqui Inc. **ceased operations in January 2024**. Consequences:
 
@@ -113,13 +178,18 @@ If you need voice cloning for a commercial product, XTTS is not a viable path. C
 MIT-licensed alternative such as [Chatterbox](https://github.com/resemble-ai/chatterbox), served
 behind an OpenAI-compatible endpoint.
 
-### About diarization
+### 4.5 Speaker diarization
 
-`--diarize` uses [pyannote.audio](https://github.com/pyannote/pyannote-audio) (MIT). Its pretrained
-pipeline, `pyannote/speaker-diarization-3.1`, is **MIT-licensed** but **gated on Hugging Face**: you
-accept its terms once and pass a token (`--hf-token` / `HF_TOKEN`). The gate is access control, not a
-commercial restriction — unlike the XTTS weights above, there is no non-commercial clause. It is an
-optional extra (`voxa-dub[diarize]`) and is off by default.
+| Model | Licence | Commercial use |
+|---|---|:---:|
+| `pyannote/speaker-diarization-3.1` (pipeline) | MIT, access-gated on Hugging Face | ✅ |
+| `pyannote/segmentation-3.0` | MIT, access-gated on Hugging Face | ✅ |
+| `pyannote/wespeaker-voxceleb-resnet34-LM` (speaker embeddings, loaded by the pipeline) | CC BY 4.0 | ✅ with attribution |
+
+You accept the gated models' terms once and pass a token (`--hf-token` / `HF_TOKEN`). The gate is
+access control, not a commercial restriction — unlike the XTTS weights, none of these has a
+non-commercial clause; the embedding model asks for credit. `--diarize` is an optional extra
+(`voxa-dub[diarize]`) and is off by default.
 
 ---
 
@@ -129,11 +199,30 @@ optional extra (`voxa-dub[diarize]`) and is off by default.
 text to third-party services under their own terms of service and pricing. Voxa never transmits
 your API keys anywhere except to the corresponding provider.
 
-For a fully offline pipeline that sends nothing over the network, use:
+For a pipeline that sends nothing over the network, use:
 
 ```bash
 voxa video.mp4 --translator ollama --tts piper
 ```
+
+— and check §4.1 and §4.3 before using its output commercially.
+
+---
+
+## 6. Container image
+
+The image published at `ghcr.io/akshinmrv/voxa` is a redistribution of third-party software, not
+just of Voxa. It is built from `python:3.12-slim` (Debian) and contains, among other packages:
+
+- **FFmpeg from Debian**, which Debian builds with GPL components enabled (`--enable-gpl`), so the
+  copy in the image is under the GPL;
+- the required Python dependencies listed in §2 (including LGPL-3.0 `edge-tts`), a CPU build of
+  `torch`, and the `[serve]` extra.
+
+It does not include `piper-tts`, `coqui-tts` or any model weights; Whisper models are downloaded
+at runtime into `/cache`. The image's `org.opencontainers.image.licenses="MIT"` label describes
+Voxa's own code. Each Debian package's licence is in `/usr/share/doc/<package>/copyright`, and its
+source is available from Debian.
 
 ---
 

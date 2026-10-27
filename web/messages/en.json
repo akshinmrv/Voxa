@@ -155,7 +155,7 @@
       {
         "name": "Offline",
         "label": "bash",
-        "command": "voxa talk.mp4 --target_lang az --translator ollama --tts piper"
+        "command": "voxa talk.mp4 --target_lang de --translator ollama --tts piper"
       },
       {
         "name": "Self-host",
@@ -186,7 +186,7 @@
       },
       {
         "q": "Is it really free?",
-        "a": "Yes, Voxa is MIT-licensed. Some optional engines carry their own licenses."
+        "a": "Yes, Voxa is MIT-licensed. The engines and voices it drives carry their own licenses, and some offline voices are non-commercial, so check NOTICE.md before commercial use."
       }
     ]
   },

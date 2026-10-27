@@ -84,8 +84,9 @@ API anahtarı gerekmez. Varsayılanlar kutudan çıktığı gibi çalışır.
 | **Genişletilebilir** | Yeni konuşma veya çeviri sağlayıcısı = 1 adaptör + 1 registry satırı |
 
 > [!NOTE]
-> Voxa hiçbir model ağırlığı taşımaz ve üçüncü taraf kodu içermez. Kendi kurduğunuz araçları
-> yönetir. Ticari kullanımdan önce [NOTICE.md](NOTICE.md) dosyasını okuyun.
+> Python paketi hiçbir model ağırlığı taşımaz ve üçüncü taraf kodu içermez. Kendi kurduğunuz
+> araçları yönetir; bu araçların, konuşma sesleri de dahil, lisansları farklıdır. Ticari
+> kullanımdan önce [NOTICE.md](NOTICE.md) dosyasını okuyun.
 
 ## Desteklenen diller
 
@@ -266,7 +267,7 @@ açıktır — port eşlemeli bir istek buna uymaz, bu yüzden konsolu yerel ola
 | Komut | Neyi etkinleştirir |
 |---|---|
 | `pipx install "voxa-dub[faster]"` | `--whisper-backend faster` — 2–4× hızlı, torch'suz |
-| `pipx install "voxa-dub[piper]"` | `--tts piper` — tamamen çevrimdışı |
+| `pipx install "voxa-dub[piper]"` | `--tts piper` — tamamen çevrimdışı (motor GPL-3.0; seslerin lisansları farklı, bkz. [NOTICE](NOTICE.md#41-piper-voices)) |
 | `pipx install "voxa-dub[anthropic]"` | `--translator anthropic` |
 | `pipx install "voxa-dub[xtts]"` | `--tts xtts` ses klonlama |
 | `pipx install "voxa-dub[url]"` | `voxa <video-url>` — girişi önce indir (yt-dlp) |
@@ -277,8 +278,9 @@ açıktır — port eşlemeli bir istek buna uymaz, bu yüzden konsolu yerel ola
 > bir ses verir — röportaj/podcast tek sesle dublajlanmasın. Bir Hugging Face token'ı (`--hf-token`
 > veya `HF_TOKEN`) ve
 > [hf.co/pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
-> adresinde model koşullarının bir kez kabul edilmesi gerekir — model MIT lisanslıdır, yalnızca
-> gated. Sayıyı biliyorsanız `--num-speakers N` verin. Edge ve OpenAI TTS her konuşmacıya ayrı ses
+> adresinde model koşullarının bir kez kabul edilmesi gerekir. Pipeline MIT lisanslıdır, yalnızca
+> gated'dır; yüklediği konuşmacı-embedding modeli ise CC BY 4.0'dır, bu yüzden kaynağını belirtin.
+> Sayıyı biliyorsanız `--num-speakers N` verin. Edge ve OpenAI TTS her konuşmacıya ayrı ses
 > alır; Piper/XTTS şimdilik tek ses ve `--diarize`, `--subtitles` ile birleşmez (kaynak ses gerekir).
 
 > [!NOTE]
@@ -480,8 +482,15 @@ itmek yerine kırpılır. Zamanlama matematiği saftır ve golden regresyon koş
 <details>
 <summary><strong>Ticari olarak kullanabilir miyim?</strong></summary>
 
-Voxa'nın kendisi MIT'tir ve copyleft bağımlılığı yoktur. Sürdüğü motorların kendi lisansları
-vardır. `--tts xtts` ticari kullanıma **uygun değildir**. Bkz. [NOTICE.md](NOTICE.md).
+Voxa'nın kendisi MIT'tir ve GPL lisanslı zorunlu bağımlılığı yoktur (varsayılan konuşma motoru
+`edge-tts` LGPL-3.0'dır). Sürdüğü motorların ve modellerin kendi lisansları vardır.
+`--tts openai` + `--translator openai` OpenAI'ın ticari koşullarıyla çalışır.
+`--tts piper` + `--translator ollama` tamamen çevrimdışı çalışır, ancak ses ve LLM ne kadar
+serbestse o kadar serbesttir: 15 Piper sesinden 8'i ticari kullanıma izin verir. **Türkçe Piper
+sesi (`tr_TR-dfki`) CC BY-NC-SA 4.0'dır, yani ticari kullanıma uygun değildir**; İngilizce, Rusça,
+Japonca, Korece ve Vietnamca sesler de öyle; Çince sesin lisansı ise bilinmiyor. Varsayılan
+`llama3` ise Meta'nın lisans koşullarıyla
+gelir. `--tts xtts` ticari kullanıma **uygun değildir**. Bkz. [NOTICE.md](NOTICE.md).
 </details>
 
 <details>
@@ -497,7 +506,9 @@ voxa video.mp4 --tts openai --openai-tts-base-url http://localhost:8004/v1
 <details>
 <summary><strong>Tamamen çevrimdışı çalışır mı?</strong></summary>
 
-Evet: `--translator ollama --tts piper`.
+Evet: `--translator ollama --tts piper`. Ancak çevrimdışı olmak ticari açıdan temiz olmak
+demek değildir: diliniz için sesin lisansını [NOTICE.md](NOTICE.md#41-piper-voices) içinde
+kontrol edin.
 </details>
 
 <details>
@@ -551,14 +562,16 @@ pytest
 
 Voxa [MIT Lisansı](LICENSE) ile yayımlanır.
 
-Voxa hiçbir model ağırlığı taşımaz ve üçüncü taraf kodu içermez; ancak sürdüğü motorların
-kendi lisansları vardır — bazıları Voxa'nınkinden katıdır. Ticari kullanımdan önce
-[NOTICE.md](NOTICE.md) dosyasını okuyun.
+Python paketi hiçbir model ağırlığı taşımaz ve üçüncü taraf kodu içermez; ancak sürdüğü
+motorların ve modellerin kendi lisansları vardır, bazıları Voxa'nınkinden katıdır. Konteyner
+imajı ise sistem paketlerini, FFmpeg dahil, kendi lisanslarıyla birlikte taşır. Ticari
+kullanımdan önce [NOTICE.md](NOTICE.md) dosyasını okuyun.
 
 | Yapılandırma | Ticari kullanım |
 |---|:---:|
-| `--tts piper` + `--translator ollama` (tamamen çevrimdışı) | ✅ |
 | `--tts openai` + `--translator openai` (ücretli API'ler) | ✅ |
+| `--tts piper` (tamamen çevrimdışı) | ⚠️ sese bağlı, 15 dilin 8'i; Türkçe ❌ |
+| `--translator ollama` (tamamen çevrimdışı) | ⚠️ modele bağlı |
 | `--tts edge` / `--translator google` (varsayılan, resmî olmayan uç noktalar) | ⚠️ gri alan |
 | `--tts xtts` (XTTS-v2 ağırlıkları CPML) | ❌ yalnızca ticari olmayan |
 
@@ -571,7 +584,7 @@ Voxa başkalarının yaptığı işin üzerinde yükselir.
 | [OpenAI Whisper](https://github.com/openai/whisper) | Konuşma tanıma |
 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | Hızlı yazıya çevirme arka ucu |
 | [edge-tts](https://github.com/rany2/edge-tts) | Microsoft nöral sesleri |
-| [Piper](https://github.com/rhasspy/piper) | Çevrimdışı nöral konuşma |
+| [Piper](https://github.com/OHF-Voice/piper1-gpl) | Çevrimdışı nöral konuşma |
 | [coqui-tts](https://github.com/idiap/coqui-ai-TTS) | XTTS ses klonlamasını çalıştıran çatal |
 | [OpenAI](https://platform.openai.com/) · [Anthropic](https://www.anthropic.com/) | LLM çeviri ve konuşma |
 | [Ollama](https://ollama.com/) | Yerel, gizli LLM çeviri |
@@ -588,7 +601,7 @@ parçaları açık bırakmak için. Voxa bu parçalardan biri. Bir videoyu dubla
 lisans pazarlığı ya da kapalı bir pipeline gerekmemeli; bir komut ve zaten sahip olduğunuz
 bir bilgisayar yetmeli.
 
-Voxa tam da bu yüzden MIT'tir, tam da bu yüzden copyleft bağımlılığı taşımaz, lisans
+Voxa tam da bu yüzden MIT'tir, tam da bu yüzden GPL bağımlılığı gerektirmez, lisans
 yükümlülükleri tam da bu yüzden gizlenmez, belgelenir; ve her motor tam da bu yüzden
 herkesin genişletebileceği bir registry'nin arkasındadır. Bu alandaki ilginç problemler —
 dublajı senkronda tutmak, sentetik bir sesi aceleci göstermemek, çıktının gerçekten iyi olup

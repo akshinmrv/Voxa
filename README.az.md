@@ -84,8 +84,9 @@ API açarı tələb olunmur. Default parametrlər olduğu kimi işləyir.
 | **Genişlənə bilən** | Yeni nitq və ya tərcümə provayderi = 1 adapter + 1 registry sətri |
 
 > [!NOTE]
-> Voxa heç bir model çəkisi daşımır və üçüncü tərəf kodu daxil etmir. O, sizin quraşdırdığınız
-> alətləri idarə edir. Kommersiya istifadəsindən əvvəl [NOTICE.md](NOTICE.md) oxuyun.
+> Python paketi heç bir model çəkisi daşımır və üçüncü tərəf kodu daxil etmir. O, sizin
+> quraşdırdığınız alətləri idarə edir, onların, o cümlədən nitq səslərinin lisenziyaları isə
+> fərqlidir. Kommersiya istifadəsindən əvvəl [NOTICE.md](NOTICE.md) oxuyun.
 
 ## Dəstəklənən dillər
 
@@ -265,7 +266,7 @@ işləyir (`serve --host 0.0.0.0`), amma onun settings endpoint-ləri yalnız lo
 | Əmr | Nəyi açır |
 |---|---|
 | `pipx install "voxa-dub[faster]"` | `--whisper-backend faster` — 2–4× sürətli, torch-suz |
-| `pipx install "voxa-dub[piper]"` | `--tts piper` — tam offline |
+| `pipx install "voxa-dub[piper]"` | `--tts piper` — tam offline (mühərrik GPL-3.0-dır; səslərin lisenziyaları fərqlidir, bax: [NOTICE](NOTICE.md#41-piper-voices)) |
 | `pipx install "voxa-dub[anthropic]"` | `--translator anthropic` |
 | `pipx install "voxa-dub[xtts]"` | `--tts xtts` səs klonlama |
 | `pipx install "voxa-dub[url]"` | `voxa <video-url>` — girişi əvvəlcə yüklə (yt-dlp) |
@@ -275,7 +276,8 @@ işləyir (`serve --host 0.0.0.0`), amma onun settings endpoint-ləri yalnız lo
 > **Çox danışan** (`--diarize`) kimin nə vaxt danışdığını aşkarlayır və hər danışana ayrı səs verir —
 > müsahibə/podkast tək səslə dublyaj olunmasın. Hugging Face token (`--hf-token` və ya `HF_TOKEN`) və
 > [hf.co/pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
-> ünvanında model şərtlərinin birdəfəlik qəbulu lazımdır — model MIT lisenziyalıdır, sadəcə gated.
+> ünvanında model şərtlərinin birdəfəlik qəbulu lazımdır. Pipeline MIT lisenziyalıdır, sadəcə
+> gated-dir. Onun yüklədiyi danışan-embedding modeli isə CC BY 4.0-dır, ona görə müəllifini qeyd edin.
 > Danışan sayını bilirsənsə `--num-speakers N` ver. Edge və OpenAI TTS hər danışana ayrı səs alır;
 > Piper/XTTS hələ tək səsdir və `--diarize` `--subtitles` ilə birləşmir (mənbə audio lazımdır).
 
@@ -481,9 +483,14 @@ kilidlənib.
 <details>
 <summary><strong>Kommersiya məqsədilə istifadə edə bilərəmmi?</strong></summary>
 
-Voxa özü MIT-dir və copyleft asılılığı yoxdur. İdarə etdiyi mühərriklərin öz lisenziyaları
-var. `--tts piper` + `--translator ollama` tam sərbəstdir. `--tts xtts` kommersiya üçün
-**yararsızdır**. Bax: [NOTICE.md](NOTICE.md).
+Voxa özü MIT-dir və GPL lisenziyalı məcburi asılılığı yoxdur (default nitq mühərriki
+`edge-tts` LGPL-3.0-dır). İdarə etdiyi mühərriklərin və modellərin öz lisenziyaları var.
+`--tts openai` + `--translator openai` OpenAI-ın kommersiya şərtləri ilə işləyir.
+`--tts piper` + `--translator ollama` tam offline işləyir, amma səs və LLM nə qədər sərbəstdirsə,
+o qədər sərbəstdir: 15 Piper səsindən 8-i kommersiya istifadəsinə icazə verir (ingilis, rus,
+yapon, koreya, türk və vyetnam səsləri vermir, çin səsinin lisenziyası isə məlum deyil),
+default `llama3` isə Meta-nın lisenziya
+şərtləri ilə gəlir. `--tts xtts` kommersiya üçün **yararsızdır**. Bax: [NOTICE.md](NOTICE.md).
 </details>
 
 <details>
@@ -502,7 +509,8 @@ Açar yoxdur, əlavə asılılıq yoxdur, qeyri-kommersiya model çəkisi yoxdur
 <summary><strong>Tam offline işləyə bilərmi?</strong></summary>
 
 Bəli: `--translator ollama --tts piper`. Modellər yükləndikdən sonra heç nə cihazınızdan
-çıxmır.
+çıxmır. Amma offline olmaq kommersiya üçün təmiz olmaq demək deyil: öz diliniz üçün səsin
+lisenziyasını [NOTICE.md](NOTICE.md#41-piper-voices)-də yoxlayın.
 </details>
 
 <details>
@@ -557,14 +565,16 @@ pytest
 
 Voxa [MIT lisenziyası](LICENSE) altında yayımlanır.
 
-Voxa heç bir model çəkisi daşımır və üçüncü tərəf kodu daxil etmir, lakin idarə etdiyi
-mühərriklərin öz lisenziyaları var — bəziləri Voxa-nınkından sərtdir. Kommersiya
-istifadəsindən əvvəl [NOTICE.md](NOTICE.md) oxuyun.
+Python paketi heç bir model çəkisi daşımır və üçüncü tərəf kodu daxil etmir, lakin idarə
+etdiyi mühərriklərin və modellərin öz lisenziyaları var, bəziləri Voxa-nınkından sərtdir.
+Konteyner image-i isə sistem paketlərini, o cümlədən FFmpeg-i, öz lisenziyaları ilə birlikdə
+daşıyır. Kommersiya istifadəsindən əvvəl [NOTICE.md](NOTICE.md) oxuyun.
 
 | Konfiqurasiya | Kommersiya istifadəsi |
 |---|:---:|
-| `--tts piper` + `--translator ollama` (tam offline) | ✅ |
 | `--tts openai` + `--translator openai` (ödənişli API) | ✅ |
+| `--tts piper` (tam offline) | ⚠️ səsdən asılıdır, 15 dildən 8-i |
+| `--translator ollama` (tam offline) | ⚠️ modeldən asılıdır |
 | `--tts edge` / `--translator google` (default, qeyri-rəsmi endpoint) | ⚠️ boz zona |
 | `--tts xtts` (XTTS-v2 çəkiləri CPML-dir) | ❌ yalnız qeyri-kommersiya |
 
@@ -577,7 +587,7 @@ Voxa başqalarının gördüyü işin üzərində dayanır.
 | [OpenAI Whisper](https://github.com/openai/whisper) | Nitqin tanınması |
 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | Sürətli transkripsiya backend-i |
 | [edge-tts](https://github.com/rany2/edge-tts) | Microsoft neyron səsləri |
-| [Piper](https://github.com/rhasspy/piper) | Offline neyron nitq |
+| [Piper](https://github.com/OHF-Voice/piper1-gpl) | Offline neyron nitq |
 | [coqui-tts](https://github.com/idiap/coqui-ai-TTS) | XTTS səs klonlamasını işlədən fork |
 | [OpenAI](https://platform.openai.com/) · [Anthropic](https://www.anthropic.com/) | LLM tərcümə və nitq |
 | [Ollama](https://ollama.com/) | Lokal, məxfi LLM tərcümə |
@@ -594,7 +604,7 @@ hissələri açıq buraxmaq üçün. Voxa həmin hissələrdən biridir. Videonu
 studiya, lisenziya danışığı və ya qapalı pipeline lazım olmamalıdır; bir əmr və artıq
 sahib olduğunuz kompüter kifayətdir.
 
-Voxa məhz buna görə MIT-dir, məhz buna görə copyleft asılılığı daşımır, lisenziya
+Voxa məhz buna görə MIT-dir, məhz buna görə GPL asılılığı tələb etmir, lisenziya
 öhdəlikləri məhz buna görə gizlədilmir, sənədləşdirilir, və hər mühərrik məhz buna görə
 istənilən adamın genişləndirə biləcəyi registry-nin arxasındadır. Bu sahədəki maraqlı
 problemlər — dublyajı sinxron saxlamaq, süni səsi tələsməyən göstərmək, çıxışın həqiqətən
