@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-27
+
 ### Added
 
 - **Piper says what each voice's licence allows.** Every voice in the table now carries the
@@ -379,7 +381,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.9.1...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/akshinmrv/Voxa/compare/v1.9.1...v1.10.0
 [1.9.1]: https://github.com/akshinmrv/Voxa/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/akshinmrv/Voxa/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/akshinmrv/Voxa/compare/v1.7.0...v1.8.0
