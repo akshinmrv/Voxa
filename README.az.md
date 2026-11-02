@@ -389,7 +389,18 @@ voxa video.mp4 --target_lang az --quality-gate --gate-model base
 # Öz serverində nitq: OpenAI-uyğun endpoint, açarsız
 voxa video.mp4 --target_lang tr --tts openai \
      --openai-tts-base-url http://localhost:8004/v1
+
+# ...məsələn, VoiceStudio-nun lokal serveri (proqramı açın; 3900 portunda dinləyir)
+voxa video.mp4 --target_lang az --tts openai \
+     --openai-tts-base-url http://127.0.0.1:3900/v1
 ```
+
+> [!NOTE]
+> Öz serveriniz hər sətirlə hədəf dili də alır, ona görə çoxdilli model düzgün dildə danışır.
+> Dublyajla nə edə biləcəyinizi serverin modeli müəyyən edir: VoiceStudio-nun default modeli
+> OmniVoice azərbaycanca danışır, amma qeyri-kommersiyadır, Chatterbox isə MIT-dir — bax:
+> [NOTICE](NOTICE.md#46-self-hosted-speech-servers). CPU-da yavaşdır: VoiceStudio və OmniVoice
+> ilə 45 saniyəlik klipin nitq sintezi noutbukda təxminən dörd dəqiqə çəkdi.
 
 > [!TIP]
 > Hədəf dil ingiliscədən uzundursa (türkçə, rusca) ən təbii nəticəni **LLM translator** verir
@@ -503,7 +514,8 @@ MIT lisenziyalı, OpenAI-uyğun nitq serverini lokal işlədin və Voxa-nı ona 
 voxa video.mp4 --tts openai --openai-tts-base-url http://localhost:8004/v1
 ```
 
-Açar yoxdur, əlavə asılılıq yoxdur, qeyri-kommersiya model çəkisi yoxdur.
+Açar yoxdur, əlavə asılılıq yoxdur, qeyri-kommersiya model çəkisi yoxdur — server Chatterbox
+kimi sərbəst lisenziyalı model işlətdikcə (bax: [NOTICE](NOTICE.md#46-self-hosted-speech-servers)).
 </details>
 
 <details>

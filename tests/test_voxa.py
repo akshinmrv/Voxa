@@ -1058,6 +1058,111 @@ def test_tts_openai_passes_base_url_to_the_client(monkeypatch):
     assert captured == {"api_key": None, "base_url": "http://localhost:8004/v1"}
 
 
+class _StatusError(Exception):
+    def __init__(self, status_code):
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+
+
+def _speech_client(create, base_url="http://localhost:3900/v1/"):
+    from types import SimpleNamespace
+    return SimpleNamespace(base_url=base_url,
+                           audio=SimpleNamespace(speech=SimpleNamespace(create=create)))
+
+
+def test_generate_openai_tts_sends_the_language_only_to_a_self_hosted_server(tmp_path):
+    # Multilingual servers (Chatterbox, VoiceStudio) pick the language from this field;
+    # OpenAI's API has none, so nothing extra goes there.
+    import asyncio
+    import io
+
+    import numpy as np
+    import soundfile as sf
+    buf = io.BytesIO()
+    sf.write(buf, (0.3 * np.sin(np.arange(24000) / 10)).astype("float32"), 24000, format="WAV")
+    wav = buf.getvalue()
+
+    class _T:
+        def __init__(self, ms):
+            self.hours, self.minutes = 0, 0
+            self.seconds, self.milliseconds = ms // 1000, ms % 1000
+
+    class _Sub:
+        def __init__(self, s, e, text):
+            self.start, self.end, self.text = _T(s), _T(e), text
+
+    from types import SimpleNamespace
+    for language, expected in (("de", {"language": "de"}), (None, None)):
+        sent = []
+
+        def _create(**kw):
+            sent.append(kw.get("extra_body"))
+            return SimpleNamespace(content=wav)
+
+        work = tmp_path / str(language)
+        work.mkdir()
+        asyncio.run(voxa.generate_openai_tts(
+            [_Sub(0, 1000, "Hallo."), _Sub(1000, 2000, "Wie geht's?")], _speech_client(_create),
+            "alloy", "gpt-4o-mini-tts", "", "de", [], [], work, enable_stretch=True,
+            server_language=language))
+        assert sent == [expected, expected]
+
+
+def test_tts_openai_sends_the_language_only_with_a_base_url(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    seen = {}
+
+    async def _generate(*a, **kw):
+        seen["server_language"] = kw.get("server_language")
+
+    monkeypatch.setattr(voxa, "get_openai_client", lambda api_key=None, base_url=None: object())
+    monkeypatch.setattr(voxa, "generate_openai_tts", _generate)
+    monkeypatch.setattr(voxa, "_media_ms", lambda _: None)
+    for base_url, expected in (("http://127.0.0.1:3900/v1", "tr"), (None, None)):
+        args = SimpleNamespace(openai_api_key="k", openai_tts_base_url=base_url,
+                               target_lang="tr-TR", no_stretch=True, quality_gate=False,
+                               openai_voice="nova", openai_tts_model="gpt-4o-mini-tts",
+                               openai_tts_instructions="", detect_emotion=False)
+        asyncio.run(voxa._tts_openai([], args, None, "v.mp4", None, _fake_logger()))
+        assert seen["server_language"] == expected
+
+
+def test_openai_speech_create_drops_a_rejected_language_field(monkeypatch):
+    # A strict server answers 422 to the unknown field: the line still goes through, and the
+    # field isn't sent to that server again.
+    from types import SimpleNamespace
+    monkeypatch.setattr(voxa, "_TTS_LANGUAGE_REJECTED", set())
+    calls = []
+
+    def _create(**kw):
+        calls.append("extra_body" in kw)
+        if "extra_body" in kw:
+            raise _StatusError(422)
+        return SimpleNamespace(content=b"audio")
+
+    client = _speech_client(_create)
+    kwargs = {"model": "m", "voice": "v", "input": "Hi.", "extra_body": {"language": "en"}}
+    assert voxa._openai_speech_create(client, kwargs).content == b"audio"
+    assert voxa._openai_speech_create(client, kwargs).content == b"audio"
+    assert calls == [True, False, False]
+    assert kwargs["extra_body"] == {"language": "en"}          # the caller's dict is untouched
+
+
+def test_openai_speech_create_keeps_the_language_when_the_line_itself_fails(monkeypatch):
+    # A 400 that has nothing to do with the field (the line is rejected either way) must not
+    # stop the language being sent for the rest of the run.
+    monkeypatch.setattr(voxa, "_TTS_LANGUAGE_REJECTED", set())
+
+    def _create(**kw):
+        raise _StatusError(400)
+
+    kwargs = {"model": "m", "voice": "v", "input": "x" * 5000, "extra_body": {"language": "en"}}
+    with pytest.raises(_StatusError):
+        voxa._openai_speech_create(_speech_client(_create), kwargs)
+    assert voxa._TTS_LANGUAGE_REJECTED == set()
+
+
 # ── A2 T1: LLM-inferred per-line delivery ────────────────
 def test_parse_delivery_json_valid():
     assert voxa._parse_delivery_json('{"deliveries": ["warm", "", "urgent"]}', 3) == \
@@ -2096,6 +2201,14 @@ def test_plan_shows_the_piper_voice_and_its_licence(monkeypatch):
     assert "(CC BY 4.0)" in plan and "credit the voice" in plan and "⚠️" not in plan
     plan = _plan(_plan_args(tts="piper", target_lang="de"))
     assert "(CC0)" in plan and "NOTICE" not in plan
+
+
+def test_plan_names_the_self_hosted_speech_server():
+    # Otherwise the plan says "openai gpt-4o-mini-tts" when the speech goes somewhere else.
+    plan = _plan(_plan_args(tts="openai", target_lang="pt-BR",
+                            openai_tts_base_url="http://127.0.0.1:3900/v1"))
+    assert "via http://127.0.0.1:3900/v1, language pt" in plan
+    assert "via " not in _plan(_plan_args(tts="openai"))
 
 
 def test_piper_model_url_layout():

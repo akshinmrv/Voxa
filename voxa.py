@@ -875,10 +875,20 @@ def _detect_pacing_conflicts(style: str) -> List[str]:
     return sorted({m.group(0).lower() for m in _PACING_CONFLICT_RE.finditer(style or "")})
 
 
+# Self-hosted speech servers (by base URL) that rejected the `language` field: it is not sent
+# to them again, so a strict server costs one extra request per run, not one per line.
+_TTS_LANGUAGE_REJECTED: set = set()
+
+
 def _openai_speech_create(client, kwargs, max_retries: int = 5):
     """OpenAI TTS speech.create with exponential backoff on rate-limit / 5xx errors, so
     parallel synthesis (--tts-workers > 1) rides out a 429 instead of dropping the segment.
-    Retries without the `instructions` param on an older SDK that rejects it (TypeError)."""
+    Retries without the `instructions` param on an older SDK that rejects it (TypeError).
+    A self-hosted server that answers 400/422 to the `language` field (sent as extra_body) is
+    retried without it and isn't sent it again."""
+    server = str(getattr(client, "base_url", "") or "")
+    if "extra_body" in kwargs and server in _TTS_LANGUAGE_REJECTED:
+        kwargs = {k: v for k, v in kwargs.items() if k != "extra_body"}
     backoff = 2.0
     for attempt in range(max_retries):
         try:
@@ -887,10 +897,20 @@ def _openai_speech_create(client, kwargs, max_retries: int = 5):
             except TypeError:
                 k = dict(kwargs)
                 k.pop("instructions", None)
+                k.pop("extra_body", None)
                 resp = client.audio.speech.create(**k)
             _record_tts_usage(len(kwargs.get("input", "") or ""))
             return resp
         except Exception as e:
+            if "extra_body" in kwargs and getattr(e, "status_code", None) in (400, 422):
+                plain = {k: v for k, v in kwargs.items() if k != "extra_body"}
+                resp = _openai_speech_create(client, plain, max(1, max_retries - attempt - 1))
+                # The same line went through without the field, so the field was the problem.
+                if server not in _TTS_LANGUAGE_REJECTED:
+                    _TTS_LANGUAGE_REJECTED.add(server)
+                    _LOG.info(f"ℹ️  {server or 'The speech server'} rejected the language field; "
+                              f"sending requests without it")
+                return resp
             if _is_transient_error(e) and attempt < max_retries - 1:
                 time.sleep(backoff + random.uniform(0, 1))
                 backoff = min(backoff * 2, 30)
@@ -912,11 +932,15 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
                              quality_gate: bool = False, asr_model=None,
                              emotion_detection: bool = False, concurrency: int = 1,
                              speaker_voices: Optional[Dict[str, str]] = None,
-                             media_ms: Optional[float] = None):
+                             media_ms: Optional[float] = None,
+                             server_language: Optional[str] = None):
     """Speech via OpenAI TTS (gpt-4o-mini-tts): multilingual, instructable delivery, no
     cloning. With emotion_detection an LLM tags each line with a delivery direction (A2 T1).
-    Timeline, placement and scoring come from synthesize_timeline."""
+    Timeline, placement and scoring come from synthesize_timeline. server_language is sent
+    as a `language` field, which self-hosted multilingual servers (Chatterbox, VoiceStudio)
+    read to pick the language; OpenAI's own API has no such field, so it stays None there."""
     sample_rate = 24000
+    extra = {"extra_body": {"language": server_language}} if server_language else {}
 
     # A2 T1: one cached LLM pass over the whole job, before any synthesis.
     deliveries: List[str] = []
@@ -942,7 +966,8 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
         seg_voice = voice
         if speaker_voices:
             seg_voice = speaker_voices.get(getattr(subs[i], "speaker", None), voice)
-        kwargs = {"model": model, "voice": seg_voice, "input": text, "response_format": "wav"}
+        kwargs = {"model": model, "voice": seg_voice, "input": text, "response_format": "wav",
+                  **extra}
         if seg_instr:
             kwargs["instructions"] = seg_instr
         resp = _openai_speech_create(client, kwargs)
@@ -972,7 +997,7 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
         cand_fin = work_dir / f"otts_fincand_{i}.wav"
         try:
             kwargs = {"model": model, "voice": voice, "input": text, "response_format": "wav",
-                      "instructions": _build_tts_instructions("", "")}  # guard only
+                      "instructions": _build_tts_instructions("", ""), **extra}  # guard only
             resp = _openai_speech_create(client, kwargs)
             cand_raw.write_bytes(resp.content)
         except Exception as e:
@@ -1321,6 +1346,9 @@ def build_run_plan(video_name: str, args, *, work_dir: Path, output_file: Path,
             locale, speaker, quality, licence = piper_voice
             speak += f" {locale}-{speaker}-{quality}  ({licence})"
         lines.append(row("speak", speak))
+        server = getattr(args, "openai_tts_base_url", None) if args.tts == "openai" else None
+        if server:
+            lines.append(row("", f"via {server}, language {args.target_lang[:2].lower()}"))
         if piper_voice and _piper_licence_note(licence):
             warn = "⚠️  " if _piper_licence_is_restricted(licence) else ""
             lines.append(row("", f"{warn}{_piper_licence_note(licence)} — see NOTICE.md"))
@@ -3434,7 +3462,8 @@ async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
         quality_gate=args.quality_gate, asr_model=gate_asr,
         emotion_detection=args.detect_emotion,
         concurrency=max(1, getattr(args, "tts_workers", 4)),
-        speaker_voices=speaker_voices
+        speaker_voices=speaker_voices,
+        server_language=args.target_lang[:2].lower() if base_url else None
     )
     log_tts_usage_summary(args.openai_tts_model, getattr(args, "tts_price", None))
     return concat_list, temp_files
@@ -3942,9 +3971,10 @@ Examples:
                         help="OpenAI TTS model (default: gpt-4o-mini-tts)")
     parser.add_argument("--openai-tts-base-url", default=os.environ.get("OPENAI_TTS_BASE_URL"),
                         help="Send speech requests to an OpenAI-compatible server instead of "
-                             "OpenAI (e.g. http://localhost:8004/v1 for Chatterbox-TTS-Server "
-                             "or LocalAI). No API key is required. Translation still uses "
-                             "OpenAI unless you change --translator")
+                             "OpenAI (e.g. http://localhost:8004/v1 for Chatterbox-TTS-Server, "
+                             "http://127.0.0.1:3900/v1 for VoiceStudio, or LocalAI). The target "
+                             "language is sent with each request. No API key is required. "
+                             "Translation still uses OpenAI unless you change --translator")
     parser.add_argument("--openai-tts-instructions", default="",
                         help="Speech style for gpt-4o-mini-tts (e.g. 'warm and reassuring; "
                              "documentary tone'). Voxa always appends a locked timing guard "

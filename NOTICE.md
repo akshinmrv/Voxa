@@ -22,6 +22,7 @@ Read this file before using Voxa commercially.
 | `--tts edge` (default) | ⚠️ Grey area | Uses an **unofficial** Microsoft endpoint (see §3) |
 | `--translator google` (default) | ⚠️ Grey area | Uses an **unofficial** Google endpoint (see §3) |
 | `--tts xtts` | ❌ **No** | XTTS-v2 model weights are **non-commercial only** (see §4.4) |
+| `--openai-tts-base-url` (self-hosted) | ⚠️ **Depends on the model** | The server's model decides: Chatterbox is MIT, VoiceStudio's default OmniVoice is non-commercial (see §4.6) |
 
 > **Offline is not the same as commercially clean.** `--translator ollama --tts piper` sends
 > nothing over the network, but whether you may use the result commercially depends on the voice
@@ -190,7 +191,7 @@ Coqui Inc. **ceased operations in January 2024**. Consequences:
 
 If you need voice cloning for a commercial product, XTTS is not a viable path. Consider an
 MIT-licensed alternative such as [Chatterbox](https://github.com/resemble-ai/chatterbox), served
-behind an OpenAI-compatible endpoint.
+behind an OpenAI-compatible endpoint (see §4.6).
 
 ### 4.5 Speaker diarization
 
@@ -204,6 +205,24 @@ You accept the gated models' terms once and pass a token (`--hf-token` / `HF_TOK
 access control, not a commercial restriction — unlike the XTTS weights, none of these has a
 non-commercial clause; the embedding model asks for credit. `--diarize` is an optional extra
 (`voxa-dub[diarize]`) and is off by default.
+
+### 4.6 Self-hosted speech servers
+
+`--openai-tts-base-url` sends speech requests to a server you run yourself. Voxa talks to it over
+HTTP as a separate program and contains none of its code, so the server's own licence does not
+change Voxa's. **What you may do with the dub depends on the model the server runs**, not on the
+server:
+
+| Server | Server licence | Model | Model licence | Commercial use |
+|---|---|---|---|:---:|
+| [Chatterbox-TTS-Server](https://github.com/devnen/Chatterbox-TTS-Server) | MIT | [Chatterbox](https://github.com/resemble-ai/chatterbox) | MIT | ✅ |
+| [VoiceStudio](https://github.com/debpalash/VoiceStudio) | AGPL-3.0 | OmniVoice (its default) | CC BY-NC (training data) | ❌ non-commercial |
+| VoiceStudio | AGPL-3.0 | MOSS-TTS-Nano, VoxCPM2, CosyVoice 3 | Apache-2.0 | ✅ |
+
+Both servers can mark their audio with an inaudible watermark: Chatterbox does it for every output
+(Resemble AI's PerTh), and VoiceStudio uses Meta's AudioSeal. VoiceStudio's AGPL obligations
+apply to VoiceStudio itself — for example if you modify it and let others use it over a network —
+not to Voxa or to audio you generate with it.
 
 ---
 

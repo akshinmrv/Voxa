@@ -425,7 +425,18 @@ voxa video.mp4 --target_lang az --quality-gate --gate-model base
 # Self-hosted speech: any OpenAI-compatible server, no API key
 voxa video.mp4 --target_lang tr --tts openai \
      --openai-tts-base-url http://localhost:8004/v1
+
+# ...such as VoiceStudio's local server (open the app; it listens on port 3900)
+voxa video.mp4 --target_lang az --tts openai \
+     --openai-tts-base-url http://127.0.0.1:3900/v1
 ```
+
+> [!NOTE]
+> A self-hosted server gets the target language with every line, so a multilingual model speaks
+> the right one. The server's model decides what you may do with the dub: VoiceStudio's default,
+> OmniVoice, speaks Azerbaijani but is non-commercial, while Chatterbox is MIT — see
+> [NOTICE](NOTICE.md#46-self-hosted-speech-servers). On a CPU it is slow: through VoiceStudio and
+> OmniVoice, a 45-second clip took about four minutes of speech synthesis on a laptop.
 
 > [!TIP]
 > A wordier target language (Turkish or Russian for an English source) reads most naturally with an
@@ -556,7 +567,8 @@ Run an MIT-licensed, OpenAI-compatible speech server locally and point Voxa at i
 voxa video.mp4 --tts openai --openai-tts-base-url http://localhost:8004/v1
 ```
 
-No API key, no extra Python dependency, and no non-commercial model weights.
+No API key, no extra Python dependency, and no non-commercial model weights — as long as the
+server runs a permissive model such as Chatterbox (see [NOTICE](NOTICE.md#46-self-hosted-speech-servers)).
 </details>
 
 <details>

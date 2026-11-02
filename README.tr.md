@@ -390,7 +390,18 @@ voxa video.mp4 --target_lang az --quality-gate --gate-model base
 # Kendi sunucunuzda konuşma
 voxa video.mp4 --target_lang tr --tts openai \
      --openai-tts-base-url http://localhost:8004/v1
+
+# ...örneğin VoiceStudio'nun yerel sunucusu (uygulamayı açın; 3900 portunu dinler)
+voxa video.mp4 --target_lang az --tts openai \
+     --openai-tts-base-url http://127.0.0.1:3900/v1
 ```
+
+> [!NOTE]
+> Kendi sunucunuz her satırla birlikte hedef dili de alır, böylece çok dilli bir model doğru dilde
+> konuşur. Dublajla ne yapabileceğinizi sunucunun modeli belirler: VoiceStudio'nun varsayılan
+> modeli OmniVoice Azerbaycanca konuşur ama ticari değildir, Chatterbox ise MIT'tir — bkz.
+> [NOTICE](NOTICE.md#46-self-hosted-speech-servers). CPU'da yavaştır: VoiceStudio ve OmniVoice ile
+> 45 saniyelik bir klibin konuşma sentezi bir dizüstü bilgisayarda yaklaşık dört dakika sürdü.
 
 > [!TIP]
 > Hedef dil kaynaktan daha uzunsa (Türkçe, Rusça) en doğal sonucu **LLM çevirmen** verir
@@ -502,6 +513,9 @@ MIT lisanslı, OpenAI uyumlu bir konuşma sunucusunu yerel çalıştırın ve Vo
 ```bash
 voxa video.mp4 --tts openai --openai-tts-base-url http://localhost:8004/v1
 ```
+
+Sunucu Chatterbox gibi serbest lisanslı bir model çalıştırdığı sürece ticari olmayan model ağırlığı
+yoktur (bkz. [NOTICE](NOTICE.md#46-self-hosted-speech-servers)).
 </details>
 
 <details>

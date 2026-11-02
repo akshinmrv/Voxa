@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Self-hosted speech servers get the target language.** With `--openai-tts-base-url`, each
+  request now carries the target language — a field Chatterbox-TTS-Server and VoiceStudio accept
+  for choosing it — while OpenAI's own API gets nothing extra. A server that rejects the field
+  gets the line again without it and isn't sent it again. `--dry-run` names the server and the
+  language instead of reading as if the speech went to OpenAI. Tested end to end with
+  VoiceStudio 0.5.7 and its OmniVoice model on a CPU: a 45-second clip dubbed into Azerbaijani,
+  each line transcribed back within 7% character error of the text Voxa sent (2.9% on average).
+- **NOTICE.md covers self-hosted speech servers** (§4.6): the dub's licence follows the model
+  the server runs, not the server. VoiceStudio's default model, OmniVoice, is non-commercial;
+  Chatterbox is MIT. The README shows how to point Voxa at VoiceStudio.
+
 ## [1.10.0] - 2026-10-27
 
 ### Added
