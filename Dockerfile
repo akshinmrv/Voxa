@@ -30,6 +30,7 @@ WORKDIR /src
 COPY pyproject.toml README.md LICENSE ./
 COPY voxa.py voxa_server.py ./
 COPY voxa_ui/__init__.py voxa_ui/
+COPY voxa_engines/ voxa_engines/
 RUN pip install --no-cache-dir ".[serve]"
 
 # Videos are mounted here. Voxa writes its work directory and the finished dub next to the

@@ -251,6 +251,7 @@
       "diarizeToggle": "Her konuşmacıya kendi sesini ver",
       "numSpeakersPlaceholder": "Konuşmacı sayısı (isteğe bağlı)",
       "offlineBadge": "Çevrimdışı",
+      "notInstalled": "kurulu değil — Modeller sayfasına bakın",
       "keyBadge": "API anahtarı gerekir",
       "run": "Dublaja başla",
       "runHint": "Etkinleştirmek için bir video seç.",
@@ -278,7 +279,25 @@
       "translation": "Çeviri",
       "tts": "Metinden konuşmaya",
       "offline": "Çevrimdışı",
-      "voiceClone": "Ses klonlama"
+      "voiceClone": "Ses klonlama",
+      "installable": "Daha fazla motor kurun",
+      "installableHint": "Her motor {dir} içinde kendi ortamını alır, böylece bağımlılıkları Voxa'nınkilerle çakışmaz. Kaldırmak o klasörü siler.",
+      "install": "Kur",
+      "installing": "Kuruluyor…",
+      "remove": "Kaldır",
+      "removeConfirm": "{label} kaldırılsın mı? Ortamı silinir; indirilen model dosyaları Hugging Face önbelleğinde kalır.",
+      "installed": "Kurulu",
+      "installFailed": "Kurulum başarısız",
+      "download": "≈{gb} GB indirme",
+      "languages": "{count} dil",
+      "homepage": "Proje sayfası",
+      "commercial": {
+        "yes": "ticari kullanım serbest",
+        "credit": "atıfla ticari kullanım",
+        "no": "ticari olmayan",
+        "unknown": "lisans belirsiz"
+      },
+      "ncConfirm": "{label} yalnızca ticari olmayan kullanım için lisanslıdır. Yine de kurulsun mu?"
     },
     "settings": {
       "title": "Ayarlar",

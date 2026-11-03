@@ -70,11 +70,20 @@ export function NewJobFlow() {
   const set = <K extends keyof JobConfig>(key: K, value: JobConfig[K]) =>
     setSel((s) => ({ ...s, [key]: value }));
 
+  // A speech engine Voxa installs separately can't be picked until it is installed — not
+  // even as the saved default, which may name one that has since been removed.
+  const usableTts = (id?: string) =>
+    options.ttsEngines.some((e) => e.id === id && e.available !== false) ? id : undefined;
+
   // Effective config: user selection, then the saved default, then the first option.
   const config: JobConfig = {
     targetLang: sel.targetLang ?? options.languages[0]?.code ?? "en",
     translator: sel.translator ?? settings?.defaultTranslator ?? options.translators[0]?.id ?? "google",
-    tts: sel.tts ?? settings?.defaultTts ?? options.ttsEngines[0]?.id ?? "edge",
+    tts:
+      sel.tts ??
+      usableTts(settings?.defaultTts) ??
+      options.ttsEngines.find((e) => e.available !== false)?.id ??
+      "edge",
     whisperModel: sel.whisperModel ?? "base",
     voiceSample: sel.voiceSample,
     openaiTtsModel: sel.openaiTtsModel ?? options.openaiTtsModels[0]?.id ?? "gpt-4o-mini-tts",
@@ -193,8 +202,8 @@ export function NewJobFlow() {
               onChange={(e) => set("tts", e.target.value)}
             >
               {options.ttsEngines.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.label} — {e.description}
+                <option key={e.id} value={e.id} disabled={e.available === false}>
+                  {e.label} — {e.available === false ? t("notInstalled") : e.description}
                 </option>
               ))}
             </Select>

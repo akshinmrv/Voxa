@@ -1,5 +1,6 @@
 import { API_BASE } from "./config";
 import type {
+  InstallableEngine,
   JobConfig,
   JobSummary,
   ProviderKeyStatus,
@@ -106,6 +107,19 @@ export async function testProvider(provider: string): Promise<ProviderTestResult
   return asJson(
     await fetch(`${API_BASE}/api/providers/${provider}/test`, { method: "POST" }),
   );
+}
+
+// ── Engines installed into environments of their own ──────────────────────────
+export async function getEngines(): Promise<{ engines: InstallableEngine[]; dir: string }> {
+  return asJson(await fetch(`${API_BASE}/api/engines`));
+}
+
+export async function installEngine(id: string): Promise<InstallableEngine> {
+  return asJson(await fetch(`${API_BASE}/api/engines/${id}/install`, { method: "POST" }));
+}
+
+export async function removeEngine(id: string): Promise<InstallableEngine> {
+  return asJson(await fetch(`${API_BASE}/api/engines/${id}`, { method: "DELETE" }));
 }
 
 export const jobEventsUrl = (id: string) => `${API_BASE}/api/jobs/${id}/events`;

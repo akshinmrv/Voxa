@@ -42,6 +42,7 @@ def machine(monkeypatch, tmp_path):
     for key in KEYS:
         monkeypatch.delenv(key, raising=False)
     state.env_file = str(tmp_path / ".env")          # never the developer's own .env
+    monkeypatch.setenv("VOXA_ENGINES_DIR", str(tmp_path / "engines"))
     return state
 
 
@@ -55,6 +56,8 @@ def test_a_plain_install_is_ready_with_the_extras_off(machine, capsys):
     assert checks[("Speed", "GPU")].status == "warn"
     assert checks[("Speech", "Piper")].status == "off"
     assert checks[("Translation", "Ollama")].status == "off"
+    chatterbox = checks[("Speech", "Chatterbox")]
+    assert chatterbox.status == "off" and chatterbox.fix.startswith("voxa engines install")
     assert not any(c.status == "fail" for c in checks.values())
     assert voxa.doctor_cli(["--env-file", machine.env_file]) == 0
     assert "Ready to dub" in capsys.readouterr().out

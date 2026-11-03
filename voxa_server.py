@@ -33,6 +33,7 @@ import time
 import urllib.request
 import uuid
 import webbrowser
+from collections import deque
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,6 +48,7 @@ from pydantic import BaseModel
 # The registries come straight from the tool, so the UI always reflects what this
 # install actually supports.
 import voxa
+import voxa_engines
 
 # --------------------------------------------------------------------------- #
 # Registry → options
@@ -94,6 +96,8 @@ SPEECH_STYLE_PRESETS = {
 }
 
 _TTS_META = {
+    "chatterbox": {"label": "Chatterbox", "description": "Voice cloning in 23 languages",
+                   "requiresVoiceSample": True},
     "edge": {"label": "Edge", "description": "Cloud, many natural voices"},
     "openai": {"label": "OpenAI", "description": "Cloud or self-hosted endpoint"},
     "piper": {"label": "Piper", "description": "Fully offline neural TTS", "offline": True},
@@ -116,7 +120,9 @@ def build_options() -> dict:
     tts_engines = []
     for tid in sorted(voxa.TTS_PROVIDERS):
         meta = _TTS_META.get(tid, {"label": tid.capitalize(), "description": ""})
-        tts_engines.append({"id": tid, **meta})
+        # An engine Voxa installs separately can be picked only once it is installed.
+        available = tid not in voxa_engines.ENGINES or voxa_engines.is_installed(tid)
+        tts_engines.append({"id": tid, **meta, "available": available})
 
     return {
         "languages": [{"code": c, "name": n} for c, n in COMMON_LANGUAGES],
@@ -824,8 +830,20 @@ async def upload(file: UploadFile = File(...)) -> dict:
     return {"fileId": file_id, "fileName": file.filename, "size": size}
 
 
+def engine_problem(tts: str) -> Optional[str]:
+    """Why a job can't use this speech engine yet: one Voxa installs separately, not installed."""
+    if tts in voxa_engines.ENGINES and not voxa_engines.is_installed(tts):
+        label = voxa_engines.get(tts).label
+        return (f"{label} isn't installed. Install it under Models, or run: "
+                f"voxa engines install {tts}")
+    return None
+
+
 @app.post("/api/jobs")
 async def create_job(body: CreateJobModel) -> dict:
+    problem = engine_problem(body.config.tts)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
     job_id = uuid.uuid4().hex[:12]
     # Content-keyed work dir: a second dub of the same source reuses its cached transcription.
     # The single job lock serialises runs and outputs are language-suffixed, so jobs sharing
@@ -922,6 +940,75 @@ async def result_video(job_id: str) -> FileResponse:
 @app.get("/api/jobs/{job_id}/result/srt")
 async def result_srt(job_id: str) -> FileResponse:
     return _result(job_id, "srt")
+
+
+# --------------------------------------------------------------------------- #
+# Engines installed into environments of their own (see voxa_engines)
+# --------------------------------------------------------------------------- #
+
+# Installs started from the console: engine id -> {"status", "log", "error"}. An install
+# runs in a thread, since it downloads for minutes; the console polls the engine's status.
+ENGINE_INSTALLS: Dict[str, dict] = {}
+
+
+def _install_state(engine_id: str) -> dict:
+    state = ENGINE_INSTALLS.get(engine_id)
+    if state is None:
+        return {"status": "idle", "log": [], "error": None}
+    return {"status": state["status"], "log": list(state["log"])[-40:], "error": state["error"]}
+
+
+def _engine_status(engine_id: str) -> dict:
+    try:
+        return {**voxa_engines.status(engine_id), "install": _install_state(engine_id)}
+    except voxa_engines.EngineError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/api/engines")
+async def list_engines() -> dict:
+    return {"engines": [_engine_status(e) for e in sorted(voxa_engines.ENGINES)],
+            "dir": str(voxa_engines.engines_dir())}
+
+
+@app.get("/api/engines/{engine_id}")
+async def get_engine(engine_id: str) -> dict:
+    return _engine_status(engine_id)
+
+
+@app.post("/api/engines/{engine_id}/install")
+async def install_engine(engine_id: str, _: None = Depends(require_local)) -> dict:
+    _engine_status(engine_id)                        # 404 for an unknown engine
+    if ENGINE_INSTALLS.get(engine_id, {}).get("status") == "installing":
+        raise HTTPException(status_code=409, detail="It is already being installed.")
+    state = {"status": "installing", "log": deque(maxlen=400), "error": None}
+    ENGINE_INSTALLS[engine_id] = state
+
+    def _install() -> None:
+        try:
+            voxa_engines.install(engine_id, log=state["log"].append)
+            state["status"] = "done"
+        except Exception as e:                       # shown in the console, not lost
+            state["status"], state["error"] = "failed", str(e)
+
+    threading.Thread(target=_install, daemon=True).start()
+    return _engine_status(engine_id)
+
+
+@app.delete("/api/engines/{engine_id}")
+async def remove_engine(engine_id: str, _: None = Depends(require_local)) -> dict:
+    _engine_status(engine_id)
+    if ENGINE_INSTALLS.get(engine_id, {}).get("status") == "installing":
+        raise HTTPException(status_code=409, detail="Wait for the install to finish first.")
+    if any(job.config.tts == engine_id and job.status in ("queued", "running")
+           for job in JOBS.values()):
+        raise HTTPException(status_code=409, detail="A dub is using it; remove it afterwards.")
+    try:
+        voxa_engines.remove(engine_id)
+    except voxa_engines.EngineError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    ENGINE_INSTALLS.pop(engine_id, None)
+    return _engine_status(engine_id)
 
 
 # --------------------------------------------------------------------------- #

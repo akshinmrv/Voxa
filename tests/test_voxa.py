@@ -1002,7 +1002,7 @@ def _fake_logger():
 
 def test_tts_providers_registry_shape():
     # Registry is the single source of truth for --tts; every engine has an adapter.
-    assert set(voxa.TTS_PROVIDERS) == {"edge", "piper", "xtts", "openai"}
+    assert set(voxa.TTS_PROVIDERS) == {"edge", "piper", "xtts", "openai", "chatterbox"}
     for name, spec in voxa.TTS_PROVIDERS.items():
         assert callable(spec["synthesize"]), name
 

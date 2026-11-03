@@ -310,6 +310,7 @@ voxa doctor --deep     # also loads XTTS and pyannote, which break on dependency
 | `pipx install "voxa-dub[xtts]"` | `--tts xtts` voice cloning |
 | `pipx install "voxa-dub[url]"` | `voxa <video-url>` — download the input first (yt-dlp) |
 | `pipx install "voxa-dub[diarize]"` | `--diarize` — a distinct voice per speaker (pyannote) |
+| `voxa engines install chatterbox` | `--tts chatterbox` — clones each speaker's voice in 23 languages, MIT. Installed into an environment of its own (about 4.5 GB); slow without a GPU |
 
 > [!NOTE]
 > **Multiple speakers** (`--diarize`) detects who speaks when and gives each speaker a distinct
@@ -334,6 +335,14 @@ voxa doctor --deep     # also loads XTTS and pyannote, which break on dependency
 > MIT-licensed engine through `--openai-tts-base-url`. If `import TTS` fails after install, `pip`
 > picked a `transformers` `coqui-tts` can't use — pin a compatible one, e.g.
 > `pip install "transformers==4.53.0"`.
+
+> [!NOTE]
+> **Engines in environments of their own.** Chatterbox pins its own versions of PyTorch and
+> transformers, so `voxa engines install chatterbox` puts it in a separate environment under
+> `~/.voxa/engines` instead of next to Voxa; nothing clashes, and `voxa engines remove
+> chatterbox` deletes it. The console's **Models** page does the same with a click. On a laptop
+> CPU it took 40–60 seconds per sentence, so a GPU makes the difference here; every clip it
+> makes carries Resemble AI's inaudible PerTh watermark.
 
 **4. GPU acceleration** — optional, NVIDIA only.
 
@@ -592,7 +601,14 @@ conditions. Most Piper voices were fine-tuned from an English voice licensed for
 <details>
 <summary><strong>How do I clone a voice for a commercial product?</strong></summary>
 
-Run an MIT-licensed, OpenAI-compatible speech server locally and point Voxa at it:
+Install Chatterbox (MIT) and dub with it; it clones each speaker from the original video:
+
+```bash
+voxa engines install chatterbox
+voxa video.mp4 --tts chatterbox --target_lang de
+```
+
+Or run an MIT-licensed, OpenAI-compatible speech server locally and point Voxa at it:
 
 ```bash
 voxa video.mp4 --tts openai --openai-tts-base-url http://localhost:8004/v1

@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chatterbox, and engines that install themselves.** `voxa engines install chatterbox` — or
+  Install on the console's Models page — puts Chatterbox Multilingual (MIT) in an environment of
+  its own under `~/.voxa/engines`, made with uv, which also picks the CPU or CUDA build of
+  PyTorch for the machine. Its pinned PyTorch and transformers can't clash with Voxa's or
+  XTTS's, and `voxa engines remove` deletes it. `--tts chatterbox` then clones each speaker
+  from the original video in 23 languages, through a worker that loads the model once per run.
+  As Chatterbox's README advises for cloning across languages, `cfg_weight` is 0 so the dub
+  doesn't keep the source language's accent. Measured on a laptop CPU: German, Russian and
+  Turkish sentences cloned from an English speaker came back word for word (CER 0), at 40–60
+  seconds a sentence; a 45-second clip took 11 minutes to dub, so a GPU matters. Every clip
+  carries Resemble AI's inaudible PerTh watermark. `voxa doctor`, `--dry-run` and the job form
+  say when it isn't installed or doesn't speak the language, before a run starts.
 - **A one-line installer.** `irm https://voxa.servoogle.com/install.ps1 | iex` on Windows,
   `curl -fsSL https://voxa.servoogle.com/install.sh | sh` on macOS and Linux. It needs no
   Python beforehand: uv installs Voxa and its console into an environment of their own, with

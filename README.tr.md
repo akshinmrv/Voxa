@@ -302,6 +302,7 @@ voxa doctor --deep     # bağımlılık güncellemelerinde bozulan XTTS ve pyann
 | `pipx install "voxa-dub[xtts]"` | `--tts xtts` ses klonlama |
 | `pipx install "voxa-dub[url]"` | `voxa <video-url>` — girişi önce indir (yt-dlp) |
 | `pipx install "voxa-dub[diarize]"` | `--diarize` — her konuşmacıya ayrı ses (pyannote) |
+| `voxa engines install chatterbox` | `--tts chatterbox` — her konuşmacının sesini 23 dilde klonlar, MIT. Kendi ortamına kurulur (yaklaşık 4,5 GB); GPU olmadan yavaştır |
 
 > [!NOTE]
 > **Birden çok konuşmacı** (`--diarize`) kimin ne zaman konuştuğunu algılar ve her konuşmacıya ayrı
@@ -324,6 +325,14 @@ voxa doctor --deep     # bağımlılık güncellemelerinde bozulan XTTS ve pyann
 > kurar. **XTTS-v2 model ağırlıkları ticari değildir** (CPML) ve Coqui Inc. artık ticari lisans
 > satacak durumda değil. Ticari ses klonlama için `--openai-tts-base-url` ile MIT lisanslı bir
 > motor kullanın.
+
+> [!NOTE]
+> **Kendi ortamında çalışan motorlar.** Chatterbox kendi PyTorch ve transformers sürümlerini
+> ister, bu yüzden `voxa engines install chatterbox` onu Voxa'nın yanına değil, `~/.voxa/engines`
+> altında ayrı bir ortama kurar; hiçbir şey çakışmaz ve `voxa engines remove chatterbox` onu
+> siler. Konsolun **Modeller** sayfası aynısını tek tıkla yapar. Bir dizüstü CPU'sunda cümle
+> başına 40–60 saniye sürdü, yani burada GPU belirleyicidir; ürettiği her klipte Resemble AI'ın
+> duyulmayan PerTh filigranı vardır.
 
 **4. GPU hızlandırma** — isteğe bağlı, yalnızca NVIDIA.
 
@@ -538,7 +547,14 @@ gelir. `--tts xtts` ticari kullanıma **uygun değildir**. Bkz. [NOTICE.md](NOTI
 <details>
 <summary><strong>Ticari bir ürün için sesi nasıl klonlarım?</strong></summary>
 
-MIT lisanslı, OpenAI uyumlu bir konuşma sunucusunu yerel çalıştırın ve Voxa'yı ona yönlendirin:
+Chatterbox'ı (MIT) kurun ve onunla dublaj yapın; her konuşmacıyı orijinal videodan klonlar:
+
+```bash
+voxa engines install chatterbox
+voxa video.mp4 --tts chatterbox --target_lang de
+```
+
+Ya da MIT lisanslı, OpenAI uyumlu bir konuşma sunucusunu yerel çalıştırın ve Voxa'yı ona yönlendirin:
 
 ```bash
 voxa video.mp4 --tts openai --openai-tts-base-url http://localhost:8004/v1

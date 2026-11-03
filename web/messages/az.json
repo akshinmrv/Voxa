@@ -251,6 +251,7 @@
       "diarizeToggle": "Hər danışana öz səsini ver",
       "numSpeakersPlaceholder": "Danışan sayı (istəyə bağlı)",
       "offlineBadge": "Offline",
+      "notInstalled": "quraşdırılmayıb — Modellər bölməsinə baxın",
       "keyBadge": "API açarı lazımdır",
       "run": "Dublyaja başla",
       "runHint": "Aktivləşdirmək üçün video seçin.",
@@ -278,7 +279,25 @@
       "translation": "Tərcümə",
       "tts": "Mətn-nitq",
       "offline": "Offline",
-      "voiceClone": "Səs klonlama"
+      "voiceClone": "Səs klonlama",
+      "installable": "Daha çox mühərrik quraşdırın",
+      "installableHint": "Hər mühərrik {dir} içində öz mühitini alır, ona görə asılılıqları Voxa-nınkı ilə toqquşmur. Silmək həmin qovluğu silir.",
+      "install": "Quraşdır",
+      "installing": "Quraşdırılır…",
+      "remove": "Sil",
+      "removeConfirm": "{label} silinsin? Mühiti silinir; endirilmiş model faylları Hugging Face keşində qalır.",
+      "installed": "Quraşdırılıb",
+      "installFailed": "Quraşdırma alınmadı",
+      "download": "≈{gb} GB endirmə",
+      "languages": "{count} dil",
+      "homepage": "Layihə səhifəsi",
+      "commercial": {
+        "yes": "kommersiya istifadəsi olar",
+        "credit": "istinadla kommersiya istifadəsi",
+        "no": "qeyri-kommersiya",
+        "unknown": "lisenziya aydın deyil"
+      },
+      "ncConfirm": "{label} yalnız qeyri-kommersiya istifadəsi üçün lisenziyalıdır. Yenə də quraşdırılsın?"
     },
     "settings": {
       "title": "Ayarlar",

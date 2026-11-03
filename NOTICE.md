@@ -21,6 +21,7 @@ Read this file before using Voxa commercially.
 | `--translator ollama` | ⚠️ **Depends on the model** | The default, `llama3`, allows it under conditions (see §4.3) |
 | `--tts edge` (default) | ⚠️ Grey area | Uses an **unofficial** Microsoft endpoint (see §3) |
 | `--translator google` (default) | ⚠️ Grey area | Uses an **unofficial** Google endpoint (see §3) |
+| `--tts chatterbox` | ✅ Yes | MIT weights; every clip carries an inaudible watermark (see §4.7) |
 | `--tts xtts` | ❌ **No** | XTTS-v2 model weights are **non-commercial only** (see §4.4) |
 | `--openai-tts-base-url` (self-hosted) | ⚠️ **Depends on the model** | The server's model decides: Chatterbox is MIT, VoiceStudio's default OmniVoice is non-commercial (see §4.6) |
 
@@ -223,6 +224,20 @@ Both servers can mark their audio with an inaudible watermark: Chatterbox does i
 (Resemble AI's PerTh), and VoiceStudio uses Meta's AudioSeal. VoiceStudio's AGPL obligations
 apply to VoiceStudio itself — for example if you modify it and let others use it over a network —
 not to Voxa or to audio you generate with it.
+
+### 4.7 Engines in environments of their own (`voxa engines`)
+
+`voxa engines install <engine>` (or the console's Models page) puts an engine and everything it
+depends on in a separate environment under `~/.voxa/engines`. Voxa runs it as a separate
+program and imports none of it.
+
+| Engine | Package | Model weights | Commercial use |
+|---|---|---|:---:|
+| Chatterbox Multilingual | [`chatterbox-tts`](https://github.com/resemble-ai/chatterbox), MIT | MIT | ✅ |
+
+Chatterbox marks every clip it makes with Resemble AI's PerTh watermark, which is inaudible and
+survives compression; a detector can tell the audio was generated. Its environment also
+installs PyTorch, transformers, diffusers and Gradio under their own licences.
 
 ---
 

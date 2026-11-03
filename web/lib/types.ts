@@ -13,6 +13,38 @@ export type EngineOption = {
   offline?: boolean;
   /** LLM translators only: the engine's built-in default model (UI placeholder). */
   defaultModel?: string;
+  /** TTS engines Voxa installs separately (Models page): false until installed. */
+  available?: boolean;
+};
+
+/** Where an engine's install, started from the console, has got to. */
+export type EngineInstall = {
+  status: "idle" | "installing" | "done" | "failed";
+  /** The install's latest output lines. */
+  log: string[];
+  error: string | null;
+};
+
+/** An engine Voxa installs into an environment of its own (GET /api/engines). */
+export type InstallableEngine = {
+  id: string;
+  label: string;
+  kind: string;
+  description: string;
+  /** The model weights' licence, as the model card gives it. */
+  licence: string;
+  /** What that licence allows commercially. */
+  commercial: "yes" | "credit" | "no" | "unknown";
+  languages: string[];
+  cloning: boolean;
+  /** Roughly what installing it downloads, packages and model together. */
+  download_gb: number;
+  homepage: string;
+  notice: string;
+  installed: boolean;
+  installedAt?: string;
+  path: string;
+  install: EngineInstall;
 };
 
 export type WhisperModel = { id: string; label: string };

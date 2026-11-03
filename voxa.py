@@ -1286,6 +1286,8 @@ def plan_blockers(args) -> List[str]:
     if args.tts == "piper" and _piper_voice(getattr(args, "target_lang", "")) is None:
         problems.append(f"no Piper voice is mapped for '{args.target_lang}' — add one to "
                         "PIPER_VOICES or choose another --tts")
+    if args.tts == "chatterbox":
+        problems.extend(_chatterbox_problems(getattr(args, "target_lang", "")))
     if any(_looks_like_url(v) for v in getattr(args, "videos", [])) and not _ytdlp_available():
         problems.append(_YTDLP_HINT)
     srt = getattr(args, "subtitles", None)
@@ -1340,7 +1342,7 @@ def build_run_plan(video_name: str, args, *, work_dir: Path, output_file: Path,
         speak = args.tts
         if args.tts == "openai":
             speak += f" {args.openai_tts_model} / voice {args.openai_voice}"
-        elif args.tts == "xtts":
+        elif args.tts in ("xtts", "chatterbox"):
             speak += f"  (voice sample: {args.voice_sample or 'auto-extracted from the video'})"
         piper_voice = _piper_voice(args.target_lang) if args.tts == "piper" else None
         if piper_voice:
@@ -3388,14 +3390,12 @@ async def _tts_piper(subs, args, work_dir, video_path, gate_asr, logger):
     return concat_list, temp_files
 
 
-async def _tts_xtts(subs, args, work_dir, video_path, gate_asr, logger):
-    # ── XTTS voice cloning ───────────────────────────
-    lang_code = args.target_lang[:2].lower()
-    if lang_code not in XTTS_SUPPORTED_LANGS:
-        raise TTSError(f"❌ XTTS does not support language '{lang_code}'. "
-                       f"Supported: {sorted(XTTS_SUPPORTED_LANGS)}")
-
-    # Determine speaker reference wav
+def _clone_references(subs, args, work_dir, video_path, logger,
+                      engine: str) -> Tuple[str, Optional[Dict[str, str]]]:
+    """The voice a cloning engine (XTTS, Chatterbox) copies: --voice-sample, or a sample cut
+    from the video. Under --diarize also one per speaker, cut from where that speaker talks,
+    so every dubbed speaker keeps the original speaker's voice; --speaker-voices values, if
+    given, are reference wav paths that override the auto extraction for those speakers."""
     speaker_wav = args.voice_sample
     if not speaker_wav:
         # Auto-extract from source video
@@ -3410,9 +3410,6 @@ async def _tts_xtts(subs, args, work_dir, video_path, gate_asr, logger):
             raise TTSError(f"❌ Voice sample not found: {speaker_wav}")
         logger.info(f"🎤 Using provided voice sample: {speaker_wav}")
 
-    # Per-speaker references (--diarize): clone each speaker from where they talk in the source,
-    # so every dubbed speaker keeps the original speaker's voice. --speaker-voices values, if given,
-    # are reference wav paths that override the auto extraction for those speakers.
     speaker_refs = None
     if getattr(args, "diarize", False):
         speaker_refs = _extract_speaker_samples(str(video_path), subs, work_dir)
@@ -3420,7 +3417,19 @@ async def _tts_xtts(subs, args, work_dir, video_path, gate_asr, logger):
             if Path(path).exists():
                 speaker_refs[spk] = path
         if speaker_refs:
-            logger.info(f"🗣️  Per-speaker XTTS references: {', '.join(sorted(speaker_refs))}")
+            logger.info(f"🗣️  Per-speaker {engine} references: "
+                        f"{', '.join(sorted(speaker_refs))}")
+    return speaker_wav, speaker_refs
+
+
+async def _tts_xtts(subs, args, work_dir, video_path, gate_asr, logger):
+    # ── XTTS voice cloning ───────────────────────────
+    lang_code = args.target_lang[:2].lower()
+    if lang_code not in XTTS_SUPPORTED_LANGS:
+        raise TTSError(f"❌ XTTS does not support language '{lang_code}'. "
+                       f"Supported: {sorted(XTTS_SUPPORTED_LANGS)}")
+    speaker_wav, speaker_refs = _clone_references(subs, args, work_dir, video_path, logger,
+                                                  "XTTS")
 
     # Load model
     tts_model = load_xtts_model()
@@ -3479,7 +3488,86 @@ async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
     return concat_list, temp_files
 
 
+def _chatterbox_problems(target_lang: str) -> List[str]:
+    """Why Chatterbox can't dub into `target_lang` here, if it can't: it runs in an
+    environment of its own (voxa engines install chatterbox) and covers 23 languages."""
+    import voxa_engines
+    engine = voxa_engines.get("chatterbox")
+    problems = []
+    if (target_lang or "")[:2].lower() not in engine.languages:
+        problems.append(f"Chatterbox doesn't speak '{target_lang}' — it covers "
+                        f"{', '.join(engine.languages)}; choose another --tts")
+    if not voxa_engines.is_installed("chatterbox"):
+        problems.append("Chatterbox isn't installed — install it once with: "
+                        "voxa engines install chatterbox")
+    return problems
+
+
+async def generate_chatterbox(subs, speaker_wav: str, lang_code: str, concat_list: list,
+                              temp_files: list, work_dir: Path, enable_stretch: bool,
+                              quality_gate: bool = False, asr_model=None,
+                              media_ms: Optional[float] = None,
+                              speaker_refs: Optional[Dict[str, str]] = None):
+    """Cloned speech with Chatterbox Multilingual, made by its worker in the engine's own
+    environment. The reference is the original speaker, so it's in the source language;
+    at Chatterbox's default cfg_weight the dub would keep that language's accent, so it is
+    set to 0, as Chatterbox's README advises for cloning across languages."""
+    import voxa_engines
+    worker = voxa_engines.Worker("chatterbox", log_path=work_dir / "chatterbox_worker.log")
+    _LOG.info("🔄 Loading Chatterbox (its first run downloads the model)...")
+    try:
+        info = await asyncio.to_thread(worker.start)
+    except voxa_engines.EngineError as e:
+        worker.close()
+        raise TTSError(f"❌ {e}") from e
+    sample_rate = info["sample_rate"]
+    _LOG.info(f"🎙️  Chatterbox on {info['device']}, cloning from: {speaker_wav}")
+
+    def _render(i, text, final_file, target_duration):
+        raw_file = work_dir / f"cbx_raw_{i}.wav"
+        reference = speaker_wav
+        if speaker_refs:
+            reference = speaker_refs.get(getattr(subs[i], "speaker", None), speaker_wav)
+        try:
+            worker.request(cmd="speak", text=text, language=lang_code, reference=reference,
+                           out=str(raw_file), cfg_weight=0.0)
+        except voxa_engines.EngineError as e:
+            _LOG.warning(f"Chatterbox segment {i}: {e}")
+            return False
+        if not _has_content(raw_file, 1000):
+            return False
+        temp_files.append(str(raw_file))
+        return _fit_to_window(raw_file, final_file, target_duration, work_dir,
+                              sample_rate, enable_stretch)
+
+    try:
+        await synthesize_timeline(
+            subs, engine="chatterbox", prefix="cbx", sample_rate=sample_rate,
+            work_dir=work_dir, concat_list=concat_list, temp_files=temp_files,
+            render=_render, text_of=lambda s: normalize_tts_text(s.text),
+            desc="Chatterbox", unit="phrase",
+            quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code,
+            media_ms=media_ms)
+    finally:
+        worker.close()
+
+
+async def _tts_chatterbox(subs, args, work_dir, video_path, gate_asr, logger):
+    problems = _chatterbox_problems(args.target_lang)
+    if problems:
+        raise TTSError("❌ " + "\n❌ ".join(problems))
+    speaker_wav, speaker_refs = _clone_references(subs, args, work_dir, video_path, logger,
+                                                  "Chatterbox")
+    concat_list, temp_files = [], []
+    await generate_chatterbox(
+        subs, speaker_wav, args.target_lang[:2].lower(), concat_list, temp_files, work_dir,
+        enable_stretch=not args.no_stretch, quality_gate=args.quality_gate,
+        asr_model=gate_asr, media_ms=_media_ms(video_path), speaker_refs=speaker_refs)
+    return concat_list, temp_files
+
+
 TTS_PROVIDERS: Dict[str, Dict] = {
+    "chatterbox": {"synthesize": _tts_chatterbox},
     "edge":   {"synthesize": _tts_edge},
     "piper":  {"synthesize": _tts_piper},
     "xtts":   {"synthesize": _tts_xtts},
@@ -3975,9 +4063,11 @@ Examples:
                         help="Number of parallel workers (default: 4)")
 
     parser.add_argument("--tts", choices=sorted(TTS_PROVIDERS), default="edge",
-                        help="TTS engine: edge (online), piper (offline), xtts (cloning), "
-                             "openai (multilingual, instructable — best for languages XTTS "
-                             "can't do, e.g. az)")
+                        help="TTS engine: edge (online), piper (offline), chatterbox "
+                             "(cloning, MIT; install it with `voxa engines install chatterbox`), "
+                             "xtts (cloning, non-commercial), openai (multilingual, "
+                             "instructable — best for languages the cloning engines can't do, "
+                             "e.g. az)")
     parser.add_argument("--openai-voice", default="alloy",
                         help="OpenAI TTS voice (alloy, echo, fable, onyx, nova, shimmer, "
                              "ash, ballad, coral, sage, verse)")
@@ -4120,6 +4210,14 @@ Examples:
               "   Set OPENAI_API_KEY or pass --openai_api_key,\n"
               "   or point --openai-tts-base-url at a compatible server (no key needed).")
         return 1
+
+    # Chatterbox runs in an environment of its own: check it's installed and speaks the
+    # language before minutes of transcription and translation, not after.
+    if args.tts == "chatterbox" and not args.dry_run:
+        problems = _chatterbox_problems(args.target_lang)
+        if problems:
+            print("❌ " + "\n❌ ".join(problems))
+            return 1
 
     # Preflight: fail before creating a workspace or loading a model, so a typo in a
     # filename or a missing FFmpeg produces a readable error and leaves no stray folder.
@@ -4465,6 +4563,15 @@ def doctor_checks(online: bool = False, deep: bool = False) -> List[DoctorCheck]
     else:
         add("Speech", "XTTS", "warn", f"installed, but it won't import ({error})",
             'pin a transformers it works with: pip install "transformers==4.53.0"')
+    import voxa_engines
+    for engine in voxa_engines.catalogue():
+        name = engine["label"].split()[0]
+        if engine["installed"]:
+            add("Speech", name, "ok", f"installed ({engine['path']})")
+        else:
+            add("Speech", name, "off", f"{engine['description'][0].lower()}"
+                f"{engine['description'][1:].rstrip('.')}; not installed",
+                f"voxa engines install {engine['id']}   (about {engine['download_gb']:g} GB)")
 
     # ── Extras ──
     if _ytdlp_available():
@@ -4564,11 +4671,74 @@ def doctor_cli(argv: Sequence[str]) -> int:
     return 1 if any(c.status == "fail" for c in checks) else 0
 
 
+_COMMERCIAL_NOTE = {"yes": "commercial use allowed",
+                    "credit": "commercial use allowed if you credit it",
+                    "no": "not for commercial use", "unknown": "licence unclear"}
+
+
+def engines_cli(argv: Sequence[str]) -> int:
+    """`voxa engines`: the engines Voxa installs into environments of their own."""
+    import voxa_engines
+    parser = argparse.ArgumentParser(
+        prog="voxa engines",
+        description="List, install and remove the engines Voxa keeps in environments of "
+                    f"their own ({voxa_engines.engines_dir()}).")
+    sub = parser.add_subparsers(dest="action")
+    listing = sub.add_parser("list", help="What can be installed, and what is (the default)")
+    listing.add_argument("--json", action="store_true", help="Print the catalogue as JSON")
+    sub.add_parser("install", help="Install an engine").add_argument("engine")
+    sub.add_parser("remove", help="Remove an installed engine").add_argument("engine")
+    args = parser.parse_args(argv)
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+        except (AttributeError, ValueError):
+            pass
+
+    try:
+        if args.action == "install":
+            engine = voxa_engines.get(args.engine)
+            print(f"Installing {engine.label} ({engine.licence}, "
+                  f"{_COMMERCIAL_NOTE.get(engine.commercial, engine.commercial)}). "
+                  f"It downloads about {engine.download_gb:g} GB, partly on first use.")
+            if engine.notice:
+                print(f"ℹ️  {engine.notice}")
+            voxa_engines.install(engine.id)
+            print(f"✅ Ready: voxa video.mp4 --tts {engine.id} --target_lang tr")
+            return 0
+        if args.action == "remove":
+            voxa_engines.remove(args.engine)
+            print(f"Removed {voxa_engines.get(args.engine).label}.")
+            return 0
+    except voxa_engines.EngineError as e:
+        print(f"❌ {e}")
+        return 1
+
+    engines = voxa_engines.catalogue()
+    if getattr(args, "json", False):
+        print(json.dumps(engines, ensure_ascii=False, indent=2))
+        return 0
+    print(f"Engines Voxa installs separately ({voxa_engines.engines_dir()})\n")
+    for e in engines:
+        icon = "✅" if e["installed"] else "➖"
+        print(f"  {icon} {e['id']:<12} {e['label']} — {e['description']}")
+        print(f"     {'':<12} {e['licence']}, "
+              f"{_COMMERCIAL_NOTE.get(e['commercial'], e['commercial'])}; "
+              f"{len(e['languages'])} languages")
+        if not e["installed"]:
+            print(f"     {'':<12} → voxa engines install {e['id']}   "
+                  f"(about {e['download_gb']:g} GB)")
+    return 0
+
+
 def cli():
     """Synchronous console-script entry point (see pyproject [project.scripts])."""
     # `voxa doctor` checks the install and says how to fix what's missing.
     if sys.argv[1:2] == ["doctor"]:
         sys.exit(doctor_cli(sys.argv[2:]))
+    # `voxa engines` installs and removes the engines that live in environments of their own.
+    if sys.argv[1:2] == ["engines"]:
+        sys.exit(engines_cli(sys.argv[2:]))
     # `voxa serve` launches the optional operator web server (see voxa_server.py), and
     # `voxa studio` does the same and opens its console in the browser. Both live behind
     # the [serve] extra so the default install stays lean.

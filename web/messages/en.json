@@ -251,6 +251,7 @@
       "diarizeToggle": "Give each speaker their own voice",
       "numSpeakersPlaceholder": "Number of speakers (optional)",
       "offlineBadge": "Offline",
+      "notInstalled": "not installed — see Models",
       "keyBadge": "Needs API key",
       "run": "Start dubbing",
       "runHint": "Select a video to enable.",
@@ -278,7 +279,25 @@
       "translation": "Translation",
       "tts": "Text-to-speech",
       "offline": "Offline",
-      "voiceClone": "Voice cloning"
+      "voiceClone": "Voice cloning",
+      "installable": "Install more engines",
+      "installableHint": "Each engine gets an environment of its own in {dir}, so its dependencies never clash with Voxa's. Removing one deletes that folder.",
+      "install": "Install",
+      "installing": "Installing…",
+      "remove": "Remove",
+      "removeConfirm": "Remove {label}? Its environment is deleted; downloaded model files stay in the Hugging Face cache.",
+      "installed": "Installed",
+      "installFailed": "Install failed",
+      "download": "≈{gb} GB download",
+      "languages": "{count, plural, one {# language} other {# languages}}",
+      "homepage": "Project page",
+      "commercial": {
+        "yes": "commercial use OK",
+        "credit": "commercial use with credit",
+        "no": "non-commercial",
+        "unknown": "licence unclear"
+      },
+      "ncConfirm": "{label} is licensed for non-commercial use only. Install it anyway?"
     },
     "settings": {
       "title": "Settings",
