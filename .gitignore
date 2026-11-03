@@ -80,3 +80,6 @@ skills-lock.json
 Q4_2026_STRATEGY_AZ.md
 SERVOOGLE_LAUNCH_KIT.md
 LICENSE_AUDIT_AZ.md
+
+# The bundled console is built (npm run build:console), not committed.
+voxa_ui/static/

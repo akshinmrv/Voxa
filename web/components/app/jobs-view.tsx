@@ -48,7 +48,11 @@ export function JobsView() {
   return (
     <div className="space-y-3">
       {jobs.map((job) => (
-        <Link key={job.id} href={`/app/jobs/${job.id}`} className="block">
+        <Link
+          key={job.id}
+          href={{ pathname: "/app/jobs/view", query: { id: job.id } }}
+          className="block"
+        >
           <Card className="flex items-center gap-4 p-4 hover:border-primary/40">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-sm border border-border bg-surface-2 text-primary">
               <FileVideo className="size-5" />

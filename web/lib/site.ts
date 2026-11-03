@@ -50,3 +50,9 @@ export const localeUrl = (locale: string) => `${SITE.url}/${locale}`;
  * own machine. The default (local) ships the full app.
  */
 export const IS_PUBLIC = process.env.NEXT_PUBLIC_TARGET === "public";
+
+/**
+ * The console `voxa serve` ships (NEXT_PUBLIC_TARGET=console): a static build of the
+ * operator app that leaves the landing page out, so links back to it go to the public site.
+ */
+export const IS_CONSOLE = process.env.NEXT_PUBLIC_TARGET === "console";

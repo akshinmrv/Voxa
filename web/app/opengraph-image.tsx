@@ -1,5 +1,8 @@
 import { ImageResponse } from "next/og";
 
+// Rendered once at build time, which `output: export` (the bundled console) requires.
+export const dynamic = "force-static";
+
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const alt = "Voxa — Dub any video into another language and keep it in sync";

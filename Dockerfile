@@ -29,6 +29,7 @@ WORKDIR /src
 # Only what the distribution itself needs — see .dockerignore for the rest.
 COPY pyproject.toml README.md LICENSE ./
 COPY voxa.py voxa_server.py ./
+COPY voxa_ui/__init__.py voxa_ui/
 RUN pip install --no-cache-dir ".[serve]"
 
 # Videos are mounted here. Voxa writes its work directory and the finished dub next to the

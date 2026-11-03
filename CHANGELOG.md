@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`voxa studio`: the console now comes with the package.** Installing `voxa-dub[serve]`
+  used to bring only the server; the console had to be run from a clone of the repository
+  with Node. The package now carries it as a static build, `voxa serve` serves it on the same
+  address as its API, and `voxa studio` starts the server and opens the console in the
+  browser, in the browser's language. The Docker image doesn't include it yet.
 - **Self-hosted speech servers get the target language.** With `--openai-tts-base-url`, each
   request now carries the target language — a field Chatterbox-TTS-Server and VoiceStudio accept
   for choosing it — while OpenAI's own API gets nothing extra. A server that rejects the field
@@ -19,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **NOTICE.md covers self-hosted speech servers** (§4.6): the dub's licence follows the model
   the server runs, not the server. VoiceStudio's default model, OmniVoice, is non-commercial;
   Chatterbox is MIT. The README shows how to point Voxa at VoiceStudio.
+
+### Fixed
+
+- **The install hint for `voxa serve` named the wrong package.** Without the `[serve]` extra
+  it told you to install `voxa[serve]`; `voxa` on PyPI is an unrelated project, and the
+  package is `voxa-dub`.
 
 ## [1.10.0] - 2026-10-27
 

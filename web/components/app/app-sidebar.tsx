@@ -6,6 +6,7 @@ import { Link, usePathname } from "@/i18n/navigation";
 import { Waveform } from "@/components/waveform";
 import { APP_NAV } from "./nav-items";
 import { cn } from "@/lib/utils";
+import { IS_CONSOLE, SITE } from "@/lib/site";
 
 const DOCS_URL = "https://github.com/akshinmrv/Voxa#readme";
 
@@ -60,13 +61,25 @@ export function AppSidebar() {
           <BookOpen className="size-4" />
           {t("docs")}
         </a>
-        <Link
-          href="/"
-          className="flex items-center gap-3 rounded-sm px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          {t("backToSite")}
-        </Link>
+        {IS_CONSOLE ? (
+          <a
+            href={SITE.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 rounded-sm px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            {t("backToSite")}
+          </a>
+        ) : (
+          <Link
+            href="/"
+            className="flex items-center gap-3 rounded-sm px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            {t("backToSite")}
+          </Link>
+        )}
       </div>
     </aside>
   );

@@ -79,6 +79,12 @@ voxa = "voxa:cli"
 
 [tool.setuptools]
 py-modules = ["voxa", "voxa_server"]
+# The operator console, as a static build `voxa serve` serves. Its files are generated
+# (npm run build:console in web/) before the release builds the wheel — see voxa_ui/.
+packages = ["voxa_ui"]
+
+[tool.setuptools.package-data]
+voxa_ui = ["static/**/*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

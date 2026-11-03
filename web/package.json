@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "build:console": "node scripts/build-console.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.3.0",

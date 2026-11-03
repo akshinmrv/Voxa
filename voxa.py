@@ -4219,16 +4219,19 @@ Examples:
 
 def cli():
     """Synchronous console-script entry point (see pyproject [project.scripts])."""
-    # `voxa serve` launches the optional operator web server (see voxa_server.py).
-    # It lives behind the [serve] extra so the default install stays lean.
-    if sys.argv[1:2] == ["serve"]:
+    # `voxa serve` launches the optional operator web server (see voxa_server.py), and
+    # `voxa studio` does the same and opens its console in the browser. Both live behind
+    # the [serve] extra so the default install stays lean.
+    if sys.argv[1:2] in (["serve"], ["studio"]):
+        command = sys.argv[1]
         try:
             from voxa_server import run_from_cli
         except ImportError:
-            print("❌ `voxa serve` needs extra dependencies.\n"
-                  "   Install them with:  pip install \"voxa[serve]\"")
+            print(f"❌ `voxa {command}` needs extra dependencies.\n"
+                  "   Install them with:  pip install \"voxa-dub[serve]\"")
             sys.exit(1)
-        sys.exit(run_from_cli(sys.argv[2:]))
+        extra = ["--open"] if command == "studio" else []
+        sys.exit(run_from_cli(sys.argv[2:] + extra, prog=f"voxa {command}"))
     sys.exit(asyncio.run(main()))
 
 

@@ -7,12 +7,16 @@ core dubbing code is never imported into the request path and stays untouched.
 
 Install the extra dependencies with::
 
-    pip install "voxa[serve]"
+    pip install "voxa-dub[serve]"
 
 Then run::
 
+    voxa studio           # serve, and open the console in the browser
     voxa serve            # http://127.0.0.1:8000
     voxa serve --port 9000
+
+A released package carries the console as a static build (the voxa_ui package) and serves
+it from "/"; a source checkout has it only after ``npm run build:console`` in web/.
 """
 from __future__ import annotations
 
@@ -24,8 +28,11 @@ import os
 import re
 import shutil
 import sys
+import threading
 import time
+import urllib.request
 import uuid
+import webbrowser
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -33,7 +40,8 @@ from typing import Dict, List, Optional, Set
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # The registries come straight from the tool, so the UI always reflects what this
@@ -917,18 +925,107 @@ async def result_srt(job_id: str) -> FileResponse:
 
 
 # --------------------------------------------------------------------------- #
-# CLI entry (called by `voxa serve` in voxa.cli)
+# Console (the operator UI, bundled into the package)
 # --------------------------------------------------------------------------- #
 
-def run_from_cli(argv: List[str]) -> int:
+CONSOLE_LOCALES = ("en", "az", "tr")
+
+
+def console_locale(cookie: str, accept_language: str) -> str:
+    """The console language for a visitor: the one they picked before (next-intl's
+    NEXT_LOCALE cookie), else the first of their browser's languages the console has,
+    else English."""
+    if cookie in CONSOLE_LOCALES:
+        return cookie
+    for tag in accept_language.split(","):
+        primary = tag.split(";")[0].strip().split("-")[0].lower()
+        if primary in CONSOLE_LOCALES:
+            return primary
+    return CONSOLE_LOCALES[0]
+
+
+# Next's static build writes a page's prefetch payloads as nested files
+# (`__next.$d$locale/app/jobs.txt`), while the browser asks for them with the segments
+# joined by dots (`__next.$d$locale.app.jobs.txt`); Next's own server maps one to the other.
+_SEGMENT_PAYLOAD = re.compile(r"__next\.([^/\\]+)\.txt")
+
+
+def segment_payload_path(path: str) -> Optional[str]:
+    """The nested file a dot-joined prefetch payload request refers to, or None when `path`
+    isn't one (a single segment, like `__next._tree.txt`, is a file of that name)."""
+    head, name = os.path.split(path)
+    match = _SEGMENT_PAYLOAD.fullmatch(name)
+    if not match or "." not in match.group(1):
+        return None
+    first, *rest = match.group(1).split(".")
+    return os.path.join(head, f"__next.{first}", *rest[:-1], f"{rest[-1]}.txt")
+
+
+class ConsoleFiles(StaticFiles):
+    """Serves the bundled console. The static build has no page at the bare root, so "/"
+    redirects to the console in the visitor's language."""
+
+    async def get_response(self, path: str, scope) -> Response:
+        if path in ("", "."):
+            request = Request(scope)
+            locale = console_locale(request.cookies.get("NEXT_LOCALE", ""),
+                                    request.headers.get("accept-language", ""))
+            return RedirectResponse(f"/{locale}/app/")
+        nested = segment_payload_path(path)
+        if nested is not None and self.lookup_path(nested)[1] is not None:
+            path = nested
+        return await super().get_response(path, scope)
+
+
+def mount_console(target: FastAPI, directory: Optional[Path]) -> bool:
+    """Serve the console from `directory` under "/". Mounted after the API routes, so
+    /api/... still reaches them. False, with nothing mounted, when there is no build."""
+    if directory is None:
+        return False
+    target.mount("/", ConsoleFiles(directory=directory, html=True), name="console")
+    return True
+
+
+try:
+    from voxa_ui import static_dir as _console_dir
+except ImportError:                      # installed without the console package
+    def _console_dir() -> Optional[Path]:
+        return None
+
+CONSOLE_BUNDLED = mount_console(app, _console_dir())
+
+
+def _open_when_ready(url: str, timeout: float = 30.0) -> None:
+    """Open the console in the browser once the server answers, from a background thread
+    so it doesn't hold up the server start."""
+    def _wait_then_open() -> None:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                urllib.request.urlopen(f"{url}/api/health", timeout=2)
+                webbrowser.open(f"{url}/")
+                return
+            except OSError:
+                time.sleep(0.3)
+    threading.Thread(target=_wait_then_open, daemon=True).start()
+
+
+# --------------------------------------------------------------------------- #
+# CLI entry (called by `voxa serve` and `voxa studio` in voxa.cli)
+# --------------------------------------------------------------------------- #
+
+def run_from_cli(argv: List[str], prog: str = "voxa serve") -> int:
     parser = argparse.ArgumentParser(
-        prog="voxa serve",
+        prog=prog,
         description="Run the Voxa operator web server (upload, dub, download).",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8000, help="Bind port (default: 8000)")
     parser.add_argument("--env-file", default=".env",
                         help="Load API keys from this .env file (default: .env)")
+    parser.add_argument("--open", action="store_true",
+                        help="Open the console in the browser once the server is up "
+                             "(`voxa studio` does this)")
     args = parser.parse_args(argv)
 
     # The settings layer reads/writes keys in this same .env file.
@@ -955,13 +1052,22 @@ def run_from_cli(argv: List[str]) -> int:
         import uvicorn
     except ImportError:
         print("❌ `voxa serve` needs extra dependencies.\n"
-              "   Install them with:  pip install \"voxa[serve]\"")
+              "   Install them with:  pip install \"voxa-dub[serve]\"")
         return 1
 
     WORKSPACE.mkdir(parents=True, exist_ok=True)
     detected = [k for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY") if os.environ.get(k)]
+    # A wildcard bind is reachable on loopback; the browser can't open 0.0.0.0 itself.
+    local = "127.0.0.1" if args.host in ("0.0.0.0", "::", "") else args.host
+    url = f"http://{local}:{args.port}"
     print(f"🌐 Voxa operator server → http://{args.host}:{args.port}")
     print(f"🔑 API keys detected: {', '.join(detected) if detected else 'none'}")
-    print("   Open the web UI (see web/) and point it at this address.")
+    if CONSOLE_BUNDLED:
+        print(f"🖥️  Console → {url}/")
+        if args.open:
+            _open_when_ready(url)
+    else:
+        print("   This install has no built console. Run it from web/ (npm run dev) and point it\n"
+              "   at this address, or build it into the package with: npm run build:console")
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     return 0

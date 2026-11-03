@@ -38,6 +38,9 @@ Copy `.env.example` to `.env.local` and adjust. Key variables:
 ```bash
 npm run build        # local build (full app)
 
+# The console `voxa serve` ships: a static export copied into ../voxa_ui/static
+npm run build:console
+
 # Public landing for a domain:
 NEXT_PUBLIC_TARGET=public NEXT_PUBLIC_SITE_URL=https://your-domain npm run build
 ```
@@ -48,5 +51,6 @@ Deploy the public build to any Next-compatible host (Vercel, Cloudflare Pages, N
 
 - `npm run dev` — dev server
 - `npm run build` — production build
+- `npm run build:console` — static build of the operator app, copied into the Python package
 - `npm run start` — serve the production build
 - `npm run lint` — ESLint

@@ -54,7 +54,11 @@ export function NewJobFlow() {
     // A single job opens on its own page; a batch goes to the list, where they can be
     // watched together.
     onSuccess: (ids) =>
-      router.push(ids.length === 1 ? `/app/jobs/${ids[0]}` : "/app/jobs"),
+      router.push(
+        ids.length === 1
+          ? { pathname: "/app/jobs/view", query: { id: ids[0] } }
+          : "/app/jobs",
+      ),
   });
 
   if (optionsQuery.isPending) return <Loading />;

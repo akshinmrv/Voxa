@@ -259,6 +259,7 @@ docker run --rm -v "$PWD:/data" -v voxa-cache:/cache     ghcr.io/akshinmrv/voxa 
 İmaj ~3,7 GB'dır, neredeyse tamamı torch'un CPU derlemesidir. `voxa serve` konteynerde de
 çalışır (`serve --host 0.0.0.0`), ancak ayar uç noktaları yalnızca loopback çağrılarına
 açıktır — port eşlemeli bir istek buna uymaz, bu yüzden konsolu yerel olarak çalıştırın.
+İmaj henüz konsolu içermiyor.
 
 </details>
 
@@ -419,13 +420,13 @@ operatör arka ucu sunar — tek tasarım sistemi, iki yüzey:
   (SSE) ve sonucu indir. Hiçbir şey sunucuya yüklenmez — kendi makinende çalışır.
 
 ```bash
-# Arka uç: REST + SSE
 pipx install "voxa-dub[serve]"
-voxa serve                              # http://127.0.0.1:8000
-
-# Önyüz (ayrı terminal)
-cd web && npm install && npm run dev    # http://localhost:3000  →  /en/app
+voxa studio                             # sunucuyu başlatır ve konsolu tarayıcıda açar
+voxa serve                              # aynısı, tarayıcı açmadan
 ```
+
+Konsol paketin içinde gelir: Node da ikinci bir terminal da gerekmez. Konsolun kendisi
+üzerinde çalışıyorsanız `voxa serve` ile birlikte [`web/`](web/) içinde `npm run dev` çalıştırın.
 
 Geliştirme, ortam değişkenleri ve dağıtım için: [`web/README.md`](web/README.md).
 

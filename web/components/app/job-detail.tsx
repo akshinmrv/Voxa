@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { ArrowLeft, Download, AlertTriangle } from "lucide-react";
 import type { JobEvent, JobStatus } from "@/lib/types";
 import { getJob, getSettings, jobEventsUrl, resultVideoUrl, resultSrtUrl } from "@/lib/api";
 import { useAutoDownload } from "@/lib/use-auto-download";
-import { Link } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "./status-badge";
@@ -15,6 +16,19 @@ import { PipelineProgress } from "./pipeline-progress";
 import { Loading, BackendError } from "./query-states";
 
 const MAX_LOGS = 500;
+
+/**
+ * The job page takes its id from `?id=` rather than a `[id]` segment: job ids only exist at
+ * run time, and the console `voxa serve` ships is a static build that can't hold dynamic routes.
+ */
+export function JobDetailFromQuery() {
+  const id = useSearchParams().get("id");
+  const router = useRouter();
+  useEffect(() => {
+    if (!id) router.replace("/app/jobs");
+  }, [id, router]);
+  return id ? <JobDetail jobId={id} /> : <Loading />;
+}
 
 export function JobDetail({ jobId }: { jobId: string }) {
   const t = useTranslations("App.job");

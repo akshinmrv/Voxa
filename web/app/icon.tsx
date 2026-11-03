@@ -1,5 +1,8 @@
 import { ImageResponse } from "next/og";
 
+// Rendered once at build time, which `output: export` (the bundled console) requires.
+export const dynamic = "force-static";
+
 export const size = { width: 64, height: 64 };
 export const contentType = "image/png";
 

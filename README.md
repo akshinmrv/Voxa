@@ -267,6 +267,7 @@ docker run --rm -v "$PWD:/data" -v voxa-cache:/cache \
 The image is ~3.7 GB, almost all of it the CPU build of torch. `voxa serve` runs in the
 container too (`serve --host 0.0.0.0`), but its settings endpoints are restricted to loopback
 callers and a port-mapped request does not qualify — run the console natively for those.
+The image doesn't include the console yet.
 
 </details>
 
@@ -457,13 +458,13 @@ engine, because it *is* the engine. It binds to `127.0.0.1`; nothing is uploaded
 </div>
 
 ```bash
-# Backend: REST + SSE, drives the same pipeline per job
 pipx install "voxa-dub[serve]"
-voxa serve                              # http://127.0.0.1:8000
-
-# Frontend (separate terminal)
-cd web && npm install && npm run dev    # http://localhost:3000  →  /en/app
+voxa studio                             # starts it and opens the console in your browser
+voxa serve                              # the same, without opening a browser
 ```
+
+The console comes inside the package: no Node, no second terminal. Working on the console
+itself? Run `npm run dev` in [`web/`](web/) next to `voxa serve`.
 
 It also carries the settings the CLI reads: API keys (kept in your local `.env`, never echoed
 back), per-provider models with a connection test, translation style, and speech style presets.
@@ -478,6 +479,7 @@ development, environment variables, and deployment.
 Voxa/
 ├── voxa.py                     # The entire tool: pipeline, engines, registries, CLI
 ├── voxa_server.py              # `voxa serve` operator backend (FastAPI; optional [serve] extra)
+├── voxa_ui/                    # the console, built from web/ into the package (npm run build:console)
 ├── web/                        # Web frontend: public landing + local operator app
 ├── pyproject.toml              # Packaging, extras, ruff and pytest configuration
 ├── requirements.txt            # Core dependencies (optional engines live in extras)

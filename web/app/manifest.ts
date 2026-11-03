@@ -1,5 +1,8 @@
 import type { MetadataRoute } from "next";
 
+// Rendered once at build time, which `output: export` (the bundled console) requires.
+export const dynamic = "force-static";
+
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Voxa — AI video dubbing",

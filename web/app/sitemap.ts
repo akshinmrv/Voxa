@@ -2,6 +2,9 @@ import type { MetadataRoute } from "next";
 import { routing } from "@/i18n/routing";
 import { localeUrl } from "@/lib/site";
 
+// Rendered once at build time, which `output: export` (the bundled console) requires.
+export const dynamic = "force-static";
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const languages = Object.fromEntries(
     routing.locales.map((l) => [l, localeUrl(l)]),
