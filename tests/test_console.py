@@ -133,9 +133,10 @@ def test_voxa_studio_is_voxa_serve_that_opens_the_browser(monkeypatch):
 
 
 def test_open_waits_for_a_bundled_console(tmp_path, monkeypatch):
-    import uvicorn
+    from types import SimpleNamespace
     opened = []
-    monkeypatch.setattr(uvicorn, "run", lambda *a, **kw: None)
+    # A stand-in, so the test needs neither a real server nor uvicorn installed (CI has none).
+    monkeypatch.setitem(sys.modules, "uvicorn", SimpleNamespace(run=lambda *a, **kw: None))
     monkeypatch.setattr(srv, "_open_when_ready", opened.append)
     monkeypatch.setattr(srv, "WORKSPACE", tmp_path / ".voxa_serve")
     monkeypatch.setattr(srv, "ENV_FILE", srv.ENV_FILE)          # run_from_cli reassigns it
