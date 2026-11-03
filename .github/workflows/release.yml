@@ -8,10 +8,22 @@ permissions:
   contents: write
 
 jobs:
+  # A tag on the wrong commit publishes the wrong version: 1.11.0's first tag put out a
+  # GitHub release and an image before PyPI refused the wheel. Every other job waits on this.
+  tag:
+    name: Check the tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Match the tag to the version
+        run: python3 scripts/check_release_tag.py "$GITHUB_REF_NAME"
+
   # A tag that can't pass its own tests should not become a release — on every Python we
   # support, as CI does. Testing 3.12 alone let a 3.9-only bug reach PyPI in 1.9.0.
   verify:
     name: Verify (py${{ matrix.python-version }})
+    needs: tag
     runs-on: ubuntu-latest
     strategy:
       matrix:
