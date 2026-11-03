@@ -197,6 +197,25 @@ yenidən yaradıldı, ona görə timeline hər üçündə eynidir.
 
 ## Quraşdırma
 
+**Bir sətirlə.** Əvvəlcədən Python lazım deyil:
+
+```powershell
+irm https://voxa.servoogle.com/install.ps1 | iex          # Windows (PowerShell)
+```
+
+```bash
+curl -fsSL https://voxa.servoogle.com/install.sh | sh     # macOS / Linux
+```
+
+Quraşdırıcı [uv](https://docs.astral.sh/uv/) ilə Voxa-nı və onun brauzer konsolunu, işlədikləri
+Python ilə birlikdə ayrıca mühitə qoyur (təxminən 1 GB, çoxu PyTorch). FFmpeg-i Windows-da
+(winget) və macOS-da (Homebrew) quraşdırır — Linux-da `sudo` tələb etdiyi üçün əmri göstərir —,
+**Voxa Studio** qısayolu əlavə edir və `voxa doctor` ilə bitir. Təkrar işə salmaq Voxa-nı
+yeniləyir; `uv tool uninstall voxa-dub` silir. `VOXA_EXTRAS=serve,piper` kimi ayarlar hər
+skriptin əvvəlində sadalanıb.
+
+Ya da addım-addım quraşdırın:
+
 **1. FFmpeg** — Voxa onu başlanğıcda yoxlayır və yoxdursa bildirir.
 
 ```bash
@@ -261,6 +280,16 @@ işləyir (`serve --host 0.0.0.0`), amma onun settings endpoint-ləri yalnız lo
 Image-də konsol hələ yoxdur.
 
 </details>
+
+**Quraşdırmanı yoxlayın.** `voxa doctor` nəyin işlədiyini, nəyin opsional olub hələ
+qurulmadığını və hər birini *bu* quraşdırmada düzəldən əmri göstərir — Voxa pipx-dədirsə,
+`pipx inject`. API açarının qoyulub-qoyulmadığını deyir, dəyərini heç vaxt göstərmir.
+
+```bash
+voxa doctor            # FFmpeg, paketlər, GPU, mühərriklər, açarlar
+voxa doctor --online   # Google, Microsoft Edge və Hugging Face-i də yoxlayır
+voxa doctor --deep     # asılılıq yeniləmələrində sınan XTTS və pyannote-u da yükləyir
+```
 
 **3. Opsional mühərriklər** — yalnız istifadə etdiyinizi quraşdırın.
 

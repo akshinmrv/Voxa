@@ -1,0 +1,162 @@
+"""
+Unit tests for `voxa doctor`: what it reports for a given install, and the fixes it suggests.
+
+Everything it would probe on the real machine (ffmpeg, Ollama, installed packages, disk) is
+replaced with a stand-in, so the results don't depend on what this machine has.
+
+Run:  pytest -q tests/test_doctor.py
+"""
+import json
+import sys
+from collections import namedtuple
+from pathlib import Path
+
+import pytest
+
+import voxa
+import voxa_ui
+
+KEYS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "HF_TOKEN",
+        "HUGGINGFACE_TOKEN", "OPENAI_TTS_BASE_URL")
+
+
+@pytest.fixture
+def machine(monkeypatch, tmp_path):
+    """A plain install: ffmpeg on PATH, no GPU, no extras, no keys, Ollama not running.
+    Tests change what they need through the returned namespace."""
+    from types import SimpleNamespace
+    state = SimpleNamespace(tools={"ffmpeg": "/usr/bin/ffmpeg"}, modules=set(), ollama=None,
+                            free_gb=50)
+    monkeypatch.setattr(voxa.shutil, "which", lambda name: state.tools.get(name))
+    monkeypatch.setattr(voxa.shutil, "disk_usage",
+                        lambda _: namedtuple("Usage", "total used free")(0, 0,
+                                                                         state.free_gb * 1024 ** 3))
+    monkeypatch.setattr(voxa, "_tool_version", lambda cmd: "7.1")
+    monkeypatch.setattr(voxa, "_ollama_models", lambda timeout=2.0: state.ollama)
+    monkeypatch.setattr(voxa, "_has_module", lambda name: name in state.modules)
+    monkeypatch.setattr(voxa, "_find_piper", lambda: state.tools.get("piper"))
+    monkeypatch.setattr(voxa, "_ytdlp_available", lambda: "yt_dlp" in state.modules)
+    monkeypatch.setattr(voxa, "torch", None)
+    monkeypatch.setattr(voxa, "edge_tts", object())       # CI doesn't install edge-tts
+    monkeypatch.setattr(voxa, "_MISSING_DEPS", [])
+    for key in KEYS:
+        monkeypatch.delenv(key, raising=False)
+    state.env_file = str(tmp_path / ".env")          # never the developer's own .env
+    return state
+
+
+def _by_name(checks):
+    return {(c.section, c.name): c for c in checks}
+
+
+def test_a_plain_install_is_ready_with_the_extras_off(machine, capsys):
+    checks = _by_name(voxa.doctor_checks())
+    assert checks[("Required", "FFmpeg")].status == "ok"
+    assert checks[("Speed", "GPU")].status == "warn"
+    assert checks[("Speech", "Piper")].status == "off"
+    assert checks[("Translation", "Ollama")].status == "off"
+    assert not any(c.status == "fail" for c in checks.values())
+    assert voxa.doctor_cli(["--env-file", machine.env_file]) == 0
+    assert "Ready to dub" in capsys.readouterr().out
+
+
+def test_missing_ffmpeg_fails_and_says_how_to_install_it(machine, capsys):
+    machine.tools.pop("ffmpeg")
+    ffmpeg = _by_name(voxa.doctor_checks())[("Required", "FFmpeg")]
+    assert ffmpeg.status == "fail" and ffmpeg.fix == voxa._ffmpeg_hint()
+    assert voxa.doctor_cli(["--env-file", machine.env_file]) == 1
+    assert "can't dub" in capsys.readouterr().out
+
+
+def test_keys_are_reported_but_never_shown(machine, monkeypatch, capsys):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-secret-123")
+    assert voxa.doctor_cli(["--json", "--env-file", machine.env_file]) == 0
+    out = capsys.readouterr().out
+    checks = {(c["section"], c["name"]): c for c in json.loads(out)}
+    assert checks[("Translation", "OpenAI")]["status"] == "ok"
+    assert checks[("Speech", "OpenAI")]["detail"] == "OPENAI_API_KEY is set"
+    assert "sk-test-secret-123" not in out
+
+
+def test_install_hints_match_how_voxa_was_installed(monkeypatch):
+    import importlib.metadata
+    monkeypatch.setattr(importlib.metadata, "requires", lambda dist: [
+        'piper-tts; extra == "piper"', 'fastapi; extra == "serve"',
+        'uvicorn[standard]; extra == "serve"'])
+    monkeypatch.setattr(sys, "prefix", "/home/u/.local/share/pipx/venvs/voxa-dub")
+    assert voxa._install_hint("piper") == "pipx inject voxa-dub piper-tts"
+    assert voxa._install_hint("serve") == 'pipx inject voxa-dub fastapi "uvicorn[standard]"'
+    assert voxa._reinstall_hint() == "pipx reinstall voxa-dub"
+    # Anywhere else, the pip of the Python running Voxa, so it lands in the right environment.
+    monkeypatch.setattr(sys, "prefix", "/opt/venv")
+    assert voxa._install_hint("piper") == f'"{sys.executable}" -m pip install "voxa-dub[piper]"'
+
+
+def test_a_uv_tool_install_keeps_its_extras(monkeypatch, tmp_path):
+    # The one-line installers use `uv tool install`, whose environment has no pip. uv replaces
+    # that environment on a change, so the hint names the extras it already has as well.
+    (tmp_path / "uv-receipt.toml").write_text(
+        '[tool]\nrequirements = [{ name = "voxa-dub", extras = ["serve"], path = "x.whl" }]\n'
+        'python = "3.12"\n', encoding="utf-8")
+    monkeypatch.setattr(sys, "prefix", str(tmp_path))
+    assert voxa._install_hint("piper") == 'uv tool install --upgrade "voxa-dub[piper,serve]"'
+    assert voxa._install_hint("serve") == 'uv tool install --upgrade "voxa-dub[serve]"'
+    assert voxa._reinstall_hint() == 'uv tool install --reinstall "voxa-dub[serve]"'
+
+
+def test_find_piper_next_to_python_when_it_isnt_on_path(monkeypatch, tmp_path):
+    # pipx doesn't put a dependency's scripts on PATH, and on Windows the file is piper.exe.
+    scripts = tmp_path / "Scripts"
+    scripts.mkdir()
+    (scripts / "piper.exe").write_bytes(b"")
+    monkeypatch.setattr(voxa.shutil, "which", lambda name: None)
+    monkeypatch.setattr(sys, "executable", str(scripts / "python.exe"))
+    assert voxa._find_piper() == str(scripts / "piper.exe")
+
+
+@pytest.mark.parametrize("models, status", [(None, "off"), ([], "warn"),
+                                            (["llama3:latest"], "ok")])
+def test_ollama(machine, models, status):
+    machine.ollama = models
+    assert _by_name(voxa.doctor_checks())[("Translation", "Ollama")].status == status
+
+
+def test_deep_imports_xtts_and_reports_a_broken_install(machine, monkeypatch):
+    machine.modules.add("TTS")
+    imported = []
+
+    def _broken(module):
+        imported.append(module)
+        return "ImportError"
+
+    monkeypatch.setattr(voxa, "_imports_cleanly", _broken)
+    assert _by_name(voxa.doctor_checks())[("Speech", "XTTS")].status == "ok"
+    assert imported == []                                   # the quick check only finds it
+    xtts = _by_name(voxa.doctor_checks(deep=True))[("Speech", "XTTS")]
+    assert xtts.status == "warn" and "transformers" in xtts.fix
+    assert imported == ["TTS.api"]
+
+
+def test_console_needs_the_server_and_a_build(machine, monkeypatch, tmp_path):
+    assert _by_name(voxa.doctor_checks())[("Extras", "Console")].status == "off"
+    machine.modules.update({"fastapi", "uvicorn"})
+    monkeypatch.setattr(voxa_ui, "static_dir", lambda: None)
+    assert _by_name(voxa.doctor_checks())[("Extras", "Console")].status == "warn"
+    monkeypatch.setattr(voxa_ui, "static_dir", lambda: tmp_path)
+    console = _by_name(voxa.doctor_checks())[("Extras", "Console")]
+    assert console.status == "ok" and "voxa studio" in console.detail
+
+
+def test_low_disk_space_is_a_warning(machine):
+    machine.free_gb = 3
+    assert _by_name(voxa.doctor_checks())[("Disk", "Free space")].status == "warn"
+
+
+def test_voxa_doctor_command(machine, monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["voxa", "doctor", "--json", "--env-file",
+                                      machine.env_file])
+    with pytest.raises(SystemExit) as done:
+        voxa.cli()
+    assert done.value.code == 0
+    assert any(c["name"] == "FFmpeg" for c in json.loads(capsys.readouterr().out))
+    assert Path(machine.env_file).exists() is False         # it only reads the .env

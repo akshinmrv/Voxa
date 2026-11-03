@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A one-line installer.** `irm https://voxa.servoogle.com/install.ps1 | iex` on Windows,
+  `curl -fsSL https://voxa.servoogle.com/install.sh | sh` on macOS and Linux. It needs no
+  Python beforehand: uv installs Voxa and its console into an environment of their own, with
+  the Python they run on. It installs FFmpeg through winget or Homebrew (on Linux it prints the
+  command, since that needs sudo), adds a Voxa Studio shortcut, and ends with `voxa doctor`.
+  The site's install section, which still showed a clone-and-`pip install .` route, now shows
+  these instead.
+- **`voxa doctor` checks the install.** It lists what works (FFmpeg, packages, GPU, each
+  translator and voice engine, the extras, disk space), what is optional and not set up,
+  and the command that fixes each item for this install: `pipx inject` when Voxa lives in
+  pipx, the running Python's pip otherwise. It says whether an API key is set, never its
+  value. `--online` also tries Google, Microsoft Edge and Hugging Face, which is how a
+  rate-limited Google endpoint shows up before a dub fails on it; `--deep` loads XTTS and
+  pyannote, which break on dependency updates; `--json` is for scripts. When Voxa can't
+  start for a missing package or FFmpeg, it now points at `voxa doctor` (the missing-package
+  message used to suggest `pip install -r requirements.txt`, which a pip install doesn't have).
 - **`voxa studio`: the console now comes with the package.** Installing `voxa-dub[serve]`
   used to bring only the server; the console had to be run from a clone of the repository
   with Node. The package now carries it as a static build, `voxa serve` serves it on the same
@@ -27,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Piper wasn't found in a pipx install on Windows.** Its binary isn't on PATH there, and
+  Voxa looked next to Python for `piper` while the file is `piper.exe`.
 - **The install hint for `voxa serve` named the wrong package.** Without the `[serve]` extra
   it told you to install `voxa[serve]`; `voxa` on PyPI is an unrelated project, and the
   package is `voxa-dub`.

@@ -1,0 +1,4 @@
+# The installers are fetched raw and piped into a shell, so their line endings must not be
+# converted on checkout: sh breaks on CRLF.
+web/public/install.sh text eol=lf
+web/public/install.ps1 text eol=crlf

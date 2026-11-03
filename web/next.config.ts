@@ -10,7 +10,18 @@ const withNextIntl = createNextIntlPlugin();
 const STATIC_EXPORT = process.env.VOXA_UI_EXPORT === "1";
 
 const nextConfig: NextConfig = {
-  ...(STATIC_EXPORT ? { output: "export" as const, trailingSlash: true } : {}),
+  ...(STATIC_EXPORT
+    ? { output: "export" as const, trailingSlash: true }
+    : {
+        // The installers in public/ are piped straight into a shell (irm | iex,
+        // curl | sh), so they go out as text rather than as a download.
+        async headers() {
+          return ["/install.sh", "/install.ps1"].map((source) => ({
+            source,
+            headers: [{ key: "Content-Type", value: "text/plain; charset=utf-8" }],
+          }));
+        },
+      }),
   // Pin the workspace root to this folder. Without it, Turbopack walks up to find
   // a lockfile and a stray one in a parent dir (e.g. ~/package-lock.json) hijacks
   // module resolution, which produces broken middleware bundles ("adapterFn is

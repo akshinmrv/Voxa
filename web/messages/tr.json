@@ -127,15 +127,15 @@
   },
   "Install": {
     "label": "Kurulum",
-    "title": "Bir dakikada çalışır durumda",
-    "subtitle": "PATH üzerinde Python 3.10+ ve ffmpeg gerektirir.",
-    "cloneLabel": "clone",
-    "clone": "git clone https://github.com/akshinmrv/Voxa.git && cd Voxa",
-    "installLabel": "install",
-    "install": "pip install .",
+    "title": "Tek satırla kurun",
+    "subtitle": "Kurulum aracı Voxa'yı, çalıştığı Python'u ve Windows ile macOS'ta FFmpeg'i getirir, ardından bir Voxa Studio kısayolu ekler.",
+    "windowsLabel": "windows · powershell",
+    "windows": "irm https://voxa.servoogle.com/install.ps1 | iex",
+    "unixLabel": "macos · linux",
+    "unix": "curl -fsSL https://voxa.servoogle.com/install.sh | sh",
     "runLabel": "run",
-    "run": "voxa talk.mp4 --target_lang tr",
-    "note": "voxa komutu pip install .'den gelir; doğrudan python voxa.py da çalıştırabilirsin."
+    "run": "voxa studio",
+    "note": "Python zaten varsa pipx install \"voxa-dub[serve]\" de çalışır. voxa doctor neyin hazır, neyin eksik olduğunu gösterir."
   },
   "QuickStart": {
     "label": "Hızlı başlangıç",
@@ -392,11 +392,11 @@
     },
     "localOnly": {
       "title": "Operatör konsolu kendi makinende çalışır",
-      "body": "Voxa'nın dublaj arayüzü yerel bir araçtır — bu web sitesinde hiçbir şey yüklenmez veya işlenmez. Voxa'yı kur, yerel sunucuyu başlat, sonra yazdırılan localhost URL'sini aç:",
+      "body": "Voxa'nın dublaj arayüzü yerel bir araçtır — bu web sitesinde hiçbir şey yüklenmez veya işlenmez. Voxa'yı kur, ardından voxa studio çalıştır — yerel sunucuyu başlatır ve konsolu tarayıcıda açar:",
       "installLabel": "install",
-      "install": "pip install \"voxa[serve]\"",
+      "install": "pipx install \"voxa-dub[serve]\"",
       "serveLabel": "run",
-      "serve": "voxa serve",
+      "serve": "voxa studio",
       "backHome": "Ana sayfaya dön",
       "viewGithub": "GitHub'da görüntüle"
     }

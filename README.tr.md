@@ -198,6 +198,25 @@ ve konuşma yeniden üretildi, bu yüzden zaman çizelgesi üçünde de aynı.
 
 ## Kurulum
 
+**Tek satırla.** Önceden Python gerekmez:
+
+```powershell
+irm https://voxa.servoogle.com/install.ps1 | iex          # Windows (PowerShell)
+```
+
+```bash
+curl -fsSL https://voxa.servoogle.com/install.sh | sh     # macOS / Linux
+```
+
+Kurulum aracı [uv](https://docs.astral.sh/uv/) ile Voxa'yı ve tarayıcı konsolunu, çalıştıkları
+Python ile birlikte kendi ortamlarına kurar (yaklaşık 1 GB, çoğu PyTorch). FFmpeg'i Windows'ta
+(winget) ve macOS'ta (Homebrew) kurar — Linux'ta `sudo` gerektirdiği için komutu gösterir —,
+bir **Voxa Studio** kısayolu ekler ve `voxa doctor` ile biter. Yeniden çalıştırmak Voxa'yı
+günceller; `uv tool uninstall voxa-dub` kaldırır. `VOXA_EXTRAS=serve,piper` gibi ayarlar her
+betiğin başında listelenir.
+
+Ya da adım adım kurun:
+
 **1. FFmpeg** — Voxa başlangıçta kontrol eder ve eksikse bildirir.
 
 ```bash
@@ -262,6 +281,16 @@ açıktır — port eşlemeli bir istek buna uymaz, bu yüzden konsolu yerel ola
 İmaj henüz konsolu içermiyor.
 
 </details>
+
+**Kurulumu kontrol edin.** `voxa doctor` neyin çalıştığını, neyin isteğe bağlı olup henüz
+kurulmadığını ve her birini *bu* kurulumda düzelten komutu gösterir — Voxa pipx'teyse
+`pipx inject`. Bir API anahtarının ayarlı olup olmadığını söyler, değerini asla göstermez.
+
+```bash
+voxa doctor            # FFmpeg, paketler, GPU, motorlar, anahtarlar
+voxa doctor --online   # Google, Microsoft Edge ve Hugging Face'i de dener
+voxa doctor --deep     # bağımlılık güncellemelerinde bozulan XTTS ve pyannote'u da yükler
+```
 
 **3. İsteğe bağlı motorlar** — yalnızca kullandığınızı kurun.
 

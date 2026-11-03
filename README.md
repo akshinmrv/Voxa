@@ -205,6 +205,25 @@ were regenerated — the timeline is identical across all three.
 
 ## Installation
 
+**One line.** No Python needed beforehand:
+
+```powershell
+irm https://voxa.servoogle.com/install.ps1 | iex          # Windows (PowerShell)
+```
+
+```bash
+curl -fsSL https://voxa.servoogle.com/install.sh | sh     # macOS / Linux
+```
+
+The installer uses [uv](https://docs.astral.sh/uv/) to put Voxa and its browser console in an
+environment of their own, with the Python they run on (about 1 GB, most of it PyTorch). It
+installs FFmpeg on Windows (winget) and macOS (Homebrew) — on Linux it prints the command,
+since that needs `sudo` — adds a **Voxa Studio** shortcut, and ends with `voxa doctor`.
+Running it again upgrades Voxa; `uv tool uninstall voxa-dub` removes it. Settings such as
+`VOXA_EXTRAS=serve,piper` are listed at the top of each script.
+
+Or install it step by step:
+
 **1. FFmpeg** — Voxa checks for it at startup and tells you if it's missing.
 
 ```bash
@@ -270,6 +289,16 @@ callers and a port-mapped request does not qualify — run the console natively 
 The image doesn't include the console yet.
 
 </details>
+
+**Check the install.** `voxa doctor` lists what works, what is optional and not set up yet,
+and the command that fixes each item for *this* install — `pipx inject` when Voxa lives in pipx.
+It says whether an API key is set, never what it is.
+
+```bash
+voxa doctor            # FFmpeg, packages, GPU, engines, keys
+voxa doctor --online   # also tries Google, Microsoft Edge and Hugging Face
+voxa doctor --deep     # also loads XTTS and pyannote, which break on dependency updates
+```
 
 **3. Optional engines** — install only what you use.
 

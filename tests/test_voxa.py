@@ -1616,7 +1616,7 @@ def test_optional_import_does_not_block_startup(monkeypatch, capsys):
     assert voxa._try_import("voxa_no_such_module") is None
     assert voxa._MISSING_DEPS == ["voxa_no_such_module"]
     assert voxa._check_runtime_deps() is False
-    assert "requirements.txt" in capsys.readouterr().out
+    assert "voxa doctor" in capsys.readouterr().out
 
 
 # ── OpenAI client factory (one client per endpoint) ──────

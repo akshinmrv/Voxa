@@ -3,7 +3,8 @@
 // the wheel:  npm run build:console
 //
 // The console calls the API on the same origin, so NEXT_PUBLIC_VOXA_API is empty. The
-// landing page's demo videos and site-verification files stay out of the package.
+// landing page's demo videos, the site-verification files and the installers the site
+// hands out stay out of the package.
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, rmSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
@@ -14,7 +15,7 @@ const out = join(web, "out");
 const target = join(web, "..", "voxa_ui", "static");
 
 const SKIP_DIRS = new Set(["demo", "tts-samples"]);
-const SKIP_FILE = /^(BingSiteAuth\.xml|google[0-9a-f]+\.html)$/;
+const SKIP_FILE = /^(BingSiteAuth\.xml|google[0-9a-f]+\.html|install\.(sh|ps1))$/;
 
 const build = spawnSync(
   process.execPath,

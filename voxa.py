@@ -251,7 +251,7 @@ def _check_runtime_deps() -> bool:
     """Return True if all runtime dependencies are importable, else print guidance."""
     if _MISSING_DEPS:
         print("❌ Missing required packages: " + ", ".join(_MISSING_DEPS) +
-              "\n   Install them first:  pip install -r requirements.txt")
+              "\n   Run `voxa doctor` for the command that installs them.")
         return False
     return True
 
@@ -269,7 +269,8 @@ def _check_external_tools() -> bool:
     """Verify the external binaries the pipeline shells out to. Checked before any work
     so a missing FFmpeg fails with an actionable message instead of an exit-code dump."""
     if shutil.which("ffmpeg") is None:
-        print("❌ FFmpeg not found.\n" + FFMPEG_INSTALL_HINT)
+        print("❌ FFmpeg not found.\n" + FFMPEG_INSTALL_HINT +
+              "\n   `voxa doctor` checks the rest of the install too.")
         return False
     return True
 
@@ -1487,6 +1488,19 @@ def _resolve_piper_model(name: str) -> Optional[str]:
     return None
 
 
+def _find_piper() -> Optional[str]:
+    """The Piper binary: on PATH, or next to this Python — in a pipx or venv install the
+    environment's scripts aren't on PATH, and on Windows the file is piper.exe."""
+    found = shutil.which("piper")
+    if found:
+        return found
+    for name in ("piper", "piper.exe"):
+        candidate = Path(sys.executable).parent / name
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
 async def generate_piper(subs, model_path: Path, concat_list: list, temp_files: list,
                          work_dir: Path, enable_stretch: bool, lang_code: str = "",
                          quality_gate: bool = False, asr_model=None,
@@ -1495,11 +1509,7 @@ async def generate_piper(subs, model_path: Path, concat_list: list, temp_files: 
     """Offline speech via the Piper binary. Timeline, placement and scoring come from
     synthesize_timeline; this only turns one line of text into one WAV. With speaker_models
     (from --diarize + --speaker-voices) each segment is spoken by its own speaker's Piper model."""
-    piper_cmd = shutil.which("piper")
-    if not piper_cmd:
-        possible_path = Path(sys.executable).parent / "piper"
-        if possible_path.exists():
-            piper_cmd = str(possible_path)
+    piper_cmd = _find_piper()
     if not piper_cmd:
         _LOG.error("❌ Piper command not found!")
         return
@@ -3898,6 +3908,10 @@ Examples:
 
   # Subtitles only
   python voxa.py video.mp4 --target_lang de --subtitles-only
+
+  # Check the install, then open the browser console
+  voxa doctor
+  voxa studio
         """
     )
 
@@ -4217,8 +4231,344 @@ Examples:
         return 1
 
 
+# ─────────────────────────────────────────────
+#  voxa doctor — what this install can do, and how to fix what it can't
+# ─────────────────────────────────────────────
+
+class DoctorCheck(NamedTuple):
+    section: str
+    name: str
+    # "ok"; "warn" — works, with a caveat; "fail" — Voxa can't run; "off" — an optional part
+    # that isn't set up.
+    status: str
+    detail: str
+    fix: str = ""
+
+
+DOCTOR_SECTIONS = ("Required", "Speed", "Translation", "Speech", "Extras", "Disk")
+_DOCTOR_ICONS = {"ok": "✅", "warn": "⚠️ ", "fail": "❌", "off": "➖"}
+
+
+def _in_pipx() -> bool:
+    return "pipx" in sys.prefix.lower()
+
+
+def _uv_tool_extras() -> Optional[List[str]]:
+    """The extras Voxa was installed with, when uv installed it as a tool (`uv tool install`,
+    which the one-line installers use). Such an environment has no pip; uv records what it
+    installed in uv-receipt.toml. None for any other kind of install."""
+    try:
+        receipt = (Path(sys.prefix) / "uv-receipt.toml").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    match = re.search(r'name\s*=\s*"voxa-dub"[^}]*?extras\s*=\s*\[([^\]]*)\]', receipt)
+    return re.findall(r'"([^"]+)"', match.group(1)) if match else []
+
+
+def _install_hint(extra: str) -> str:
+    """The command that adds an extra to *this* install. uv and pipx keep Voxa in an
+    environment of their own, where a plain `pip install` would land somewhere else."""
+    uv_extras = _uv_tool_extras()
+    if uv_extras is not None:
+        # uv replaces the tool's environment, so the extras it already has are named again.
+        extras = ",".join(sorted(set(uv_extras) | {extra}))
+        return f'uv tool install --upgrade "voxa-dub[{extras}]"'
+    if _in_pipx():
+        try:
+            from importlib.metadata import requires
+            pkgs = [r.split(";")[0].strip() for r in requires("voxa-dub") or []
+                    if f'extra == "{extra}"' in r]
+        except Exception:
+            pkgs = []
+        if pkgs:
+            return "pipx inject voxa-dub " + " ".join(f'"{p}"' if "[" in p else p for p in pkgs)
+    return f'"{sys.executable}" -m pip install "voxa-dub[{extra}]"'
+
+
+def _reinstall_hint() -> str:
+    uv_extras = _uv_tool_extras()
+    if uv_extras is not None:
+        extras = f"[{','.join(sorted(uv_extras))}]" if uv_extras else ""
+        return f'uv tool install --reinstall "voxa-dub{extras}"'
+    if _in_pipx():
+        return "pipx reinstall voxa-dub"
+    return f'"{sys.executable}" -m pip install --force-reinstall voxa-dub'
+
+
+def _ffmpeg_hint() -> str:
+    """The FFMPEG_INSTALL_HINT line for this platform."""
+    if sys.platform == "win32":
+        return "winget install Gyan.FFmpeg"
+    if sys.platform == "darwin":
+        return "brew install ffmpeg"
+    return "sudo apt install ffmpeg   (Fedora/RHEL: sudo dnf install ffmpeg)"
+
+
+def _tool_version(cmd: str) -> str:
+    """The version `cmd -version` reports (ffmpeg's style), or "installed" if it can't say."""
+    try:
+        out = subprocess.run([cmd, "-version"], capture_output=True, text=True,
+                             timeout=10).stdout
+        match = re.search(r"version (\S+)", out)
+        return match.group(1) if match else "installed"
+    except Exception:
+        return "installed"
+
+
+def _ollama_models(timeout: float = 2.0) -> Optional[List[str]]:
+    """The models the local Ollama server has, or None when it isn't running."""
+    try:
+        with urllib.request.urlopen("http://localhost:11434/api/tags", timeout=timeout) as r:
+            return [m.get("name", "") for m in json.loads(r.read()).get("models", [])]
+    except Exception:
+        return None
+
+
+def _has_module(name: str) -> bool:
+    """Whether `name` is installed, without importing it (some of these take seconds)."""
+    import importlib.util
+    try:
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ValueError):
+        return False
+
+
+def _online_checks() -> List[DoctorCheck]:
+    """The network services the free engines rely on, tried once each (--online)."""
+    checks = []
+    try:
+        out = GoogleTranslator(source="en", target="az").translate("Good morning")
+        if out and out.strip().lower() != "good morning":
+            checks.append(DoctorCheck("Translation", "Google (online)", "ok", "reachable"))
+        else:
+            checks.append(DoctorCheck("Translation", "Google (online)", "warn",
+                                      "answered without translating"))
+    except Exception as e:
+        checks.append(DoctorCheck(
+            "Translation", "Google (online)", "warn", f"failed: {str(e)[:90]}",
+            "Google's free endpoint limits each IP; use another --translator "
+            "(Ollama locally, or an API) or set --fallback-translator"))
+    try:
+        voices = asyncio.run(edge_tts.list_voices())
+        checks.append(DoctorCheck("Speech", "Edge (online)", "ok", f"{len(voices)} voices"))
+    except Exception as e:
+        checks.append(DoctorCheck("Speech", "Edge (online)", "warn", f"failed: {str(e)[:90]}",
+                                  "Edge needs Microsoft's service; Piper works offline"))
+    try:
+        req = urllib.request.Request("https://huggingface.co", method="HEAD")
+        urllib.request.urlopen(req, timeout=10)
+        checks.append(DoctorCheck("Extras", "Hugging Face", "ok",
+                                  "reachable (Piper voices and models download from it)"))
+    except Exception as e:
+        checks.append(DoctorCheck("Extras", "Hugging Face", "warn", f"failed: {str(e)[:90]}",
+                                  "model and voice downloads will fail until it is reachable"))
+    return checks
+
+
+def _imports_cleanly(module: str) -> Optional[str]:
+    """None if `module` imports, else the error's type. Its own warnings are kept quiet."""
+    import importlib
+    import warnings
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            importlib.import_module(module)
+        return None
+    except Exception as e:
+        return type(e).__name__
+
+
+_PROVIDER_NAMES = {"openai": "OpenAI", "anthropic": "Anthropic", "openrouter": "OpenRouter"}
+
+
+def doctor_checks(online: bool = False, deep: bool = False) -> List[DoctorCheck]:
+    """Everything `voxa doctor` reports, in DOCTOR_SECTIONS order. Never shows a key's value,
+    only whether it is set. With deep, the extras known to break on a dependency update
+    (XTTS, pyannote) are imported, not just found, which takes a while."""
+    checks: List[DoctorCheck] = []
+
+    def add(*args, **kwargs):
+        checks.append(DoctorCheck(*args, **kwargs))
+
+    # ── Required: without these nothing runs ──
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        add("Required", "FFmpeg", "ok", f"{_tool_version(ffmpeg)}  ({ffmpeg})")
+    else:
+        add("Required", "FFmpeg", "fail", "not found on PATH", _ffmpeg_hint())
+    if _MISSING_DEPS:
+        add("Required", "Python packages", "fail", "missing: " + ", ".join(_MISSING_DEPS),
+            _reinstall_hint())
+    else:
+        add("Required", "Python packages", "ok", "all installed")
+
+    # ── Speed ──
+    if torch is not None and torch.cuda.is_available():
+        add("Speed", "GPU", "ok", f"{torch.cuda.get_device_name(0)} (CUDA)")
+    elif shutil.which("nvidia-smi"):
+        add("Speed", "GPU", "warn", "an NVIDIA GPU is present, but this torch can't use it",
+            "install the CUDA build of torch (see the README's GPU section)")
+    else:
+        add("Speed", "GPU", "warn", "none — Whisper and the local voices run on the CPU, slower")
+    if _has_module("faster_whisper"):
+        add("Speed", "faster-whisper", "ok", "installed (--whisper-backend faster)")
+    else:
+        add("Speed", "faster-whisper", "off", "2-4× quicker transcription",
+            _install_hint("faster"))
+
+    # ── Translation ──
+    add("Translation", "Google", "ok", "free, no key; needs the internet")
+    models = _ollama_models()
+    if models is None:
+        add("Translation", "Ollama", "off", "not running (local, offline translation)",
+            "install it from ollama.com, then: ollama pull llama3")
+    elif models:
+        add("Translation", "Ollama", "ok", "running — " + ", ".join(models[:4]))
+    else:
+        add("Translation", "Ollama", "warn", "running, but has no models",
+            "ollama pull llama3")
+    for pid in sorted(LLM_PROVIDERS):
+        env_key = LLM_PROVIDERS[pid]["env_key"]
+        name = _PROVIDER_NAMES.get(pid, pid.capitalize())
+        if pid == "anthropic" and not _has_module("anthropic"):
+            add("Translation", name, "off", "package not installed", _install_hint("anthropic"))
+        elif os.environ.get(env_key):
+            add("Translation", name, "ok", f"{env_key} is set")
+        else:
+            add("Translation", name, "off", f"{env_key} isn't set",
+                f"set {env_key}, or add the key in the console's Settings")
+
+    # ── Speech ──
+    add("Speech", "Edge", "ok" if edge_tts is not None else "fail",
+        "free, no key; needs the internet" if edge_tts is not None else "edge-tts missing",
+        "" if edge_tts is not None else _reinstall_hint())
+    server = os.environ.get("OPENAI_TTS_BASE_URL")
+    if server:
+        add("Speech", "OpenAI", "ok", f"self-hosted server: {server}")
+    elif os.environ.get("OPENAI_API_KEY"):
+        add("Speech", "OpenAI", "ok", "OPENAI_API_KEY is set")
+    else:
+        add("Speech", "OpenAI", "off", "OPENAI_API_KEY isn't set",
+            "set OPENAI_API_KEY, or point --openai-tts-base-url at a self-hosted server")
+    piper = _find_piper()
+    if piper:
+        add("Speech", "Piper", "ok", f"offline; voices download on first use  ({piper})")
+    else:
+        add("Speech", "Piper", "off", "offline speech, not installed", _install_hint("piper"))
+    if not _has_module("TTS"):
+        add("Speech", "XTTS", "off", "voice cloning, not installed (weights are non-commercial)",
+            _install_hint("xtts"))
+    elif not deep:
+        add("Speech", "XTTS", "ok", "installed (non-commercial weights); --deep checks it loads")
+    elif (error := _imports_cleanly("TTS.api")) is None:
+        add("Speech", "XTTS", "ok", "loads (weights are non-commercial, see NOTICE.md)")
+    else:
+        add("Speech", "XTTS", "warn", f"installed, but it won't import ({error})",
+            'pin a transformers it works with: pip install "transformers==4.53.0"')
+
+    # ── Extras ──
+    if _ytdlp_available():
+        add("Extras", "URL input", "ok", "yt-dlp installed")
+    else:
+        add("Extras", "URL input", "off", "dub straight from a video link", _install_hint("url"))
+    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+    if not _has_module("pyannote"):
+        add("Extras", "Diarization", "off", "a voice per speaker (--diarize)",
+            _install_hint("diarize"))
+    elif deep and (error := _imports_cleanly("pyannote.audio")) is not None:
+        add("Extras", "Diarization", "warn", f"installed, but it won't import ({error})",
+            _install_hint("diarize"))
+    elif token:
+        add("Extras", "Diarization", "ok", "installed, HF_TOKEN is set")
+    else:
+        add("Extras", "Diarization", "warn", "installed, but HF_TOKEN isn't set",
+            "accept the terms at hf.co/pyannote/speaker-diarization-3.1, then set HF_TOKEN")
+    if not all(_has_module(m) for m in ("fastapi", "uvicorn")):
+        add("Extras", "Console", "off", "the browser console (voxa studio)",
+            _install_hint("serve"))
+    else:
+        try:
+            from voxa_ui import static_dir
+            bundled = static_dir() is not None
+        except ImportError:
+            bundled = False
+        if bundled:
+            add("Extras", "Console", "ok", "run: voxa studio")
+        else:
+            add("Extras", "Console", "warn", "server installed, but this install has no console",
+                "in a source checkout: cd web && npm run build:console")
+
+    # ── Disk ──
+    try:
+        free_gb = shutil.disk_usage(Path.home()).free / 1024 ** 3
+        if free_gb >= 10:
+            add("Disk", "Free space", "ok", f"{free_gb:.0f} GB")
+        else:
+            add("Disk", "Free space", "warn", f"{free_gb:.1f} GB",
+                "local models take several GB each; free some space before downloading them")
+    except OSError:
+        pass
+
+    if online:
+        checks.extend(_online_checks())
+    order = {s: i for i, s in enumerate(DOCTOR_SECTIONS)}
+    return sorted(checks, key=lambda c: order.get(c.section, len(order)))
+
+
+def print_doctor(checks: Sequence[DoctorCheck]) -> None:
+    import platform
+    print(f"Voxa {__version__} · Python {platform.python_version()} · "
+          f"{platform.system()} {platform.release()}")
+    for section in DOCTOR_SECTIONS:
+        rows = [c for c in checks if c.section == section]
+        if not rows:
+            continue
+        print(f"\n{section}")
+        for c in rows:
+            print(f"  {_DOCTOR_ICONS.get(c.status, '?')} {c.name:<17}{c.detail}")
+            if c.fix and c.status != "ok":
+                print(f"       → {c.fix}")
+    print()
+    if any(c.status == "fail" for c in checks):
+        print("❌ Voxa can't dub until the ❌ items above are fixed.")
+    else:
+        print("✅ Ready to dub. ➖ items are optional extras.")
+
+
+def doctor_cli(argv: Sequence[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="voxa doctor",
+        description="Check what this install can do, and how to fix what it can't.")
+    parser.add_argument("--online", action="store_true",
+                        help="Also try the network services the free engines use "
+                             "(Google, Microsoft Edge, Hugging Face)")
+    parser.add_argument("--deep", action="store_true",
+                        help="Import the extras that break on dependency updates (XTTS, "
+                             "pyannote) instead of only finding them; slower")
+    parser.add_argument("--json", action="store_true", help="Print the checks as JSON")
+    parser.add_argument("--env-file", default=".env",
+                        help="Read API keys from this .env file, as a run would (default: .env)")
+    args = parser.parse_args(argv)
+    load_dotenv(args.env_file)
+    # The icons must survive a legacy console codepage (e.g. cp1254) and a redirect.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+        except (AttributeError, ValueError):
+            pass
+    checks = doctor_checks(online=args.online, deep=args.deep)
+    if args.json:
+        print(json.dumps([c._asdict() for c in checks], ensure_ascii=False, indent=2))
+    else:
+        print_doctor(checks)
+    return 1 if any(c.status == "fail" for c in checks) else 0
+
+
 def cli():
     """Synchronous console-script entry point (see pyproject [project.scripts])."""
+    # `voxa doctor` checks the install and says how to fix what's missing.
+    if sys.argv[1:2] == ["doctor"]:
+        sys.exit(doctor_cli(sys.argv[2:]))
     # `voxa serve` launches the optional operator web server (see voxa_server.py), and
     # `voxa studio` does the same and opens its console in the browser. Both live behind
     # the [serve] extra so the default install stays lean.

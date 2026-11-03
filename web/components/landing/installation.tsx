@@ -15,8 +15,8 @@ export function Installation() {
           subtitle={t("subtitle")}
         />
         <div className="mt-12 space-y-4">
-          <TerminalBlock label={t("cloneLabel")} command={t("clone")} />
-          <TerminalBlock label={t("installLabel")} command={t("install")} />
+          <TerminalBlock label={t("windowsLabel")} command={t("windows")} />
+          <TerminalBlock label={t("unixLabel")} command={t("unix")} />
           <TerminalBlock label={t("runLabel")} command={t("run")} />
         </div>
         <div className="mt-6 flex gap-3 rounded-md border border-primary/25 bg-primary/10 p-4">

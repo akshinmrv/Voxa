@@ -127,15 +127,15 @@
   },
   "Install": {
     "label": "Installation",
-    "title": "Up and running in a minute",
-    "subtitle": "Requires Python 3.10+ and ffmpeg on your PATH.",
-    "cloneLabel": "clone",
-    "clone": "git clone https://github.com/akshinmrv/Voxa.git && cd Voxa",
-    "installLabel": "install",
-    "install": "pip install .",
+    "title": "One line to install",
+    "subtitle": "The installer brings Voxa, the Python it runs on and, on Windows and macOS, FFmpeg — then adds a Voxa Studio shortcut.",
+    "windowsLabel": "windows · powershell",
+    "windows": "irm https://voxa.servoogle.com/install.ps1 | iex",
+    "unixLabel": "macos · linux",
+    "unix": "curl -fsSL https://voxa.servoogle.com/install.sh | sh",
     "runLabel": "run",
-    "run": "voxa talk.mp4 --target_lang tr",
-    "note": "The voxa command comes from pip install .; you can also run python voxa.py directly."
+    "run": "voxa studio",
+    "note": "Already have Python? pipx install \"voxa-dub[serve]\" works too. voxa doctor shows what is ready and what is missing."
   },
   "QuickStart": {
     "label": "Quick start",
@@ -392,11 +392,11 @@
     },
     "localOnly": {
       "title": "The operator console runs on your machine",
-      "body": "Voxa's dubbing UI is a local tool — nothing is uploaded or processed on this website. Install Voxa and start the local server, then open the printed localhost URL:",
+      "body": "Voxa's dubbing UI is a local tool — nothing is uploaded or processed on this website. Install Voxa, then run voxa studio — it starts the local server and opens the console in your browser:",
       "installLabel": "install",
-      "install": "pip install \"voxa[serve]\"",
+      "install": "pipx install \"voxa-dub[serve]\"",
       "serveLabel": "run",
-      "serve": "voxa serve",
+      "serve": "voxa studio",
       "backHome": "Back to home",
       "viewGithub": "View on GitHub"
     }
