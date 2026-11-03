@@ -24,7 +24,8 @@ pytestmark = pytest.mark.skipif(sys.platform == "win32" or shutil.which("sh") is
 
 
 def _stub(path: Path, body: str) -> None:
-    path.write_text("#!/bin/sh\n" + textwrap.dedent(body), encoding="utf-8", newline="\n")
+    # Bytes, so the line endings stay LF (write_text has no `newline` before Python 3.10).
+    path.write_bytes(("#!/bin/sh\n" + textwrap.dedent(body)).encode("utf-8"))
     path.chmod(0o755)
 
 
