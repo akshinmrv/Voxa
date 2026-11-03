@@ -2365,3 +2365,111 @@ def test_stopping_the_run_implies_the_fallback_would_have_run():
         for untranslated in range(checked + 1):
             if voxa._translation_unusable(untranslated, checked):
                 assert voxa._translation_failed(untranslated, checked)
+
+
+# ── A translation with letters of another script ─────────
+@pytest.mark.parametrize("text, lang, found", [
+    ("Bir dakika ekran上的 ses artık eşleşmiyor.", "tr", ["Han"]),
+    ("Bu səhər hava soyuq idi.", "az", []),                    # ə and ı are Latin
+    ("Это MIT-лицензия, API-ключ не нужен.", "ru", []),        # Latin brand names are fine
+    ("Merhaba Привет", "tr", ["Cyrillic"]),
+    ("今日はいい天気です。", "ja", []),                          # kana and kanji
+    ("你好 안녕", "zh", ["Hangul"]),
+    ("오늘 날씨 좋네요", "ko", []),
+    ("Guten Morgen", "de", []),
+])
+def test_foreign_scripts(text, lang, found):
+    assert voxa._foreign_scripts(text, lang) == found
+
+
+def test_strip_foreign_scripts():
+    assert voxa._strip_foreign_scripts("Bir dakika ekran上的 ses", "tr") == "Bir dakika ekran ses"
+    assert voxa._strip_foreign_scripts("Bu səhər", "az") == "Bu səhər"
+
+
+def _mixed_run(monkeypatch, answers, fallback=None):
+    """Repair one Turkish line with Chinese in it; `answers` maps translator -> its retry."""
+    from types import SimpleNamespace
+    asked = []
+
+    def _translate_line(text, translator, args):
+        asked.append(translator)
+        answer = answers[translator]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+    monkeypatch.setattr(voxa, "_translate_line", _translate_line)
+    merged = [{"start": 0.0, "end": 2.0, "text": "A minute in, the sound no longer matches."},
+              {"start": 2.0, "end": 3.0, "text": "Hello."}]
+    translated = [{"start": 0.0, "end": 2.0, "text": "Bir dakika ekran上的 ses eşleşmiyor."},
+                  {"start": 2.0, "end": 3.0, "text": "Merhaba."}]
+    args = SimpleNamespace(translator="ollama", fallback_translator=fallback, target_lang="tr")
+    repaired = voxa._repair_foreign_scripts(merged, translated, args, voxa._LOG)
+    return repaired, [s["text"] for s in translated], asked
+
+
+def test_a_mixed_line_is_translated_again(monkeypatch):
+    repaired, lines, asked = _mixed_run(
+        monkeypatch, {"ollama": "Bir dakika sonra ses artık eşleşmiyor."})
+    assert repaired == 1 and asked == ["ollama"]
+    assert lines == ["Bir dakika sonra ses artık eşleşmiyor.", "Merhaba."]
+
+
+def test_a_mixed_line_falls_back_then_drops_the_foreign_letters(monkeypatch):
+    repaired, lines, asked = _mixed_run(
+        monkeypatch, {"ollama": "Bir dakika ekran上的 ses.", "openai": "Bir dakika sonra ses."},
+        fallback="openai")
+    assert asked == ["ollama", "openai"] and lines[0] == "Bir dakika sonra ses."
+    # Nothing clean comes back (the retry fails outright): the letters are dropped instead.
+    repaired, lines, asked = _mixed_run(monkeypatch, {"ollama": RuntimeError("down")})
+    assert lines[0] == "Bir dakika ekran ses eşleşmiyor."
+
+
+# ── Speech a TTS model adds after the line ───────────────
+def _words(*timed):
+    from types import SimpleNamespace
+    return [SimpleNamespace(word=w, start=s, end=e) for w, s, e in timed]
+
+
+def test_trailing_speech_is_found_after_the_lines_last_word():
+    heard = _words((" Bu", 0.0, 0.2), (" API", 0.3, 0.6), (" anahtarına", 0.7, 1.2),
+                   (" gerek", 1.3, 1.6), (" yoktur.", 1.7, 2.1), (" Bey", 2.5, 2.7),
+                   (" yer", 2.8, 3.0), (" mizakuyla.", 3.1, 3.6))
+    assert voxa._trailing_speech_cut(heard, "Bu API anahtarına gerek yoktur.") == \
+        (2.1, ["bey", "yer", "mizakuyla"])
+
+
+def test_a_line_said_again_counts_as_trailing_speech():
+    heard = _words((" ekrana", 0.0, 0.4), (" eşleşmiyor.", 0.5, 1.0),
+                   (" ekrana", 1.4, 1.8), (" eşleşmiyor.", 1.9, 2.4))
+    assert voxa._trailing_speech_cut(heard, "ekrana eşleşmiyor") == (1.0, ["ekrana", "eşleşmiyor"])
+
+
+def test_nothing_is_cut_without_a_clear_end():
+    clean = _words((" Merhaba", 0.0, 0.5), (" dünya.", 0.6, 1.1))
+    assert voxa._trailing_speech_cut(clean, "Merhaba dünya.") is None
+    # The ASR spelling a word differently, or missing one, still finds the end ...
+    slipped = _words((" Bu", 0.0, 0.2), (" yoktır", 0.3, 0.8), (" ve", 1.0, 1.2),
+                     (" sonra", 1.3, 1.6))
+    assert voxa._trailing_speech_cut(slipped, "Bu araç yoktur.") == (0.8, ["ve", "sonra"])
+    # ... but if the line's last word is never heard, nothing is cut on a guess.
+    lost = _words((" Bu", 0.0, 0.2), (" araç", 0.3, 0.8), (" başka", 1.0, 1.4))
+    assert voxa._trailing_speech_cut(lost, "Bu araç yoktur.") is None
+
+
+def test_cut_trailing_speech_shortens_the_clip(tmp_path):
+    import numpy as np
+    import soundfile as sf
+    clip = tmp_path / "line.wav"
+    sf.write(str(clip), (0.3 * np.ones(24000 * 3)).astype("float32"), 24000)
+
+    class _ASR:
+        def transcribe(self, path, language=None, word_timestamps=False):
+            from types import SimpleNamespace
+            words = _words((" Merhaba", 0.1, 0.9), (" dünya.", 1.0, 1.5), (" bla", 2.0, 2.6))
+            return [SimpleNamespace(words=words)], None
+
+    assert voxa._cut_trailing_speech(clip, "Merhaba dünya.", _ASR(), "tr", 0) is True
+    data, sr = sf.read(str(clip))
+    assert abs(len(data) / sr - 1.62) < 0.01          # the last word's end plus a short pad
+    assert abs(data[-1]) < 0.02                        # faded out, not clipped off

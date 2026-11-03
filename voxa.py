@@ -2309,6 +2309,58 @@ def translate_llm_batch(texts: List[str], target_lang: str, provider: str,
                                 p["chat"], api_key, batch_size, max_chars, style)
 
 
+# Letters of the scripts a translation can slip into by mistake, as Unicode ranges. Latin isn't
+# here: brand names, acronyms and code stay in Latin letters in any language.
+_SCRIPT_RANGES = {
+    "Cyrillic": ((0x0400, 0x052F),),
+    "Greek": ((0x0370, 0x03FF),),
+    "Armenian": ((0x0530, 0x058F),),
+    "Hebrew": ((0x0590, 0x05FF),),
+    "Arabic": ((0x0600, 0x06FF), (0x0750, 0x077F), (0xFB50, 0xFDFF), (0xFE70, 0xFEFF)),
+    "Devanagari": ((0x0900, 0x097F),),
+    "Bengali": ((0x0980, 0x09FF),),
+    "Thai": ((0x0E00, 0x0E7F),),
+    "Georgian": ((0x10A0, 0x10FF),),
+    "Hangul": ((0x1100, 0x11FF), (0x3130, 0x318F), (0xAC00, 0xD7AF)),
+    "Kana": ((0x3040, 0x30FF),),
+    "Han": ((0x3400, 0x4DBF), (0x4E00, 0x9FFF)),
+}
+# The scripts of those a language is written in. A language not listed is written in Latin.
+_LANGUAGE_SCRIPTS = {
+    **{code: {"Cyrillic"} for code in ("ru", "uk", "be", "bg", "sr", "mk", "kk", "ky", "tg",
+                                       "mn", "tt", "ba")},
+    "el": {"Greek"}, "hy": {"Armenian"}, "he": {"Hebrew"}, "yi": {"Hebrew"},
+    **{code: {"Arabic"} for code in ("ar", "fa", "ur", "ps", "ug", "sd")},
+    **{code: {"Devanagari"} for code in ("hi", "mr", "ne", "sa")},
+    "bn": {"Bengali"}, "th": {"Thai"}, "ka": {"Georgian"},
+    "ko": {"Hangul", "Han"}, "ja": {"Kana", "Han"}, "zh": {"Han"},
+}
+
+
+def _foreign_scripts(text: str, target_lang: str) -> List[str]:
+    """The scripts in `text` that `target_lang` isn't written in — Chinese characters an LLM
+    slipped into a Turkish line, say. A TTS can't read those as the target language. Pure."""
+    allowed = _LANGUAGE_SCRIPTS.get((target_lang or "")[:2].lower(), set())
+    found = []
+    for ch in text or "":
+        cp = ord(ch)
+        if cp < 0x0370:                              # ASCII and Latin, which never count
+            continue
+        for script, ranges in _SCRIPT_RANGES.items():
+            if script not in allowed and script not in found and \
+                    any(lo <= cp <= hi for lo, hi in ranges):
+                found.append(script)
+    return found
+
+
+def _strip_foreign_scripts(text: str, target_lang: str) -> str:
+    """`text` without letters of the scripts _foreign_scripts finds, spacing tidied. Pure."""
+    foreign = set(_foreign_scripts(text, target_lang))
+    kept = "".join(ch for ch in text if not any(
+        lo <= ord(ch) <= hi for script in foreign for lo, hi in _SCRIPT_RANGES[script]))
+    return re.sub(r"\s{2,}", " ", kept).strip()
+
+
 def _is_untranslated(source: str, output: Optional[str]) -> bool:
     """A translator that fails — a rate limit, an unreachable Ollama, a bad key — hands the source
     text back, so an empty or unchanged line counts as untranslated. Pure."""
@@ -2381,6 +2433,54 @@ def _apply_translation_fallback(texts: List[str], translated: List[str], args, l
     for idx, val in zip(failed, fb_out):
         if (val or "").strip():
             repaired[idx] = val
+    return repaired
+
+
+def _translate_line(text: str, translator: str, args) -> str:
+    """One line through one translator, the way the run translates (for a retry)."""
+    if translator in LLM_PROVIDERS:
+        return translate_llm_batch(
+            [text], args.target_lang, translator,
+            model=getattr(args, f"{translator}_model", None),
+            api_key=getattr(args, f"{translator}_api_key", None),
+            batch_size=1, style=getattr(args, "translation_prompt", None) or "")[0]
+    return translate_with_retry(text, args.target_lang, translator, args.ollama_model)
+
+
+def _repair_foreign_scripts(merged_segments: List[Dict], translated_segments: List[Dict],
+                            args, logger) -> int:
+    """Fix translated lines that contain letters of a script the target language isn't
+    written in (an LLM slipping Chinese into Turkish): translate the line again, then with
+    --fallback-translator, and if it's still mixed, drop the foreign letters so the voice
+    doesn't stumble over them. Changes translated_segments in place; returns how many lines
+    needed it."""
+    source = {(seg["start"], seg["end"]): seg["text"].strip() for seg in merged_segments}
+    retries = [args.translator] + [fb for fb in [getattr(args, "fallback_translator", None)]
+                                   if fb and fb != args.translator]
+    repaired = 0
+    for seg in translated_segments:
+        scripts = _foreign_scripts(seg.get("text", ""), args.target_lang)
+        src = source.get((seg["start"], seg["end"]))
+        if not scripts or not src:
+            continue
+        repaired += 1
+        logger.warning(f"⚠️  A translated line has {'/'.join(scripts)} letters, which "
+                       f"'{args.target_lang}' isn't written in: \"{seg['text'][:60]}\"")
+        for translator in retries:
+            try:
+                again = _translate_line(src, translator, args)
+            except Exception as e:
+                logger.debug(f"retranslating with {translator} failed: {e}")
+                continue
+            if (again or "").strip() and not _is_untranslated(src, again) and \
+                    not _foreign_scripts(again, args.target_lang):
+                seg["text"] = again.strip()
+                logger.info(f"   ✓ translated again with {translator}: \"{seg['text'][:60]}\"")
+                break
+        else:
+            seg["text"] = _strip_foreign_scripts(seg["text"], args.target_lang)
+            logger.warning(f"   still mixed after a retry; the {'/'.join(scripts)} letters "
+                           f"were dropped: \"{seg['text'][:60]}\"")
     return repaired
 
 
@@ -3256,7 +3356,7 @@ def _get_gate_asr(model_name: str = "tiny"):
     try:
         from faster_whisper import WhisperModel
     except ImportError:
-        _LOG.warning("Quality gate needs faster-whisper (pip install 'voxa[faster]'); "
+        _LOG.warning("Quality gate needs faster-whisper (pip install 'voxa-dub[faster]'); "
                         "scoring without ASR round-trip")
         return None
     device = "cuda" if (torch is not None and torch.cuda.is_available()) else "cpu"
@@ -3488,6 +3588,65 @@ async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
     return concat_list, temp_files
 
 
+def _similar_word(a: str, b: str) -> bool:
+    """Two normalized words are the same word, allowing for an ASR's spelling slips. Pure."""
+    if a == b:
+        return True
+    if min(len(a), len(b)) < 3:
+        return False
+    import difflib
+    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.75
+
+
+def _trailing_speech_cut(words, expected_text: str) -> Optional[Tuple[float, List[str]]]:
+    """Where to cut a clip that runs on after its line. Some models (Chatterbox) add a few
+    words once the line is over, or say part of it again. The ASR's words (each with .word,
+    .start and .end) are walked in order against the line's, allowing the ASR to miss a couple,
+    to find where the line's last word is said; if speech follows it, this returns that word's
+    end time and the extra words. None when the clip ends with the line — or when its end
+    can't be found, so nothing is cut on a guess. Pure."""
+    expected = _normalize_for_compare(expected_text).split()
+    heard = [(token, w.end) for w in words
+             if (token := _normalize_for_compare(getattr(w, "word", "")))]
+    if not expected or not heard:
+        return None
+    j = 0
+    for i, (token, end) in enumerate(heard):
+        for k in range(j, min(j + 3, len(expected))):
+            if _similar_word(token, expected[k]):
+                j = k + 1
+                break
+        if j == len(expected):
+            extra = [t for t, _ in heard[i + 1:]]
+            return (end, extra) if extra else None
+    return None
+
+
+def _cut_trailing_speech(path: Path, text: str, asr_model, lang: str, index: int) -> bool:
+    """Cut what a TTS model said after `text` from the clip at `path` (see
+    _trailing_speech_cut), keeping a short pad and fading out. True when it cut."""
+    try:
+        segments, _ = asr_model.transcribe(str(path), language=lang, word_timestamps=True)
+        words = [w for seg in segments for w in (seg.words or [])]
+    except Exception as e:
+        _LOG.debug(f"trailing-speech check failed for segment {index}: {e}")
+        return False
+    cut = _trailing_speech_cut(words, text)
+    if cut is None:
+        return False
+    end, extra = cut
+    data, sr = sf.read(str(path), dtype="float32")
+    clip = data[:min(len(data), int((end + 0.12) * sr))]
+    fade = min(len(clip), int(0.03 * sr))
+    if fade:
+        ramp = np.linspace(1.0, 0.0, fade, dtype="float32")
+        clip[-fade:] *= ramp[:, None] if clip.ndim > 1 else ramp
+    sf.write(str(path), clip, sr, subtype="PCM_16")
+    _LOG.info(f"✂️  segment {index}: cut {len(data) / sr - len(clip) / sr:.1f}s said after "
+              f"the line ended (\"{' '.join(extra)[:60]}\")")
+    return True
+
+
 def _chatterbox_problems(target_lang: str) -> List[str]:
     """Why Chatterbox can't dub into `target_lang` here, if it can't: it runs in an
     environment of its own (voxa engines install chatterbox) and covers 23 languages."""
@@ -3522,6 +3681,15 @@ async def generate_chatterbox(subs, speaker_wav: str, lang_code: str, concat_lis
         raise TTSError(f"❌ {e}") from e
     sample_rate = info["sample_rate"]
     _LOG.info(f"🎙️  Chatterbox on {info['device']}, cloning from: {speaker_wav}")
+    # Chatterbox sometimes keeps talking after the line. A word-timed transcript of each clip
+    # finds where the line ends so the rest can be cut — the quality gate's ASR if it is on,
+    # else a small one of its own. It takes a second or two, against tens for the synthesis.
+    trail_asr = asr_model
+    if trail_asr is None and _has_module("faster_whisper"):
+        trail_asr = await asyncio.to_thread(_get_gate_asr, "small")
+    if trail_asr is None:
+        _LOG.info("ℹ️  Speech Chatterbox adds after a line can't be cut without faster-whisper: "
+                  + _install_hint("faster"))
 
     def _render(i, text, final_file, target_duration):
         raw_file = work_dir / f"cbx_raw_{i}.wav"
@@ -3536,6 +3704,8 @@ async def generate_chatterbox(subs, speaker_wav: str, lang_code: str, concat_lis
             return False
         if not _has_content(raw_file, 1000):
             return False
+        if trail_asr is not None:
+            _cut_trailing_speech(raw_file, text, trail_asr, lang_code, i)
         temp_files.append(str(raw_file))
         return _fit_to_window(raw_file, final_file, target_duration, work_dir,
                               sample_rate, enable_stretch)
@@ -3792,6 +3962,7 @@ async def process_video(video_path: str, args, logger: Logger):
                 translated_segments.append(
                     {'text': translated, 'start': seg['start'], 'end': seg['end'],
                      **({'speaker': seg['speaker']} if 'speaker' in seg else {})})
+        _repair_foreign_scripts(merged_segments, translated_segments, args, logger)
         # A failing translator returns the source text, which would otherwise be spoken and
         # reported as a finished dub in the wrong language. Stop before anything is cached,
         # so a re-run tries the translation again.

@@ -330,7 +330,8 @@ voxa doctor --deep     # asılılıq yeniləmələrində sınan XTTS və pyannot
 > altında ayrıca mühitə qoyur; heç nə toqquşmur, `voxa engines remove chatterbox` isə onu silir.
 > Konsolun **Modellər** səhifəsi eyni işi bir kliklə görür. Noutbuk CPU-sunda hər cümlə 40–60
 > saniyə çəkdi, yəni burada GPU həlledicidir; yaratdığı hər klipdə Resemble AI-ın eşidilməyən
-> PerTh su nişanı var.
+> PerTh su nişanı var. faster-whisper quraşdırılıbsa, Voxa Chatterbox-un bəzən sətrin sonuna
+> əlavə etdiyi sözləri də kəsir.
 
 **4. GPU sürətləndirmə** — opsional, yalnız NVIDIA.
 

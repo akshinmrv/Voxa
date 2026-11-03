@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seconds a sentence; a 45-second clip took 11 minutes to dub, so a GPU matters. Every clip
   carries Resemble AI's inaudible PerTh watermark. `voxa doctor`, `--dry-run` and the job form
   say when it isn't installed or doesn't speak the language, before a run starts.
+- **Speech a voice model adds after a line is cut.** Chatterbox sometimes keeps talking once
+  a line is over — a few made-up words, or part of the line again. Each clip is transcribed
+  with word timings (by the quality gate's ASR, or a small faster-whisper model of its own) to
+  find where the line ends, and what follows is cut with a short fade. On the clip where it
+  happened, the line's character error went from 19% to 0 with every word kept; the four
+  clean clips were left as they were.
 - **A one-line installer.** `irm https://voxa.servoogle.com/install.ps1 | iex` on Windows,
   `curl -fsSL https://voxa.servoogle.com/install.sh | sh` on macOS and Linux. It needs no
   Python beforehand: uv installs Voxa and its console into an environment of their own, with
@@ -55,6 +61,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A translation with letters of another script is caught.** An LLM can slip a word in
+  another script into a line — Ollama's llama3 put Chinese characters into a Turkish one —
+  and the voice then stumbles over it. Such a line is now translated again, then with
+  `--fallback-translator`, and if it's still mixed the foreign letters are dropped; the log
+  says which line and what happened. Latin letters always pass, since brand names and
+  acronyms keep them in any language. On that Turkish dub, one retry gave a clean line.
 - **Piper wasn't found in a pipx install on Windows.** Its binary isn't on PATH there, and
   Voxa looked next to Python for `piper` while the file is `piper.exe`.
 - **The install hint for `voxa serve` named the wrong package.** Without the `[serve]` extra

@@ -342,7 +342,8 @@ voxa doctor --deep     # also loads XTTS and pyannote, which break on dependency
 > `~/.voxa/engines` instead of next to Voxa; nothing clashes, and `voxa engines remove
 > chatterbox` deletes it. The console's **Models** page does the same with a click. On a laptop
 > CPU it took 40–60 seconds per sentence, so a GPU makes the difference here; every clip it
-> makes carries Resemble AI's inaudible PerTh watermark.
+> makes carries Resemble AI's inaudible PerTh watermark. With faster-whisper installed, Voxa
+> also cuts the words Chatterbox sometimes adds after a line.
 
 **4. GPU acceleration** — optional, NVIDIA only.
 

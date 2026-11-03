@@ -332,7 +332,8 @@ voxa doctor --deep     # bağımlılık güncellemelerinde bozulan XTTS ve pyann
 > altında ayrı bir ortama kurar; hiçbir şey çakışmaz ve `voxa engines remove chatterbox` onu
 > siler. Konsolun **Modeller** sayfası aynısını tek tıkla yapar. Bir dizüstü CPU'sunda cümle
 > başına 40–60 saniye sürdü, yani burada GPU belirleyicidir; ürettiği her klipte Resemble AI'ın
-> duyulmayan PerTh filigranı vardır.
+> duyulmayan PerTh filigranı vardır. faster-whisper kuruluysa, Voxa Chatterbox'ın bazen satırın
+> sonuna eklediği sözcükleri de keser.
 
 **4. GPU hızlandırma** — isteğe bağlı, yalnızca NVIDIA.
 
