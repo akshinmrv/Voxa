@@ -879,6 +879,8 @@ def _detect_pacing_conflicts(style: str) -> List[str]:
 # Self-hosted speech servers (by base URL) that rejected the `language` field: it is not sent
 # to them again, so a strict server costs one extra request per run, not one per line.
 _TTS_LANGUAGE_REJECTED: set = set()
+# Self-hosted servers that refused a request for want of a key, told so once (see below).
+_TTS_KEY_HINTED: set = set()
 
 
 def _openai_speech_create(client, kwargs, max_retries: int = 5):
@@ -916,6 +918,12 @@ def _openai_speech_create(client, kwargs, max_retries: int = 5):
                 time.sleep(backoff + random.uniform(0, 1))
                 backoff = min(backoff * 2, 30)
                 continue
+            if getattr(e, "status_code", None) in (401, 403) and \
+                    "api.openai.com" not in server and server not in _TTS_KEY_HINTED:
+                _TTS_KEY_HINTED.add(server)
+                _LOG.warning(f"⚠️  {server or 'The speech server'} wants a key. OPENAI_API_KEY "
+                             f"isn't sent to a self-hosted server; set OPENAI_TTS_API_KEY "
+                             f"(or --openai-tts-api-key) to the key it expects")
             raise
 
 
@@ -1831,7 +1839,8 @@ def get_openai_client(api_key: Optional[str] = None, base_url: Optional[str] = N
     Clients are cached per (api_key, base_url). The previous single global instance meant
     the first caller won: once translation had built a client, speech could not point at a
     different endpoint or use a different key. `base_url` targets any OpenAI-compatible
-    server; such servers usually ignore the key, so one is not required in that case.
+    server; such servers usually ignore the key, so one is not required in that case — and
+    OPENAI_API_KEY is never sent to one: a server at `base_url` gets `api_key` or nothing.
     """
     try:
         from openai import OpenAI
@@ -1839,8 +1848,8 @@ def get_openai_client(api_key: Optional[str] = None, base_url: Optional[str] = N
         _LOG.error("❌ 'openai' package not installed. Run: pip install openai")
         return None
 
-    key = api_key or os.environ.get("OPENAI_API_KEY")
     url = base_url or None
+    key = api_key or (None if url else os.environ.get("OPENAI_API_KEY"))
     if not key and not url:
         _LOG.error("❌ OpenAI API key not found. "
                    "Set the OPENAI_API_KEY environment variable or pass --openai_api_key")
@@ -2091,7 +2100,7 @@ LLM_PROVIDERS: Dict[str, Dict] = {
     "anthropic": {"chat": _anthropic_chat_text, "default_model": DEFAULT_ANTHROPIC_MODEL,
                   "env_key": "ANTHROPIC_API_KEY"},
     "openrouter": {"chat": _openrouter_chat_text, "default_model": DEFAULT_OPENROUTER_MODEL,
-                   "env_key": "OPENROUTER_API_KEY"},
+                   "env_key": "OPENROUTER_API_KEY", "base_url": OPENROUTER_BASE_URL},
 }
 
 
@@ -3547,9 +3556,18 @@ async def _tts_xtts(subs, args, work_dir, video_path, gate_asr, logger):
     return concat_list, temp_files
 
 
+def _speech_api_key(args, base_url: Optional[str]) -> Optional[str]:
+    """The key speech requests carry. OpenAI's key goes to OpenAI only: a server at
+    --openai-tts-base-url gets --openai-tts-api-key (OPENAI_TTS_API_KEY) or no key, since
+    OPENAI_API_KEY there would hand a paid key to whatever answers at that address."""
+    if base_url:
+        return getattr(args, "openai_tts_api_key", None) or None
+    return getattr(args, "openai_api_key", None)
+
+
 async def _tts_openai(subs, args, work_dir, video_path, gate_asr, logger):
     base_url = getattr(args, "openai_tts_base_url", None)
-    client = get_openai_client(args.openai_api_key, base_url)
+    client = get_openai_client(_speech_api_key(args, base_url), base_url)
     if client is None:
         raise TTSError("OpenAI TTS requires an API key (OPENAI_API_KEY or --openai_api_key), "
                        "or an --openai-tts-base-url pointing at a compatible server")
@@ -4248,8 +4266,12 @@ Examples:
                         help="Send speech requests to an OpenAI-compatible server instead of "
                              "OpenAI (e.g. http://localhost:8004/v1 for Chatterbox-TTS-Server, "
                              "http://127.0.0.1:3900/v1 for VoiceStudio, or LocalAI). The target "
-                             "language is sent with each request. No API key is required. "
-                             "Translation still uses OpenAI unless you change --translator")
+                             "language is sent with each request. Your OpenAI key isn't: see "
+                             "--openai-tts-api-key. Translation still uses OpenAI unless you "
+                             "change --translator")
+    parser.add_argument("--openai-tts-api-key", default=os.environ.get("OPENAI_TTS_API_KEY"),
+                        help="Key for the --openai-tts-base-url server, if it wants one "
+                             "(default: OPENAI_TTS_API_KEY). OPENAI_API_KEY is never sent there")
     parser.add_argument("--openai-tts-instructions", default="",
                         help="Speech style for gpt-4o-mini-tts (e.g. 'warm and reassuring; "
                              "documentary tone'). Voxa always appends a locked timing guard "
@@ -4713,7 +4735,9 @@ def doctor_checks(online: bool = False, deep: bool = False) -> List[DoctorCheck]
         "" if edge_tts is not None else _reinstall_hint())
     server = os.environ.get("OPENAI_TTS_BASE_URL")
     if server:
-        add("Speech", "OpenAI", "ok", f"self-hosted server: {server}")
+        sent = ("OPENAI_TTS_API_KEY is sent to it" if os.environ.get("OPENAI_TTS_API_KEY")
+                else "no key is sent to it")
+        add("Speech", "OpenAI", "ok", f"self-hosted server: {server}; {sent}")
     elif os.environ.get("OPENAI_API_KEY"):
         add("Speech", "OpenAI", "ok", "OPENAI_API_KEY is set")
     else:

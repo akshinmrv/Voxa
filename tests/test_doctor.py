@@ -17,7 +17,7 @@ import voxa
 import voxa_ui
 
 KEYS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "HF_TOKEN",
-        "HUGGINGFACE_TOKEN", "OPENAI_TTS_BASE_URL")
+        "HUGGINGFACE_TOKEN", "OPENAI_TTS_BASE_URL", "OPENAI_TTS_API_KEY")
 
 
 @pytest.fixture
@@ -79,6 +79,22 @@ def test_keys_are_reported_but_never_shown(machine, monkeypatch, capsys):
     assert checks[("Translation", "OpenAI")]["status"] == "ok"
     assert checks[("Speech", "OpenAI")]["detail"] == "OPENAI_API_KEY is set"
     assert "sk-test-secret-123" not in out
+
+
+def test_a_self_hosted_speech_server_is_reported_with_the_key_it_gets(machine, monkeypatch,
+                                                                     capsys):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-secret-123")
+    monkeypatch.setenv("OPENAI_TTS_BASE_URL", "http://127.0.0.1:3900/v1")
+    for server_key, detail in ((None, "no key is sent to it"),
+                               ("srv-secret-456", "OPENAI_TTS_API_KEY is sent to it")):
+        if server_key:
+            monkeypatch.setenv("OPENAI_TTS_API_KEY", server_key)
+        voxa.doctor_cli(["--json", "--env-file", machine.env_file])
+        out = capsys.readouterr().out
+        speech = {c["name"]: c for c in json.loads(out) if c["section"] == "Speech"}
+        assert speech["OpenAI"]["detail"] == \
+            f"self-hosted server: http://127.0.0.1:3900/v1; {detail}"
+        assert "secret" not in out
 
 
 def test_install_hints_match_how_voxa_was_installed(monkeypatch):

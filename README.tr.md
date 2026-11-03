@@ -437,7 +437,9 @@ voxa video.mp4 --target_lang az --tts openai \
 ```
 
 > [!NOTE]
-> Kendi sunucunuz her satırla birlikte hedef dili de alır, böylece çok dilli bir model doğru dilde
+> `OPENAI_API_KEY` kendi sunucunuza asla gönderilmez; sunucu kendi anahtarını istiyorsa
+> `OPENAI_TTS_API_KEY` ayarlayın. Kendi sunucunuz her satırla birlikte hedef dili de alır, böylece
+> çok dilli bir model doğru dilde
 > konuşur. Dublajla ne yapabileceğinizi sunucunun modeli belirler: VoiceStudio'nun varsayılan
 > modeli OmniVoice Azerbaycanca konuşur ama ticari değildir, Chatterbox ise MIT'tir — bkz.
 > [NOTICE](NOTICE.md#46-self-hosted-speech-servers). CPU'da yavaştır: VoiceStudio ve OmniVoice ile

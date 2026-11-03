@@ -472,7 +472,9 @@ voxa video.mp4 --target_lang az --tts openai \
 ```
 
 > [!NOTE]
-> A self-hosted server gets the target language with every line, so a multilingual model speaks
+> Your `OPENAI_API_KEY` is never sent to a self-hosted server; if it wants a key of its
+> own, set `OPENAI_TTS_API_KEY`. A self-hosted server gets the target language with every
+> line, so a multilingual model speaks
 > the right one. The server's model decides what you may do with the dub: VoiceStudio's default,
 > OmniVoice, speaks Azerbaijani but is non-commercial, while Chatterbox is MIT — see
 > [NOTICE](NOTICE.md#46-self-hosted-speech-servers). On a CPU it is slow: through VoiceStudio and

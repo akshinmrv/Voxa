@@ -656,8 +656,10 @@ def advanced_timing_args(settings: dict) -> List[str]:
 
 
 def test_provider(pid: str) -> dict:
-    """Connection test for one LLM provider: a cheap, no-token models.list() call that
-    only checks the key is valid and the endpoint is reachable. Never raises."""
+    """Connection test for one LLM provider: a cheap, no-token call that only checks the
+    key is valid and the endpoint is reachable — models.list(), or for OpenRouter, whose
+    model list is public, its key endpoint. The key goes to its own provider's host only.
+    Never raises."""
     info = voxa.LLM_PROVIDERS.get(pid)
     if not info:
         return {"ok": False, "error": f"Unknown provider: {pid}"}
@@ -666,11 +668,14 @@ def test_provider(pid: str) -> dict:
     try:
         key = os.environ[info["env_key"]]
         client = (voxa.get_anthropic_client(key) if pid == "anthropic"
-                  else voxa.get_openai_client(key))
+                  else voxa.get_openai_client(key, info.get("base_url")))
         if client is None:
             return {"ok": False, "error": "Client unavailable (provider package missing?)."}
         started = time.perf_counter()
-        client.models.list()
+        if pid == "openrouter":
+            client.get("/key", cast_to=object)
+        else:
+            client.models.list()
         return {"ok": True, "latencyMs": int((time.perf_counter() - started) * 1000)}
     except Exception as exc:  # noqa: BLE001 — surface any auth/network error to the UI
         return {"ok": False, "error": str(exc)[:300]}

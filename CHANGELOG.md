@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Your OpenAI key is no longer sent to a self-hosted speech server.** With
+  `--openai-tts-base-url` set, speech requests carried `OPENAI_API_KEY` to that address — to
+  the server you meant, or to whatever else answers there. Such a server now gets no key, or
+  `OPENAI_TTS_API_KEY` (`--openai-tts-api-key`) if it wants one of its own; one that refuses a
+  request for want of a key is told once which variable to set, and `voxa doctor` says which
+  key the server gets. Checked with a local server that records each request's header: 1.11.0
+  sent it the OpenAI key; now it receives none, or the server key when one is set.
+
+### Fixed
+
+- **The console's connection test for OpenRouter asked OpenAI.** It sent the OpenRouter key to
+  api.openai.com, which refused it, so the test failed whatever the key. It now asks OpenRouter
+  — on its key endpoint, since OpenRouter's model list answers any key.
+
 ## [1.11.0] - 2026-11-03
 
 ### Added

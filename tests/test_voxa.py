@@ -1163,6 +1163,56 @@ def test_openai_speech_create_keeps_the_language_when_the_line_itself_fails(monk
     assert voxa._TTS_LANGUAGE_REJECTED == set()
 
 
+# ── Each key goes to its own host ────────────────────────
+def test_openai_key_is_not_sent_to_a_self_hosted_speech_server(monkeypatch):
+    # OPENAI_API_KEY (or --openai_api_key) is OpenAI's; a server at --openai-tts-base-url
+    # gets OPENAI_TTS_API_KEY, or nothing.
+    import asyncio
+    from types import SimpleNamespace
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    sent = []
+
+    def _factory(api_key=None, base_url=None):
+        sent.append(api_key)
+        return None                            # short-circuit into TTSError
+
+    monkeypatch.setattr(voxa, "get_openai_client", _factory)
+    for base_url, server_key in (("http://127.0.0.1:3900/v1", None),
+                                 ("http://127.0.0.1:3900/v1", "srv-key"), (None, None)):
+        args = SimpleNamespace(openai_api_key="sk-flag", openai_tts_base_url=base_url,
+                               openai_tts_api_key=server_key)
+        with pytest.raises(voxa.TTSError):
+            asyncio.run(voxa._tts_openai(None, args, None, None, None, _fake_logger()))
+    assert sent == [None, "srv-key", "sk-flag"]
+
+
+def test_openai_client_for_another_endpoint_never_takes_the_env_key(monkeypatch):
+    monkeypatch.setattr(voxa, "_openai_clients", {})
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    local = voxa.get_openai_client(None, "http://localhost:8004/v1")
+    assert local.api_key == "not-needed"
+    assert voxa.get_openai_client(None).api_key == "sk-openai"
+    assert voxa.get_openai_client("srv-key", "http://localhost:8004/v1").api_key == "srv-key"
+
+
+def test_a_server_that_wants_a_key_says_which_variable_to_set(monkeypatch, caplog):
+    monkeypatch.setattr(voxa, "_TTS_KEY_HINTED", set())
+
+    def _create(**kw):
+        raise _StatusError(401)
+
+    for _ in range(2):
+        with pytest.raises(_StatusError):
+            voxa._openai_speech_create(_speech_client(_create), {"input": "x"})
+    hints = [r for r in caplog.records if "OPENAI_TTS_API_KEY" in r.getMessage()]
+    assert len(hints) == 1                     # once per server, not once per line
+    caplog.clear()
+    with pytest.raises(_StatusError):          # OpenAI's own 401 is about OPENAI_API_KEY
+        voxa._openai_speech_create(_speech_client(_create, "https://api.openai.com/v1/"),
+                                   {"input": "x"})
+    assert not [r for r in caplog.records if "OPENAI_TTS_API_KEY" in r.getMessage()]
+
+
 # ── A2 T1: LLM-inferred per-line delivery ────────────────
 def test_parse_delivery_json_valid():
     assert voxa._parse_delivery_json('{"deliveries": ["warm", "", "urgent"]}', 3) == \

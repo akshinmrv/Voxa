@@ -436,7 +436,9 @@ voxa video.mp4 --target_lang az --tts openai \
 ```
 
 > [!NOTE]
-> Öz serveriniz hər sətirlə hədəf dili də alır, ona görə çoxdilli model düzgün dildə danışır.
+> `OPENAI_API_KEY` öz serverinizə heç vaxt göndərilmir; serverin öz açarı lazımdırsa,
+> `OPENAI_TTS_API_KEY` təyin edin. Öz serveriniz hər sətirlə hədəf dili də alır, ona görə çoxdilli
+> model düzgün dildə danışır.
 > Dublyajla nə edə biləcəyinizi serverin modeli müəyyən edir: VoiceStudio-nun default modeli
 > OmniVoice azərbaycanca danışır, amma qeyri-kommersiyadır, Chatterbox isə MIT-dir — bax:
 > [NOTICE](NOTICE.md#46-self-hosted-speech-servers). CPU-da yavaşdır: VoiceStudio və OmniVoice

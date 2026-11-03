@@ -181,6 +181,24 @@ def test_test_provider_no_key(store):
     assert "key" in result["error"].lower()
 
 
+def test_test_provider_sends_the_openrouter_key_to_openrouter(store, monkeypatch):
+    # It used to go to api.openai.com, which refused it, so the test always failed. And
+    # OpenRouter's model list is public, so the key is tried on its key endpoint instead.
+    from types import SimpleNamespace
+    seen = {}
+
+    def _factory(api_key=None, base_url=None):
+        seen["base_url"] = base_url
+        models = SimpleNamespace(list=lambda: seen.setdefault("path", "models"))
+        return SimpleNamespace(get=lambda path, cast_to: seen.setdefault("path", path),
+                               models=models)
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    monkeypatch.setattr(srv.voxa, "get_openai_client", _factory)
+    assert srv.test_provider("openrouter")["ok"] is True
+    assert seen == {"base_url": srv.voxa.OPENROUTER_BASE_URL, "path": "/key"}
+
+
 def test_build_options_exposes_default_model():
     translators = {t["id"]: t for t in srv.build_options()["translators"]}
     assert translators["openai"]["defaultModel"] == voxa_default_model("openai")
