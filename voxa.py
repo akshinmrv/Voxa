@@ -3127,6 +3127,26 @@ def normalize_audio(input_file: str, output_file: str, target_level: float = -20
         return False
 
 
+# Microsoft's Edge speech service refuses (403) requests from edge-tts releases that haven't
+# caught up with its latest change, which 7.3.0 did in October 2026. Said once per run.
+_EDGE_REFUSED_HINTED = False
+
+
+def _edge_refused_hint(error: Exception) -> None:
+    global _EDGE_REFUSED_HINTED
+    if "403" not in str(error) or _EDGE_REFUSED_HINTED:
+        return
+    _EDGE_REFUSED_HINTED = True
+    try:
+        from importlib.metadata import version
+        installed = f"this is edge-tts {version('edge-tts')}"
+    except Exception:
+        installed = "this edge-tts may be older"
+    _LOG.warning(f"⚠️  Microsoft refused the request (403). Its speech service turns away older "
+                 f"edge-tts releases; {installed}, and 7.3.1 or newer works. Upgrade it: "
+                 f"{_upgrade_hint('edge-tts>=7.3.1')}")
+
+
 async def generate_tts_edge(text: str, voice: str, output_file: str,
                             emotion: Optional[str] = None,
                             rate: str = "+0%",
@@ -3142,6 +3162,7 @@ async def generate_tts_edge(text: str, voice: str, output_file: str,
         _LOG.warning("Edge TTS produced an empty file; retrying")
     except Exception as e:
         _LOG.error(f"Edge TTS failed: {e}")
+        _edge_refused_hint(e)
     # Retry once without the emotion style (also covers the empty-output case).
     try:
         communicate = edge_tts.Communicate(text, voice, rate=rate)
@@ -4584,6 +4605,18 @@ def _reinstall_hint() -> str:
     if _in_pipx():
         return "pipx reinstall voxa-dub"
     return f'"{sys.executable}" -m pip install --force-reinstall voxa-dub'
+
+
+def _upgrade_hint(requirement: str) -> str:
+    """The command that upgrades one dependency inside *this* install. uv re-resolves the
+    tool's whole environment with --upgrade, so it is named by the tool, not the package."""
+    uv_extras = _uv_tool_extras()
+    if uv_extras is not None:
+        extras = f"[{','.join(sorted(uv_extras))}]" if uv_extras else ""
+        return f'uv tool install --upgrade "voxa-dub{extras}"'
+    if _in_pipx():
+        return f'pipx runpip voxa-dub install --upgrade "{requirement}"'
+    return f'"{sys.executable}" -m pip install --upgrade "{requirement}"'
 
 
 def _ffmpeg_hint() -> str:

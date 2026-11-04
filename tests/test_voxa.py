@@ -1732,6 +1732,23 @@ def test_check_input_videos(tmp_path, capsys):
     assert "not found" in out and "empty" in out and "not a file" in out
 
 
+def test_edge_says_how_to_upgrade_when_microsoft_refuses_it(monkeypatch, caplog, tmp_path):
+    # Microsoft's service answers 403 to an edge-tts that hasn't caught up with it.
+    class _Refused:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def save(self, path):
+            raise Exception("403, message='Invalid response status'")
+
+    monkeypatch.setattr(voxa, "edge_tts", SimpleNamespace(Communicate=_Refused))
+    monkeypatch.setattr(voxa, "_EDGE_REFUSED_HINTED", False)
+    for _ in range(2):
+        assert asyncio.run(voxa.generate_tts_edge("x", "v", str(tmp_path / "o.mp3"))) is False
+    hints = [r.getMessage() for r in caplog.records if "edge-tts>=7.3.1" in r.getMessage()]
+    assert len(hints) == 1                     # once per run, not once per line
+
+
 def test_check_external_tools_reports_missing_ffmpeg(monkeypatch, capsys):
     monkeypatch.setattr(voxa.shutil, "which", lambda name: None)
     assert voxa._check_external_tools() is False

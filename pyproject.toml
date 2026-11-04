@@ -36,7 +36,9 @@ classifiers = [
 # torch is listed explicitly because voxa imports it, but openai-whisper requires it too.
 dependencies = [
     "openai-whisper",
-    "edge-tts>=7.0",
+    # Microsoft's service refuses (403) what older releases send; 7.3.0 added the token it
+    # asks for since October 2026, and 7.3.1 fixed the date parsing on non-English locales.
+    "edge-tts>=7.3.1",
     "deep-translator",
     "openai",
     "tqdm",

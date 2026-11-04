@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The console's connection test for OpenRouter asked OpenAI.** It sent the OpenRouter key to
   api.openai.com, which refused it, so the test failed whatever the key. It now asks OpenRouter
   — on its key endpoint, since OpenRouter's model list answers any key.
+- **Edge speaks again on installs with an older edge-tts.** Microsoft's service now refuses
+  (403) every request from edge-tts before 7.3.0, which added the token it asks for, so the
+  default engine made no speech at all. Voxa needs edge-tts 7.3.1 or newer — upgrading Voxa
+  brings it — and when Microsoft refuses one anyway, the log names the installed version and
+  the command that upgrades it. Checked on one machine, minutes apart: 7.2.8 got a 403 every
+  time, 7.3.0 and 7.3.1 spoke.
 
 ## [1.11.0] - 2026-11-03
 
