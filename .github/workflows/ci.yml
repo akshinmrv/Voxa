@@ -28,7 +28,8 @@ jobs:
 
   test:
     name: pytest (py${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: since it became 26.04, setup-python has no Python 3.9 for it.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
