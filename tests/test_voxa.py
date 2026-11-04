@@ -1732,6 +1732,23 @@ def test_check_input_videos(tmp_path, capsys):
     assert "not found" in out and "empty" in out and "not a file" in out
 
 
+def test_ollama_is_reached_where_ollama_host_says(monkeypatch):
+    # Ollama's own convention; in a container it is how Voxa finds Ollama on the host.
+    for value, expected in ((None, "http://localhost:11434"),
+                            ("", "http://localhost:11434"),
+                            ("http://host.docker.internal:11434", "http://host.docker.internal:11434"),
+                            ("host.docker.internal", "http://host.docker.internal:11434"),
+                            ("192.168.1.5:8080", "http://192.168.1.5:8080"),
+                            ("https://ollama.example.com/", "https://ollama.example.com:11434"),
+                            ("0.0.0.0", "http://127.0.0.1:11434"),   # where it listens
+                            ("[::1]:11434", "http://[::1]:11434")):
+        if value is None:
+            monkeypatch.delenv("OLLAMA_HOST", raising=False)
+        else:
+            monkeypatch.setenv("OLLAMA_HOST", value)
+        assert voxa._ollama_url("/api/tags") == expected + "/api/tags", value
+
+
 def test_a_silent_video_is_explained_not_failed_on():
     # No audio track: without subtitles there's nothing to transcribe; with them the video
     # can be voiced, except by an engine that would clone the voice from that audio.

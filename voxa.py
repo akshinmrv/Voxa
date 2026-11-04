@@ -1830,8 +1830,28 @@ def translate_with_retry(text: str, target_lang: str, translator_type: str,
         return text
 
 
+def _ollama_url(path: str) -> str:
+    """Where Ollama answers: OLLAMA_HOST, as Ollama's own tools read it ("host", "host:port"
+    or a URL), else localhost:11434. In a container that is how it reaches Ollama on the host
+    (OLLAMA_HOST=http://host.docker.internal:11434). A wildcard is where the server listens,
+    not an address to call, so it means this machine."""
+    from urllib.parse import urlsplit
+    host = (os.environ.get("OLLAMA_HOST") or "").strip().rstrip("/") or "localhost:11434"
+    parts = urlsplit(host if "://" in host else f"http://{host}")
+    name = parts.hostname or "127.0.0.1"
+    if name in ("0.0.0.0", "::"):
+        name = "127.0.0.1"
+    try:
+        port = parts.port or 11434
+    except ValueError:
+        port = 11434
+    if ":" in name:                                   # an IPv6 literal
+        name = f"[{name}]"
+    return f"{parts.scheme}://{name}:{port}{path}"
+
+
 def translate_ollama(text: str, target_lang: str, model_name: str) -> str:
-    url = "http://localhost:11434/api/generate"
+    url = _ollama_url("/api/generate")
     full_lang = LANG_MAP.get(target_lang.lower(), target_lang)
     prompt = (
         f"Translate the following text into {full_lang}. "
@@ -4691,9 +4711,9 @@ def _tool_version(cmd: str) -> str:
 
 
 def _ollama_models(timeout: float = 2.0) -> Optional[List[str]]:
-    """The models the local Ollama server has, or None when it isn't running."""
+    """The models the Ollama server has, or None when it isn't running."""
     try:
-        with urllib.request.urlopen("http://localhost:11434/api/tags", timeout=timeout) as r:
+        with urllib.request.urlopen(_ollama_url("/api/tags"), timeout=timeout) as r:
             return [m.get("name", "") for m in json.loads(r.read()).get("models", [])]
     except Exception:
         return None
@@ -4794,8 +4814,9 @@ def doctor_checks(online: bool = False, deep: bool = False) -> List[DoctorCheck]
     # ── Translation ──
     add("Translation", "Google", "ok", "free, no key; needs the internet")
     models = _ollama_models()
+    where = "" if not os.environ.get("OLLAMA_HOST") else f" at {_ollama_url('')}"
     if models is None:
-        add("Translation", "Ollama", "off", "not running (local, offline translation)",
+        add("Translation", "Ollama", "off", f"not running{where} (local, offline translation)",
             "install it from ollama.com, then: ollama pull llama3")
     elif models:
         add("Translation", "Ollama", "ok", "running — " + ", ".join(models[:4]))

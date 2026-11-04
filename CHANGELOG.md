@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Ollama wherever `OLLAMA_HOST` says.** Voxa called Ollama on localhost:11434 only, which
+  inside a container is the container itself. It now reads `OLLAMA_HOST` as Ollama's own tools
+  do (`host`, `host:port` or a URL), so `-e OLLAMA_HOST=http://host.docker.internal:11434`
+  reaches Ollama on the host; `voxa doctor` says where it looked.
+
 ## [1.11.1] - 2026-11-04
 
 ### Security
