@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-11-04
+
 ### Security
 
 - **Your OpenAI key is no longer sent to a self-hosted speech server.** With
@@ -476,7 +478,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.11.1...HEAD
+[1.11.1]: https://github.com/akshinmrv/Voxa/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/akshinmrv/Voxa/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/akshinmrv/Voxa/compare/v1.9.1...v1.10.0
 [1.9.1]: https://github.com/akshinmrv/Voxa/compare/v1.9.0...v1.9.1
