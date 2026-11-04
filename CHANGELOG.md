@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   brings it — and when Microsoft refuses one anyway, the log names the installed version and
   the command that upgrades it. Checked on one machine, minutes apart: 7.2.8 got a 403 every
   time, 7.3.0 and 7.3.1 spoke.
+- **A video with no audio track is explained, and can be voiced.** It used to stop at step 1
+  on ffmpeg's "Output file does not contain any stream". Now the run, and `--dry-run`, say
+  before anything is made that there is no speech to transcribe, and point to `--subtitles`:
+  with a script, a silent screen recording is voiced and the dub becomes its only track. A
+  cloning engine asks for `--voice-sample` there, since there is no voice to copy.
 
 ## [1.11.0] - 2026-11-03
 

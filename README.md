@@ -453,6 +453,9 @@ voxa video.mp4 --target_lang es --subtitles-only
 # Dub from an existing SRT — skip Whisper (hand-corrected captions, or subtitles you already have)
 voxa video.mp4 --target_lang de --subtitles captions.srt
 
+# ...which also voices a video with no sound at all, such as a screen recording
+voxa screencast.mp4 --target_lang de --subtitles script.srt
+
 # Give every speaker their own voice (interviews, podcasts) — needs a Hugging Face token
 voxa video.mp4 --target_lang de --diarize --num-speakers 2 --hf-token hf_...
 

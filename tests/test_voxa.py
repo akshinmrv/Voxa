@@ -1732,6 +1732,37 @@ def test_check_input_videos(tmp_path, capsys):
     assert "not found" in out and "empty" in out and "not a file" in out
 
 
+def test_a_silent_video_is_explained_not_failed_on():
+    # No audio track: without subtitles there's nothing to transcribe; with them the video
+    # can be voiced, except by an engine that would clone the voice from that audio.
+    args = _plan_args(subtitles=None)
+    assert voxa._silent_video_problems("v.mp4", args, True) == []
+    assert voxa._silent_video_problems("v.mp4", args, None) == []      # probe failed: allow
+    [problem] = voxa._silent_video_problems("v.mp4", args, False)
+    assert "no audio track" in problem and "--subtitles" in problem
+    assert voxa._silent_video_problems("v.mp4", _plan_args(subtitles="s.srt"), False) == []
+    for tts in ("xtts", "chatterbox"):
+        [problem] = voxa._silent_video_problems(
+            "v.mp4", _plan_args(subtitles="s.srt", tts=tts), False)
+        assert "--voice-sample" in problem
+        assert voxa._silent_video_problems(
+            "v.mp4", _plan_args(subtitles="s.srt", tts=tts, voice_sample="me.wav"), False) == []
+
+
+def test_a_silent_video_stops_the_run_before_a_workspace(tmp_path, monkeypatch, capsys):
+    video = tmp_path / "silent.mp4"
+    video.write_bytes(b"x" * 10)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(voxa, "_has_audio", lambda path: False)
+    monkeypatch.setattr(voxa, "_check_runtime_deps", lambda: True)
+    monkeypatch.setattr(voxa, "_check_external_tools", lambda: True)
+    monkeypatch.setattr(voxa.sys, "argv", ["voxa", str(video), "--target_lang", "tr",
+                                      "--env-file", str(tmp_path / "none.env")])
+    assert asyncio.run(voxa.main()) == 1
+    assert "no audio track" in capsys.readouterr().out
+    assert not (tmp_path / "silent_work").exists()
+
+
 def test_edge_says_how_to_upgrade_when_microsoft_refuses_it(monkeypatch, caplog, tmp_path):
     # Microsoft's service answers 403 to an edge-tts that hasn't caught up with it.
     class _Refused:

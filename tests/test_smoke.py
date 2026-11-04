@@ -46,6 +46,25 @@ def test_assemble_final_video_produces_valid_output(tmp_path):
     assert "video" in streams and "audio" in streams
 
 
+def test_a_silent_source_is_voiced_with_the_dub_as_its_only_track(tmp_path):
+    # A screen recording with no audio, voiced from --subtitles: nothing to mix it with.
+    src = tmp_path / "silent.mp4"
+    _run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=320x240:d=3",
+          "-c:v", "libx264", "-pix_fmt", "yuv420p", str(src)])
+    assert voxa._has_audio(src) is False
+    vo = tmp_path / "vo.wav"
+    _run(["ffmpeg", "-y", "-f", "lavfi", "-i", "sine=frequency=330:duration=2.5",
+          "-ar", "22050", "-ac", "1", str(vo)])
+    assert voxa._has_audio(vo) is True
+    out = tmp_path / "out.mp4"
+    voxa._assemble_final_video(str(src), str(vo), str(out), 0.3, 1.0)
+    streams = subprocess.check_output(
+        ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type",
+         "-of", "csv=p=0", str(out)]).decode().split()
+    assert sorted(streams) == ["audio", "video"]
+    assert _audio_seconds(out) >= 2.4
+
+
 def test_assemble_does_not_truncate_a_long_final_line(tmp_path):
     # A source with 6s of video but only 4s of audio (audio ends before the video does).
     src = tmp_path / "src.mp4"

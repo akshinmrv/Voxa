@@ -418,6 +418,9 @@ voxa video.mp4 --target_lang es --subtitles-only
 # Mevcut SRT'den dublaj — Whisper'ı atla (elle düzeltilmiş altyazı veya zaten var olan)
 voxa video.mp4 --target_lang de --subtitles captions.srt
 
+# ...hiç sesi olmayan bir videoyu da seslendirir, örneğin bir ekran kaydını
+voxa screencast.mp4 --target_lang de --subtitles script.srt
+
 # Her konuşmacıya kendi sesi (röportaj, podcast) — Hugging Face token gerekir
 voxa video.mp4 --target_lang de --diarize --num-speakers 2 --hf-token hf_...
 

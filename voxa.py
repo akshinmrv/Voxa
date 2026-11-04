@@ -1265,6 +1265,37 @@ def probe_duration(path: Path) -> Optional[float]:
         return None
 
 
+def _has_audio(path) -> Optional[bool]:
+    """Whether the file has an audio stream, via ffprobe; None when it can't be told (no
+    ffprobe, unreadable file), which callers treat as "probably", so nothing is refused on a
+    failed probe."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
+             "stream=index", "-of", "csv=p=0", str(path)],
+            capture_output=True, text=True, timeout=20)
+    except Exception:
+        return None
+    if out.returncode != 0:
+        return None
+    return bool(out.stdout.strip())
+
+
+def _silent_video_problems(name: str, args, has_audio: Optional[bool]) -> List[str]:
+    """Why a video with no audio track (has_audio False) can't be dubbed as asked. Without
+    --subtitles there is no speech to transcribe; with them the video can be voiced from the
+    script, except by a cloning engine that would copy the voice from the audio. Pure."""
+    if has_audio is not False:
+        return []
+    if not getattr(args, "subtitles", None):
+        return [f"{name} has no audio track, so there's no speech to transcribe. To voice a "
+                f"silent video, give its script as subtitles: --subtitles script.srt"]
+    if args.tts in ("xtts", "chatterbox") and not getattr(args, "voice_sample", None):
+        return [f"{name} has no audio track for {args.tts} to copy a voice from: pass "
+                f"--voice-sample, or choose another --tts"]
+    return []
+
+
 def _media_ms(path) -> Optional[float]:
     """Total media duration in milliseconds — the room the final line may breathe into (it has
     no next line to protect) so a longer translation isn't compressed to its own window. None
@@ -1298,6 +1329,9 @@ def plan_blockers(args) -> List[str]:
         problems.extend(_chatterbox_problems(getattr(args, "target_lang", "")))
     if any(_looks_like_url(v) for v in getattr(args, "videos", [])) and not _ytdlp_available():
         problems.append(_YTDLP_HINT)
+    for video in getattr(args, "videos", []):
+        if not _looks_like_url(video) and Path(video).is_file():
+            problems.extend(_silent_video_problems(Path(video).name, args, _has_audio(video)))
     srt = getattr(args, "subtitles", None)
     if srt and not Path(srt).exists():
         problems.append(f"subtitles file not found: {srt}")
@@ -3788,8 +3822,17 @@ def _assemble_final_video(video_path, voiceover_path, output_file,
                           background_volume: float, voice_volume: float) -> None:
     """Mix the dubbed voiceover over the source as a faint bed and mux it onto the copied video.
     amix duration=longest (not first): a final line that runs past the source *audio* stream —
-    which can be shorter than the video — must not be truncated. Extracted so the smoke test can
-    exercise the real mux without the whole pipeline."""
+    which can be shorter than the video — must not be truncated. A silent source (voiced from
+    --subtitles) has no bed to mix, so the dub is its only track. Extracted so the smoke test
+    can exercise the real mux without the whole pipeline."""
+    if _has_audio(video_path) is False:
+        run_ffmpeg([
+            "ffmpeg", "-y", "-i", str(video_path), "-i", str(voiceover_path),
+            "-filter_complex", f"[1:a]volume={voice_volume}[fg]",
+            "-map", "0:v:0", "-map", "[fg]",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", str(output_file)
+        ], "Final video assembly")
+        return
     run_ffmpeg([
         "ffmpeg", "-y",
         "-i", str(video_path),
@@ -4453,6 +4496,14 @@ Examples:
     if args.subtitles and not args.dry_run and not Path(args.subtitles).exists():
         print(f"❌ Subtitles file not found: {args.subtitles}")
         return 1
+    if not args.dry_run:
+        silent = [problem for video in args.videos
+                  for problem in _silent_video_problems(Path(video).name, args,
+                                                        _has_audio(video))]
+        for problem in silent:
+            print(f"❌ {problem}")
+        if silent:
+            return 1
     if args.diarize and not args.dry_run:
         if args.subtitles:
             print("❌ --diarize can't be combined with --subtitles yet (it needs the audio).")
