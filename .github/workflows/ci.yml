@@ -130,3 +130,38 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+
+  docker:
+    name: docker (image + console)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      # The image used to be built only at a release, so a Dockerfile that broke was found
+      # after the tag. The layer cache is shared with the release workflow.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: voxa:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Check the image runs and serves the console
+        run: |
+          docker run --rm voxa:ci --version
+          docker run --rm voxa:ci doctor
+          docker run -d --name voxa -p 127.0.0.1:8000:8000 voxa:ci serve --host 0.0.0.0
+          for _ in $(seq 60); do curl -fs http://127.0.0.1:8000/api/health && break; sleep 1; done
+          curl -fs http://127.0.0.1:8000/en/app/ | grep -q "</html>"
+          curl -fs http://127.0.0.1:8000/api/engines | grep -q '"chatterbox"'
+          # Port-mapped requests aren't loopback; the refusal says what to do in a container.
+          curl -s -X POST http://127.0.0.1:8000/api/engines/chatterbox/install \
+            | grep -q "voxa engines install"
+          docker exec voxa sh -c 'command -v uv && echo "$VOXA_ENGINES_DIR"'
+          docker rm -f voxa
+
+      - name: Show the server's log
+        if: failure()
+        run: docker logs voxa || true

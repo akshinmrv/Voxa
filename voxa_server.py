@@ -558,10 +558,16 @@ def read_key_status() -> List[dict]:
 
 def require_local(request: Request) -> None:
     """Reject any non-loopback caller. Defense in depth: the server binds 127.0.0.1 by
-    default, but this still holds if it is ever started with --host 0.0.0.0."""
+    default, but this still holds if it is ever started with --host 0.0.0.0. In a
+    container no caller is loopback, so the refusal says what to do there instead."""
     host = request.client.host if request.client else ""
     if host not in _LOCAL_HOSTS:
-        raise HTTPException(status_code=403, detail="Settings are available on localhost only.")
+        detail = ("Settings, keys and engines can be changed only from the machine Voxa "
+                  "runs on.")
+        if voxa._in_container():
+            detail += (" In a container, pass keys with -e (docker run -e OPENAI_API_KEY=...) "
+                       "and install an engine with: docker run ... voxa engines install <id>")
+        raise HTTPException(status_code=403, detail=detail)
 
 
 class SettingsPatch(BaseModel):

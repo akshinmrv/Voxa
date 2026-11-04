@@ -271,13 +271,31 @@ mühərrikə keçsəniz `-e OPENAI_API_KEY=...` ilə ötürün. Yüklənmiş Whi
 saxlamaq üçün keşi mount edin:
 
 ```bash
-docker run --rm -v "$PWD:/data" -v voxa-cache:/cache     ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
+docker run --rm -v "$PWD:/data" -v voxa-cache:/cache \
+    ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
 ```
 
-Image ~3.7 GB-dır, demək olar hamısı torch-un CPU buildidir. `voxa serve` də konteynerdə
-işləyir (`serve --host 0.0.0.0`), amma onun settings endpoint-ləri yalnız loopback
-çağırışlarına açıqdır — port-mapped sorğu buna uyğun gəlmir, ona görə konsolu nativ işlədin.
-Image-də konsol hələ yoxdur.
+Image ~3.0 GB-dır, çoxu torch-un CPU buildi, FFmpeg və Whisper-dir. Konsol da içindədir — bundan
+sonra http://127.0.0.1:8000 ünvanını açın:
+
+```bash
+docker run --rm -p 127.0.0.1:8000:8000 -v "$PWD:/data" -v voxa-cache:/cache \
+    -v voxa-engines:/engines ghcr.io/akshinmrv/voxa serve --host 0.0.0.0
+```
+
+`127.0.0.1`-də açmaq konsolu şəbəkənizdən kənarda saxlayır. Yükləmələr, işlər və dublyajlar
+mount edilmiş qovluqda qalır. Konteynerin içindən konsol ayarları, açarları və mühərrikləri
+dəyişə bilmir, çünki port-mapped sorğu loopback deyil: açarları `-e` ilə ötürün, mühərriki isə
+CLI ilə `voxa-engines` volume-una qurun — konsol onu oradan götürür:
+
+```bash
+docker run --rm -v voxa-cache:/cache -v voxa-engines:/engines \
+    ghcr.io/akshinmrv/voxa engines install chatterbox
+```
+
+Host-da işləyən Ollama ilə tərcümə üçün konteynerə onun ünvanını verin:
+`-e OLLAMA_HOST=http://host.docker.internal:11434` (Linux-da həm də
+`--add-host=host.docker.internal:host-gateway`).
 
 </details>
 

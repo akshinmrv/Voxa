@@ -4648,9 +4648,17 @@ def _uv_tool_extras() -> Optional[List[str]]:
     return re.findall(r'"([^"]+)"', match.group(1)) if match else []
 
 
+def _in_container() -> bool:
+    """Running in a Docker or Podman container."""
+    return Path("/.dockerenv").exists() or Path("/run/.containerenv").exists()
+
+
 def _install_hint(extra: str) -> str:
     """The command that adds an extra to *this* install. uv and pipx keep Voxa in an
-    environment of their own, where a plain `pip install` would land somewhere else."""
+    environment of their own, where a plain `pip install` would land somewhere else; in a
+    container, one would be gone with the container, so it belongs in the image."""
+    if _in_container():
+        return f'add it to the image:  RUN pip install "voxa-dub[{extra}]"'
     uv_extras = _uv_tool_extras()
     if uv_extras is not None:
         # uv replaces the tool's environment, so the extras it already has are named again.
@@ -4832,7 +4840,8 @@ def doctor_checks(online: bool = False, deep: bool = False) -> List[DoctorCheck]
             add("Translation", name, "ok", f"{env_key} is set")
         else:
             add("Translation", name, "off", f"{env_key} isn't set",
-                f"set {env_key}, or add the key in the console's Settings")
+                f"pass it to the container:  docker run -e {env_key}=..." if _in_container()
+                else f"set {env_key}, or add the key in the console's Settings")
 
     # ── Speech ──
     add("Speech", "Edge", "ok" if edge_tts is not None else "fail",
@@ -4899,7 +4908,10 @@ def doctor_checks(online: bool = False, deep: bool = False) -> List[DoctorCheck]
             bundled = static_dir() is not None
         except ImportError:
             bundled = False
-        if bundled:
+        if bundled and _in_container():
+            add("Extras", "Console", "ok", "run: docker run -p 127.0.0.1:8000:8000 … "
+                "serve --host 0.0.0.0, then open http://127.0.0.1:8000")
+        elif bundled:
             add("Extras", "Console", "ok", "run: voxa studio")
         else:
             add("Extras", "Console", "warn", "server installed, but this install has no console",

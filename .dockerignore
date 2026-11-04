@@ -1,16 +1,23 @@
-# Keep the build context small: the image needs the engine and its metadata, nothing else.
+# Keep the build context small: the image needs the engine, its metadata and the console's
+# source, nothing else.
 .git
 .github
 .venv
 venv
-__pycache__
-*.py[cod]
-*.egg-info
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
 build
 dist
 
-# The web frontend is a separate, optional surface — it is not part of the CLI image.
-web
+# The console is built from web/ in its own stage; its build output, dependencies and the
+# landing page's media are not part of it.
+web/node_modules
+web/.next
+web/out
+web/public/demo
+web/public/tts-samples
+voxa_ui/static
 
 # Docs, tests and examples do not affect the installed package.
 docs
@@ -20,17 +27,17 @@ scripts
 
 # Local runtime artifacts and media.
 .voxa_serve
-*_work
-*.mp4
-*.mkv
-*.mov
-*.avi
-*.wav
-*.mp3
-*.srt
+**/*_work
+**/*.mp4
+**/*.mkv
+**/*.mov
+**/*.avi
+**/*.wav
+**/*.mp3
+**/*.srt
 voxa.log
 
 # Secrets must never reach a layer.
-.env
-*.key
-*.pem
+**/.env*
+**/*.key
+**/*.pem

@@ -28,6 +28,7 @@ def machine(monkeypatch, tmp_path):
     state = SimpleNamespace(tools={"ffmpeg": "/usr/bin/ffmpeg"}, modules=set(), ollama=None,
                             free_gb=50)
     monkeypatch.setattr(voxa.shutil, "which", lambda name: state.tools.get(name))
+    monkeypatch.setattr(voxa, "_in_container", lambda: False)
     monkeypatch.setattr(voxa.shutil, "disk_usage",
                         lambda _: namedtuple("Usage", "total used free")(0, 0,
                                                                          state.free_gb * 1024 ** 3))
@@ -99,6 +100,7 @@ def test_a_self_hosted_speech_server_is_reported_with_the_key_it_gets(machine, m
 
 def test_install_hints_match_how_voxa_was_installed(monkeypatch):
     import importlib.metadata
+    monkeypatch.setattr(voxa, "_in_container", lambda: False)
     monkeypatch.setattr(importlib.metadata, "requires", lambda dist: [
         'piper-tts; extra == "piper"', 'fastapi; extra == "serve"',
         'uvicorn[standard]; extra == "serve"'])
@@ -154,6 +156,17 @@ def test_deep_imports_xtts_and_reports_a_broken_install(machine, monkeypatch):
     xtts = _by_name(voxa.doctor_checks(deep=True))[("Speech", "XTTS")]
     assert xtts.status == "warn" and "transformers" in xtts.fix
     assert imported == ["TTS.api"]
+
+
+def test_in_a_container_the_fixes_are_for_the_image(machine, monkeypatch):
+    # A pip install in a running container is gone with it, and the console's Settings can't
+    # be changed from inside one; the fixes say what works there.
+    monkeypatch.setattr(voxa, "_in_container", lambda: True)
+    checks = _by_name(voxa.doctor_checks())
+    assert checks[("Speed", "faster-whisper")].fix == \
+        'add it to the image:  RUN pip install "voxa-dub[faster]"'
+    assert checks[("Translation", "OpenAI")].fix == \
+        "pass it to the container:  docker run -e OPENAI_API_KEY=..."
 
 
 def test_console_needs_the_server_and_a_build(machine, monkeypatch, tmp_path):

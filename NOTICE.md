@@ -69,6 +69,13 @@ licence file the package ships (October 2026).
 | [pyannote.audio](https://github.com/pyannote/pyannote-audio) | `[diarize]` | `--diarize` | MIT (see §4.5 for the models) |
 | [fastapi](https://github.com/fastapi/fastapi) · [uvicorn](https://github.com/Kludex/uvicorn) · [python-multipart](https://github.com/Kludex/python-multipart) | `[serve]` | `voxa serve` | MIT · BSD-3-Clause · Apache-2.0 |
 
+### The console
+
+The package ships the operator console (`voxa serve`, `voxa studio`) as a static build of
+`web/`. Its JavaScript bundles npm packages — Next.js, React, next-intl and the rest under MIT,
+lucide-react under ISC, class-variance-authority under Apache-2.0 — and it carries the Inter and
+JetBrains Mono fonts, under the SIL Open Font License 1.1.
+
 ### ⚠️ Copyleft dependencies you should know about
 
 - **`edge-tts` is LGPL-3.0** and is a required dependency. Importing it without modification is
@@ -265,9 +272,12 @@ just of Voxa. It is built from `python:3.12-slim` (Debian) and contains, among o
 - **FFmpeg from Debian**, which Debian builds with GPL components enabled (`--enable-gpl`), so the
   copy in the image is under the GPL;
 - the required Python dependencies listed in §2 (including LGPL-3.0 `edge-tts`), a CPU build of
-  `torch`, and the `[serve]` extra.
+  `torch`, and the `[serve]` extra;
+- the console, as in the wheel (see §2), and [uv](https://github.com/astral-sh/uv) (MIT or
+  Apache-2.0), which `voxa engines install` uses to make the engines' environments.
 
-It does not include `piper-tts`, `coqui-tts` or any model weights; Whisper models are downloaded
+It does not include `piper-tts`, `coqui-tts`, any engine from §4.7 or any model weights;
+engines installed in the container go into `/engines`; Whisper models are downloaded
 at runtime into `/cache`. The image's `org.opencontainers.image.licenses="MIT"` label describes
 Voxa's own code. Each Debian package's licence is in `/usr/share/doc/<package>/copyright`, and its
 source is available from Debian.

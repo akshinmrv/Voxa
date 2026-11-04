@@ -272,13 +272,31 @@ motora geçerseniz `-e OPENAI_API_KEY=...` ile aktarın. İndirilen Whisper mode
 korumak için önbelleği bağlayın:
 
 ```bash
-docker run --rm -v "$PWD:/data" -v voxa-cache:/cache     ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
+docker run --rm -v "$PWD:/data" -v voxa-cache:/cache \
+    ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
 ```
 
-İmaj ~3,7 GB'dır, neredeyse tamamı torch'un CPU derlemesidir. `voxa serve` konteynerde de
-çalışır (`serve --host 0.0.0.0`), ancak ayar uç noktaları yalnızca loopback çağrılarına
-açıktır — port eşlemeli bir istek buna uymaz, bu yüzden konsolu yerel olarak çalıştırın.
-İmaj henüz konsolu içermiyor.
+İmaj ~3,0 GB'dır, çoğu torch'un CPU derlemesi, FFmpeg ve Whisper'dır. Konsolu da içerir — ardından
+http://127.0.0.1:8000 adresini açın:
+
+```bash
+docker run --rm -p 127.0.0.1:8000:8000 -v "$PWD:/data" -v voxa-cache:/cache \
+    -v voxa-engines:/engines ghcr.io/akshinmrv/voxa serve --host 0.0.0.0
+```
+
+`127.0.0.1` üzerinde yayınlamak konsolu ağınızın dışında tutar. Yüklemeler, işler ve dublajlar
+bağlanan klasörde kalır. Konteynerin içinden konsol ayarları, anahtarları ve motorları
+değiştiremez, çünkü port eşlemeli bir istek loopback değildir: anahtarları `-e` ile aktarın,
+motoru ise CLI ile `voxa-engines` birimine kurun — konsol onu oradan kullanır:
+
+```bash
+docker run --rm -v voxa-cache:/cache -v voxa-engines:/engines \
+    ghcr.io/akshinmrv/voxa engines install chatterbox
+```
+
+Host'ta çalışan Ollama ile çevirmek için konteynere adresini verin:
+`-e OLLAMA_HOST=http://host.docker.internal:11434` (Linux'ta ayrıca
+`--add-host=host.docker.internal:host-gateway`).
 
 </details>
 

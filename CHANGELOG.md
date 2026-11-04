@@ -9,10 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The container image has the console, and engines install into a volume.** `docker run -p
+  127.0.0.1:8000:8000 … ghcr.io/akshinmrv/voxa serve --host 0.0.0.0` opens the console on
+  http://127.0.0.1:8000; it is built from `web/` in a stage of its own, so the image needs no
+  Node. `voxa engines install` works in the container too, into `/engines` (a volume, so an
+  engine outlives the container), and the console uses what is there. A port-mapped request
+  isn't loopback, so the console can't change settings, keys or engines from inside a
+  container; its refusal now says to pass keys with `-e` and install an engine with the CLI.
+  CI builds and starts the image on every push, where before only a release built it.
 - **Ollama wherever `OLLAMA_HOST` says.** Voxa called Ollama on localhost:11434 only, which
   inside a container is the container itself. It now reads `OLLAMA_HOST` as Ollama's own tools
   do (`host`, `host:port` or a URL), so `-e OLLAMA_HOST=http://host.docker.internal:11434`
   reaches Ollama on the host; `voxa doctor` says where it looked.
+
+### Changed
+
+- **The container image is 1.3 GB smaller.** openai-whisper pulls in triton on Linux for its
+  CUDA kernels, which it imports only for a tensor on a GPU; the CPU-only image no longer
+  carries it. The same build measured locally with and without it: 4.31 GB → 2.98 GB; a dub
+  inside it (Whisper, Ollama on the host, Edge) came out in German, as Whisper heard it back
+  (p=1.0).
 
 ## [1.11.1] - 2026-11-04
 

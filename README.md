@@ -283,10 +283,27 @@ docker run --rm -v "$PWD:/data" -v voxa-cache:/cache \
     ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
 ```
 
-The image is ~3.7 GB, almost all of it the CPU build of torch. `voxa serve` runs in the
-container too (`serve --host 0.0.0.0`), but its settings endpoints are restricted to loopback
-callers and a port-mapped request does not qualify — run the console natively for those.
-The image doesn't include the console yet.
+The image is ~3.0 GB, most of it torch's CPU build, FFmpeg and Whisper. It includes the console —
+open http://127.0.0.1:8000 after:
+
+```bash
+docker run --rm -p 127.0.0.1:8000:8000 -v "$PWD:/data" -v voxa-cache:/cache \
+    -v voxa-engines:/engines ghcr.io/akshinmrv/voxa serve --host 0.0.0.0
+```
+
+Publishing on `127.0.0.1` keeps the console off your network. Uploads, jobs and dubs stay in
+the mounted folder. From inside a container the console can't change settings, keys or
+engines, since a port-mapped request isn't loopback: pass keys with `-e`, and install an
+engine with the CLI into the `voxa-engines` volume the console then uses:
+
+```bash
+docker run --rm -v voxa-cache:/cache -v voxa-engines:/engines \
+    ghcr.io/akshinmrv/voxa engines install chatterbox
+```
+
+To translate with Ollama running on the host, point the container at it with
+`-e OLLAMA_HOST=http://host.docker.internal:11434` (on Linux also
+`--add-host=host.docker.internal:host-gateway`).
 
 </details>
 
