@@ -362,10 +362,11 @@ voxa doctor --deep     # bağımlılık güncellemelerinde bozulan XTTS ve pyann
 > hafif fona göre 26 dB daha yüksek, orijinal konuşma ise 5 dB daha alçak çıktı. Whisper
 > ve klonlanan ses de ayrılmış konuşmayı alır: konuşmadan 12 dB yüksek müziğin altında
 > Whisper'ın kelime hata oranı %32'den (son cümleyi uydurmuştu) %12'ye düştü, ondan
-> kesilen klonlama örneğinde ise kelimelerin arasında müzik kalmaz. Arka plan orijinal
-> seviyesini korur, bu yüzden konuşmayı bastıran müzik dublajı da bastırır; onu
-> `--background-volume` ile kısın (`--separate` ile varsayılan 1.0). Bir
-> dizüstü CPU'sunda videonun süresinin yaklaşık 0,6 katı kadar sürdü ve 1,7 GB bellek
+> kesilen klonlama örneğinde ise kelimelerin arasında müzik kalmaz. Dublaj konuşurken
+> arka plan, dublajın 10 dB altında kalacak kadar kısılır, satırlar arasında ise kendi
+> seviyesinde çalar (`--no-duck` bunu kapatır): konuşmadan 12 dB yüksek müzikte Almanca
+> Whisper dublajın %34'ünü bu olmadan, %6,5'ini bununla yanlış duydu, hafif fondaki gibi.
+> Bir dizüstü CPU'sunda videonun süresinin yaklaşık 0,6 katı kadar sürdü ve 1,7 GB bellek
 > kullandı; sonuç saklanır, bu yüzden aynı video başka bir dile dublajlanırken yeniden
 > ayrılmaz. Demucs'un kodu MIT'dir, ama yazarına göre ağırlıkların lisansı belirsizdir
 > (eğitim verisinin bir kısmı yalnızca araştırma için yayımlandı), bu yüzden ticari

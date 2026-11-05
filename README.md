@@ -372,9 +372,10 @@ voxa doctor --deep     # also loads XTTS and pyannote, which break on dependency
 > quieter. Whisper and a cloned voice get the separated speech: over music 12 dB louder
 > than the speech, Whisper's word error rate fell from 32% (it made up the last sentence)
 > to 12%, and a cloning reference cut from it is quiet between words instead of carrying
-> the music under them. The background keeps its original level, so music that drowns
-> the speech drowns the dub too; lower it with `--background-volume` (1.0 by default with
-> `--separate`). On a laptop CPU it took about 0.6× the video's length and 1.7 GB of memory; the
+> the music under them. Where the dub speaks, the background is lowered just enough to
+> stay 10 dB under it, and between lines it plays at its own level (`--no-duck` keeps it
+> at one level): over music 12 dB louder than the speech, German Whisper misheard 34% of
+> the dub without that and 6.5% with it, as under the faint bed. On a laptop CPU it took about 0.6× the video's length and 1.7 GB of memory; the
 > result is kept, so dubbing the same video into another language doesn't separate it
 > again. Demucs' code is MIT, but its author says the weights' licence is unclear (part of
 > their training data was released for research only), so check that before commercial

@@ -16,6 +16,7 @@ import hashlib
 import inspect
 import json
 import logging
+import math
 import os
 import random
 import re
@@ -1404,6 +1405,9 @@ def build_run_plan(video_name: str, args, *, work_dir: Path, output_file: Path,
         if getattr(args, "separate", False):
             lines.append(row("separate", "Demucs: Whisper and cloning get the speech alone, "
                                          "the dub keeps the music and effects"))
+            if not getattr(args, "no_duck", False):
+                lines.append(row("", f"lowered where the dub speaks, to stay "
+                                     f"{DUCK_MARGIN_DB:g} dB under it"))
             lines.append(row("", "⚠️  the licence of its weights is unclear — see NOTICE.md"))
 
     if args.quality_gate:
@@ -3926,6 +3930,100 @@ def _voice_source(args, work_dir: Path, video_path) -> str:
     return str(video_path)
 
 
+# Ducking a separated background: how far under the dub it must stay while the dub speaks,
+# and how much it may be lowered for that. Between lines it plays at its own level.
+DUCK_MARGIN_DB = 10.0
+DUCK_MAX_DB = 24.0
+_DUCK_FRAME_S = 0.05
+
+
+def _speech_stretches(voice_db, active_db: float = -45.0,
+                      bridge_s: float = 0.5) -> List[Tuple[int, int]]:
+    """Where the dub speaks, from its level per 50 ms frame: (first, last) frames over
+    active_db, joined across pauses shorter than bridge_s. Pure."""
+    stretches: List[List[int]] = []
+    for i, level in enumerate(voice_db):
+        if level <= active_db:
+            continue
+        if stretches and i - stretches[-1][1] <= bridge_s / _DUCK_FRAME_S:
+            stretches[-1][1] = i
+        else:
+            stretches.append([i, i])
+    return [(first, last) for first, last in stretches]
+
+
+def _duck_plan(voice_db, bg_db, margin_db: float = DUCK_MARGIN_DB,
+               max_duck_db: float = DUCK_MAX_DB,
+               active_db: float = -45.0) -> List[Tuple[int, int, float]]:
+    """How far to lower the background where the dub speaks, from the two tracks' levels
+    per 50 ms frame (dBFS, with their mix volumes applied). In each stretch of speech the
+    background's loudest moments (its 90th percentile) are brought margin_db under the dub's
+    average level, and no further than max_duck_db. Returns (first, last + 1, gain_db) frame
+    ranges with a gain below zero; a background already that far under needs none. Pure."""
+    plan = []
+    for first, last in _speech_stretches(voice_db, active_db):
+        spoken = [voice_db[i] for i in range(first, last + 1) if voice_db[i] > active_db]
+        voice = 10 * math.log10(sum(10 ** (v / 10) for v in spoken) / len(spoken))
+        under = sorted(bg_db[first:last + 1])
+        loudest = under[min(len(under) - 1, int(0.9 * len(under)))] if under else -120.0
+        gain = max(-max_duck_db, min(0.0, voice - margin_db - loudest))
+        if gain < 0:
+            plan.append((first, last + 1, gain))
+    return plan
+
+
+def _duck_curve(plan, frames: int, attack_s: float = 0.2, release_s: float = 0.6):
+    """The background's gain in dB per frame for a _duck_plan: down over attack_s before each
+    stretch, held through it, back up over release_s after. Where ramps overlap the lower
+    gain wins. Pure."""
+    curve = np.zeros(frames)
+    attack, release = attack_s / _DUCK_FRAME_S, release_s / _DUCK_FRAME_S
+    index = np.arange(frames)
+    for first, end, gain in plan:
+        shape = np.clip(np.minimum((index - (first - attack)) / attack,
+                                   ((end + release) - index) / release), 0, 1)
+        curve = np.minimum(curve, gain * shape)
+    return curve
+
+
+def _frame_levels(path: Path, volume: float) -> Tuple[List[float], int]:
+    """A track's level per 50 ms frame in dBFS, mixed down to mono, with its mix volume."""
+    rate = sf.info(str(path)).samplerate
+    size = int(rate * _DUCK_FRAME_S)
+    offset = 20 * math.log10(max(volume, 1e-6))
+    levels = []
+    for block in sf.blocks(str(path), blocksize=size, dtype="float32", always_2d=True):
+        power = float(np.mean(np.square(block)))
+        levels.append(10 * math.log10(power + 1e-12) + offset)
+    return levels, rate
+
+
+def duck_background(background: Path, voice: Path, out: Path, background_volume: float,
+                    voice_volume: float) -> Tuple[int, int, float]:
+    """Write `background` lowered where it would cover the dub, so the dub stays
+    DUCK_MARGIN_DB over it while it speaks. Read and written a block at a time, so an
+    hour-long track needs little memory. Returns (stretches lowered, stretches of speech,
+    the deepest cut in dB)."""
+    voice_db, _ = _frame_levels(voice, voice_volume)
+    bg_db, rate = _frame_levels(background, background_volume)
+    plan = _duck_plan(voice_db, bg_db)
+    stretches = len(_speech_stretches(voice_db))
+    curve = _duck_curve(plan, len(bg_db))
+    centres = (np.arange(len(curve)) + 0.5) * _DUCK_FRAME_S
+    info = sf.info(str(background))
+    with sf.SoundFile(str(out), "w", samplerate=rate, channels=info.channels,
+                      subtype="PCM_16") as dst:
+        done = 0
+        for block in sf.blocks(str(background), blocksize=rate * 10, dtype="float32",
+                               always_2d=True):
+            times = (done + np.arange(len(block))) / rate
+            gain = 10 ** (np.interp(times, centres, curve) / 20)
+            dst.write(block * gain[:, None].astype(np.float32))
+            done += len(block)
+    deepest = -min((gain for _, _, gain in plan), default=0.0)
+    return len(plan), stretches, deepest
+
+
 def _assemble_final_video(video_path, voiceover_path, output_file,
                           background_volume: float, voice_volume: float,
                           background_path=None) -> None:
@@ -4301,12 +4399,24 @@ async def process_video(video_path: str, args, logger: Logger):
     background_volume = args.background_volume
     if background_volume is None:
         background_volume = 1.0 if background else 0.05
+    # At its own level a loud background can cover the dub, so where the dub speaks it is
+    # lowered just enough to stay DUCK_MARGIN_DB under it; between lines it plays as it was.
+    if background and not getattr(args, "no_duck", False):
+        ducked = work_dir / "background_ducked.wav"
+        lowered, stretches, deepest = duck_background(
+            background, voiceover_norm, ducked, background_volume, args.voice_volume)
+        if lowered:
+            logger.info(f"🎚️  Lowered the background under {lowered} of the dub's {stretches} "
+                        f"spoken stretches (by up to {deepest:.0f} dB), to keep it "
+                        f"{DUCK_MARGIN_DB:g} dB under the dub")
+        background = ducked
     _assemble_final_video(video_path, voiceover_norm, output_file,
                           background_volume, args.voice_volume, background)
 
     if not args.keep_temp:
         logger.info("🧹 Cleaning up temporary files...")
-        for pattern in ['*_raw.*', 'silence_*.wav', 'xtts_sil_*.wav', 'speech_*_processed.*']:
+        for pattern in ['*_raw.*', 'silence_*.wav', 'xtts_sil_*.wav', 'speech_*_processed.*',
+                        'background_ducked.wav']:
             for f in work_dir.glob(pattern):
                 f.unlink(missing_ok=True)
 
@@ -4515,6 +4625,10 @@ Examples:
                              "speech alone. Needs Demucs, which Voxa installs "
                              "separately: voxa engines install demucs (the licence of its "
                              "weights is unclear, see NOTICE.md)")
+    parser.add_argument("--no-duck", action="store_true",
+                        help="With --separate, keep the background at one level. By default "
+                             "it is lowered where it would cover the dub, so it stays 10 dB "
+                             "under the dub while the dub speaks")
     parser.add_argument("--background-volume", type=float, default=None,
                         help="Original audio volume (0.0-1.0, default: 0.05 — keeps the "
                              "source as a faint ambience bed ~35 dB under the dub, so the "

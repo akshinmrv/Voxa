@@ -2181,6 +2181,8 @@ def test_plan_says_when_the_background_is_separated():
     out = _plan(_plan_args(separate=True))
     assert "Whisper and cloning get the speech alone" in out
     assert "licence of its weights is unclear" in out
+    assert "to stay 10 dB under it" in out
+    assert "to stay" not in _plan(_plan_args(separate=True, no_duck=True))
 
 
 def test_blockers_flag_separate_without_demucs(monkeypatch, tmp_path):
@@ -2199,6 +2201,53 @@ def test_a_separation_out_of_memory_says_what_to_free():
                        "DefaultCPUAllocator: not enough memory: you tried to allocate 231211008")
     assert "ollama ps" in voxa._separation_hint(oom)
     assert voxa._separation_hint(RuntimeError("Demucs: ValueError: the input has no audio")) == "."
+
+
+def test_the_dubs_speech_is_found_across_short_pauses():
+    quiet, speech = [-120.0], [-16.0]
+    # 0.25 s between two lines is one stretch; a second's silence starts another.
+    frames = quiet * 5 + speech * 10 + quiet * 5 + speech * 10 + quiet * 20 + speech * 4
+    assert voxa._speech_stretches(frames) == [(5, 29), (50, 53)]
+
+
+@pytest.mark.parametrize("background, gain", [(-10.0, -16.0), (-40.0, None), (20.0, -24.0)])
+def test_the_background_is_lowered_only_as_far_as_the_dub_needs(background, gain):
+    # A dub at -16 dB wants the background at -26 dB while it speaks: a loud one comes down
+    # that far (but no more than 24 dB), and a quiet one is left alone.
+    voice = [-120.0] * 5 + [-16.0] * 10 + [-120.0] * 5
+    plan = voxa._duck_plan(voice, [background] * 20)
+    assert plan == ([] if gain is None else [(5, 15, gain)])
+
+
+def test_the_background_eases_down_before_a_line_and_back_up_after():
+    curve = voxa._duck_curve([(10, 20, -12.0)], 40)    # 50 ms frames
+    assert curve[5] == 0 and curve[8] == pytest.approx(-6)        # 0.2 s down
+    assert all(curve[10:20] == -12)
+    assert curve[26] == pytest.approx(-6) and curve[32] == 0      # 0.6 s back up
+
+
+def test_duck_background_keeps_a_loud_bed_under_the_dub(tmp_path):
+    import numpy as np
+    import soundfile as sf
+    rate = 44100
+    t = np.arange(rate * 2) / rate
+    line = 0.2 * np.sin(2 * np.pi * 440 * t)                       # about -17 dBFS
+    voice = np.concatenate([np.zeros(rate * 2), line, np.zeros(rate * 2)])
+    noise = np.random.default_rng(0).uniform(-0.5, 0.5, (rate * 6, 2))   # about -11 dBFS
+    sf.write(tmp_path / "voice.wav", voice, rate)
+    sf.write(tmp_path / "bg.wav", noise, rate)
+    lowered, stretches, deepest = voxa.duck_background(
+        tmp_path / "bg.wav", tmp_path / "voice.wav", tmp_path / "out.wav", 1.0, 1.0)
+    assert (lowered, stretches) == (1, 1) and 15 < deepest < 18
+    out, _ = sf.read(tmp_path / "out.wav")
+
+    def db(x):
+        return 10 * np.log10(np.mean(np.square(x)))
+
+    middle = slice(int(rate * 2.5), int(rate * 3.5))
+    assert db(voice[middle]) - db(out[middle]) == pytest.approx(10, abs=1)
+    for untouched in (slice(0, int(rate * 1.5)), slice(int(rate * 5), rate * 6)):
+        assert np.allclose(out[untouched], noise[untouched], atol=1e-4)
 
 
 def test_a_cloned_voice_is_cut_from_the_separated_speech(tmp_path):

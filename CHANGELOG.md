@@ -19,15 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Whisper's word error rate fell from 32% (it made up the last sentence) to 12%, and in a
   cloning reference cut from it the gaps between words are 30 dB under the voice instead of 3.
   A transcript already made is kept, so adding `--separate` to a finished dub only remixes it.
-  The background keeps its original level, so music that drowns the speech drowns the dub too
-  (over a mix with the music 12 dB louder, it came out 7 dB over the dub);
-  `--background-volume` lowers it. On a laptop CPU it took 0.6× the video's length and 1.7 GB
-  of memory, however long the video, since it works two minutes at a time; the result is kept
-  for a dub of the same video into another language. Ollama keeps the model it translated with
-  in memory for five minutes, which in a batch left Demucs short on a 14 GB laptop, so Voxa
-  asks Ollama to free that model first (5.0 GB for llama3). The console offers it as
-  **Background → Keep the music and effects**. Demucs' code is MIT, but the licence of its
-  weights is unclear, which `voxa engines`, the console and the dry run say.
+  Where the dub speaks, the background is lowered just enough to stay 10 dB under it, and
+  between lines it plays at its own level (`--no-duck` keeps it at one level): over music 12
+  dB louder than the speech, which came out 7 dB over the dub, German Whisper misheard 34% of
+  the dub without that and 6.5% with it, the same as under the faint bed (5.2% alone). On a
+  laptop CPU it took 0.6× the video's length and 1.7 GB of memory, however long the video,
+  since it works two minutes at a time; the result is kept for a dub of the same video into
+  another language. Ollama keeps the model it translated with in memory for five minutes,
+  which in a batch left Demucs short on a 14 GB laptop, so Voxa asks Ollama to free that model
+  first (5.0 GB for llama3). The console offers it as **Background → Keep the music and
+  effects**. Demucs' code is MIT, but the licence of its weights is unclear, which `voxa
+  engines`, the console and the dry run say.
 - **The container image has the console, and engines install into a volume.** `docker run -p
   127.0.0.1:8000:8000 … ghcr.io/akshinmrv/voxa serve --host 0.0.0.0` opens the console on
   http://127.0.0.1:8000; it is built from `web/` in a stage of its own, so the image needs no
