@@ -22,6 +22,7 @@ Read this file before using Voxa commercially.
 | `--tts edge` (default) | ⚠️ Grey area | Uses an **unofficial** Microsoft endpoint (see §3) |
 | `--translator google` (default) | ⚠️ Grey area | Uses an **unofficial** Google endpoint (see §3) |
 | `--tts chatterbox` | ✅ Yes | MIT weights; every clip carries an inaudible watermark (see §4.7) |
+| `--separate` | ⚠️ Unclear | Demucs' code is MIT, but its weights have no licence; part of their training data was for research only (see §4.7) |
 | `--tts xtts` | ❌ **No** | XTTS-v2 model weights are **non-commercial only** (see §4.4) |
 | `--openai-tts-base-url` (self-hosted) | ⚠️ **Depends on the model** | The server's model decides: Chatterbox is MIT, VoiceStudio's default OmniVoice is non-commercial (see §4.6) |
 
@@ -241,10 +242,19 @@ program and imports none of it.
 | Engine | Package | Model weights | Commercial use |
 |---|---|---|:---:|
 | Chatterbox Multilingual | [`chatterbox-tts`](https://github.com/resemble-ai/chatterbox), MIT | MIT | ✅ |
+| Demucs (`--separate`) | [`demucs`](https://github.com/adefossez/demucs), MIT | None stated | ⚠️ Unclear |
 
 Chatterbox marks every clip it makes with Resemble AI's PerTh watermark, which is inaudible and
 survives compression; a detector can tell the audio was generated. Its environment also
 installs PyTorch, transformers, diffusers and Gradio under their own licences.
+
+Demucs takes the speech out of the original so that `--separate` can keep its music and
+effects. Its README says the licence of the weights "is not clear", because part of their
+training data, MUSDB, was released for research only, and the rest is Meta's own; its author
+can't clarify it further. An MIT tag on one of its Hugging Face model cards was questioned in
+August 2026; the cards now state no licence. Voxa uses the default `htdemucs` model, which the first separation
+downloads from Hugging Face (about 80 MB). Its environment also installs PyTorch and numpy
+under their own licences.
 
 ---
 

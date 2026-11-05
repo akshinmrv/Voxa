@@ -250,6 +250,10 @@
       "diarizeHint": "Kimin nə vaxt danışdığını aşkarla və hər danışana öz səsini ver. Hugging Face token (HF_TOKEN) və diarize extra lazımdır.",
       "diarizeToggle": "Hər danışana öz səsini ver",
       "numSpeakersPlaceholder": "Danışan sayı (istəyə bağlı)",
+      "separate": "Fon səsi",
+      "separateHint": "Orijinalın danışığını çıxar, musiqi və effektlərini isə dublyajın altında tam səslə saxla. Əks halda bütün orijinal zəif fon kimi qalır. CPU-da 10 dəqiqəlik video təxminən 6 dəqiqə əlavə vaxt aparır.",
+      "separateToggle": "Musiqi və effektləri saxla",
+      "separateInstall": "Orijinalın musiqi və effektlərini saxlamaq üçün Modellər bölməsində Demucs-u quraşdırın.",
       "offlineBadge": "Offline",
       "notInstalled": "quraşdırılmayıb — Modellər bölməsinə baxın",
       "keyBadge": "API açarı lazımdır",
@@ -290,6 +294,7 @@
       "installFailed": "Quraşdırma alınmadı",
       "download": "≈{gb} GB endirmə",
       "languages": "{count} dil",
+      "anyLanguage": "İstənilən dil",
       "homepage": "Layihə səhifəsi",
       "commercial": {
         "yes": "kommersiya istifadəsi olar",

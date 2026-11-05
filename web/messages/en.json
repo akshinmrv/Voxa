@@ -250,6 +250,10 @@
       "diarizeHint": "Detect who speaks when and give each speaker their own voice. Needs a Hugging Face token (HF_TOKEN) and the diarize extra.",
       "diarizeToggle": "Give each speaker their own voice",
       "numSpeakersPlaceholder": "Number of speakers (optional)",
+      "separate": "Background",
+      "separateHint": "Take the original's speech out and keep its music and effects under the dub at full volume, instead of the whole original as a faint bed. On a CPU, a 10-minute video takes about 6 minutes more.",
+      "separateToggle": "Keep the music and effects",
+      "separateInstall": "Install Demucs under Models to keep the original's music and effects.",
       "offlineBadge": "Offline",
       "notInstalled": "not installed — see Models",
       "keyBadge": "Needs API key",
@@ -290,6 +294,7 @@
       "installFailed": "Install failed",
       "download": "≈{gb} GB download",
       "languages": "{count, plural, one {# language} other {# languages}}",
+      "anyLanguage": "Any language",
       "homepage": "Project page",
       "commercial": {
         "yes": "commercial use OK",

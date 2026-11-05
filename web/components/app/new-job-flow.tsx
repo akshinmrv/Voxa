@@ -90,6 +90,7 @@ export function NewJobFlow() {
     openaiVoice: sel.openaiVoice ?? options.openaiVoices[0]?.id ?? "alloy",
     diarize: sel.diarize ?? false,
     numSpeakers: sel.numSpeakers,
+    separate: !!options.separateAvailable && (sel.separate ?? false),
   };
 
   const selectedTts = options.ttsEngines.find((e) => e.id === config.tts);
@@ -300,6 +301,24 @@ export function NewJobFlow() {
               )}
             </Field>
           )}
+
+          {/* Offered even before Demucs is installed, so the choice can be found. */}
+          <Field
+            id="separate"
+            label={t("separate")}
+            hint={options.separateAvailable ? t("separateHint") : t("separateInstall")}
+          >
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={!!config.separate}
+                disabled={!options.separateAvailable}
+                onChange={(e) => set("separate", e.target.checked)}
+                className="h-4 w-4 rounded-sm border-input accent-primary disabled:opacity-50"
+              />
+              {t("separateToggle")}
+            </label>
+          </Field>
 
           <div className="pt-1">
             <Button

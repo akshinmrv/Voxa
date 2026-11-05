@@ -62,7 +62,7 @@ API açarı tələb olunmur. Default parametrlər olduğu kimi işləyir.
 
 | İmkan | Təfərrüat |
 |---|---|
-| **Video dublyaj** | Dublyaj səsi orijinalın üzərinə miksləndir; video axını yenidən kodlaşdırılmır |
+| **Video dublyaj** | Dublyaj səsi orijinalın, ya da `--separate` ilə yalnız onun musiqi və effektlərinin üzərinə miksləndir; video axını yenidən kodlaşdırılmır |
 | **Nitqin tanınması** | `openai-whisper` (tiny → turbo) və ya `faster-whisper` (2–4× sürətli, daxili VAD, torch-suz) |
 | **Avtomatik tərcümə** | Google, Ollama (lokal), OpenAI, Anthropic, OpenRouter |
 | **Kontekst-məlumatlı tərcümə** | Sətirlər bloklarla tərcümə olunur, ona görə əvəzliklər, cins, adlar və ton səhnə boyu ardıcıl qalır |
@@ -320,6 +320,7 @@ voxa doctor --deep     # asılılıq yeniləmələrində sınan XTTS və pyannot
 | `pipx install "voxa-dub[url]"` | `voxa <video-url>` — girişi əvvəlcə yüklə (yt-dlp) |
 | `pipx install "voxa-dub[diarize]"` | `--diarize` — hər danışana ayrı səs (pyannote) |
 | `voxa engines install chatterbox` | `--tts chatterbox` — hər danışanın səsini 23 dildə klonlayır, MIT. Öz mühitinə quraşdırılır (təxminən 4.5 GB); GPU olmadan yavaşdır |
+| `voxa engines install demucs` | `--separate` — orijinalın musiqi və effektlərini tam səslə saxlayır, danışığını çıxarır. Öz mühitinə quraşdırılır (təxminən 0.7 GB); çəkilərin lisenziyası aydın deyil ([NOTICE](NOTICE.md#47-engines-in-environments-of-their-own-voxa-engines)) |
 
 > [!NOTE]
 > **Çox danışan** (`--diarize`) kimin nə vaxt danışdığını aşkarlayır və hər danışana ayrı səs verir —
@@ -350,6 +351,18 @@ voxa doctor --deep     # asılılıq yeniləmələrində sınan XTTS və pyannot
 > saniyə çəkdi, yəni burada GPU həlledicidir; yaratdığı hər klipdə Resemble AI-ın eşidilməyən
 > PerTh su nişanı var. faster-whisper quraşdırılıbsa, Voxa Chatterbox-un bəzən sətrin sonuna
 > əlavə etdiyi sözləri də kəsir.
+
+> [!NOTE]
+> **Musiqi və effektləri saxlamaq** (`--separate`). Standart olaraq bütün orijinal
+> dublyajın altında zəif fon kimi qalır: musiqisi çətin eşidilir, danışığı isə sadəcə
+> sakitləşir. `voxa engines install demucs` və `--separate` ilə Demucs əvvəlcə danışığı
+> çıxarır, musiqi və effektlər isə tam səslə qalır. Sınaq miksində (musiqi üstündə danışıq)
+> musiqi zəif fondakından 26 dB uca, orijinal danışıq isə 5 dB sakit çıxdı. Noutbuk
+> CPU-sunda videonun uzunluğunun təxminən 0.6-sı qədər vaxt və 1.7 GB yaddaş tələb etdi;
+> nəticə saxlanılır, ona görə eyni videonu başqa dilə dublyaj edəndə yenidən ayrılmır.
+> Demucs-un kodu MIT-dir, amma müəllifinə görə çəkilərin lisenziyası aydın deyil (təlim
+> datasının bir hissəsi yalnız tədqiqat üçün buraxılıb), ona görə kommersiya istifadəsindən
+> əvvəl bunu yoxlayın — [NOTICE](NOTICE.md#47-engines-in-environments-of-their-own-voxa-engines).
 
 **4. GPU sürətləndirmə** — opsional, yalnız NVIDIA.
 
@@ -602,7 +615,8 @@ lisenziyasını [NOTICE.md](NOTICE.md#41-piper-voices)-də yoxlayın.
 
 Xeyr. Video axını kopyalanır. Yalnız audio yenidən qurulur: orijinal 5%-lə sakit ambiyans
 yatağı kimi, dublyaj 150%-lə qarışdırılır; `amix` hər ikisini yarıya bölür, ona görə miks
-kəsilmir. Hər iki səviyyə konfiqurasiya olunur.
+kəsilmir. Hər iki səviyyə konfiqurasiya olunur. `--separate` ilə isə əvvəlcə orijinalın
+danışığı çıxarılır, musiqi və effektləri 100%-lə qarışdırılır.
 </details>
 
 <details>

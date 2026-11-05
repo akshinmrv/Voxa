@@ -250,6 +250,10 @@
       "diarizeHint": "Kimin ne zaman konuştuğunu algıla ve her konuşmacıya kendi sesini ver. Bir Hugging Face token'ı (HF_TOKEN) ve diarize ekstrası gerekir.",
       "diarizeToggle": "Her konuşmacıya kendi sesini ver",
       "numSpeakersPlaceholder": "Konuşmacı sayısı (isteğe bağlı)",
+      "separate": "Arka plan sesi",
+      "separateHint": "Orijinaldeki konuşmayı çıkar, müzik ve efektleri dublajın altında tam seviyede tut; aksi halde orijinalin tamamı hafif bir fon olarak kalır. CPU'da 10 dakikalık bir video yaklaşık 6 dakika daha sürer.",
+      "separateToggle": "Müzik ve efektleri koru",
+      "separateInstall": "Orijinalin müzik ve efektlerini korumak için Modeller sayfasından Demucs'u kur.",
       "offlineBadge": "Çevrimdışı",
       "notInstalled": "kurulu değil — Modeller sayfasına bakın",
       "keyBadge": "API anahtarı gerekir",
@@ -290,6 +294,7 @@
       "installFailed": "Kurulum başarısız",
       "download": "≈{gb} GB indirme",
       "languages": "{count} dil",
+      "anyLanguage": "Her dil",
       "homepage": "Proje sayfası",
       "commercial": {
         "yes": "ticari kullanım serbest",

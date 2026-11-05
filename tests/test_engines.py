@@ -125,6 +125,10 @@ FAKE_WORKER = textwrap.dedent("""\
             else:
                 open(req["out"], "w").write(req["text"])
                 reply = {"ok": True, "seconds": 1.0}
+        elif req["cmd"] == "slow":
+            for done in (0.5, 1.0):
+                print(json.dumps({"progress": done}), flush=True)
+            reply = {"ok": True}
         elif req["cmd"] == "crash":
             print("boom: something went wrong", file=sys.stderr)
             sys.exit(3)
@@ -159,6 +163,16 @@ def test_worker_round_trip(fake_engine):
         assert worker.request(cmd="speak", text="still here", out=str(out))["ok"]
 
 
+def test_a_long_request_says_how_far_it_has_got(fake_engine):
+    seen = []
+    with ve.Worker("fake", log_path=fake_engine / "worker.log") as worker:
+        worker.start()
+        assert worker.request(on_progress=seen.append, cmd="slow") == {"ok": True}
+        assert worker.request(cmd="slow") == {"ok": True}   # nobody listening is fine too
+        assert worker.request(cmd="speak", text="next", out=str(fake_engine / "x"))["ok"]
+    assert seen == [0.5, 1.0]
+
+
 def test_a_worker_that_dies_says_why(fake_engine):
     worker = ve.Worker("fake", log_path=fake_engine / "worker.log")
     worker.start()
@@ -172,12 +186,16 @@ def test_an_engine_that_isnt_installed_has_no_worker(home):
         ve.Worker("chatterbox")
 
 
-def test_the_chatterbox_workers_protocol_without_chatterbox():
-    # Before loading, nothing imports Chatterbox, so the protocol itself can be checked here.
-    requests = [{"cmd": "speak", "text": "Merhaba", "language": "tr", "out": "x.wav"},
-                {"cmd": "bogus"}, {"cmd": "quit"}]
+@pytest.mark.parametrize("worker, first", [
+    ("chatterbox_worker.py", {"cmd": "speak", "text": "Merhaba", "language": "tr",
+                              "out": "x.wav"}),
+    ("demucs_worker.py", {"cmd": "separate", "input": "mix.wav", "background": "bg.wav"}),
+])
+def test_a_workers_protocol_without_its_engine(worker, first):
+    # Before loading, nothing imports the engine, so the protocol itself can be checked here.
+    requests = [first, {"cmd": "bogus"}, {"cmd": "quit"}]
     proc = subprocess.run(
-        [sys.executable, str(ve.WORKERS_DIR / "chatterbox_worker.py")],
+        [sys.executable, str(ve.WORKERS_DIR / worker)],
         input="".join(json.dumps(r) + "\n" for r in requests),
         capture_output=True, text=True, encoding="utf-8", timeout=60)
     replies = [json.loads(line) for line in proc.stdout.splitlines()]
@@ -185,6 +203,65 @@ def test_the_chatterbox_workers_protocol_without_chatterbox():
     assert replies[1]["ok"] is False and "bogus" in replies[1]["error"]
     assert replies[2] == {"ok": True}
     assert proc.returncode == 0
+
+
+def _demucs_worker():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("demucs_worker",
+                                                  ve.WORKERS_DIR / "demucs_worker.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _wav(path, samples=None, rate=100, channels=2):
+    """Write int16 [channels, frames] samples to a WAV, or read one back."""
+    import wave
+
+    import numpy as np
+    if samples is None:
+        with wave.open(str(path), "rb") as f:
+            data = np.frombuffer(f.readframes(f.getnframes()), dtype="<i2")
+            return data.reshape(-1, f.getnchannels()).T.astype(np.int32)
+    with wave.open(str(path), "wb") as f:
+        f.setnchannels(channels)
+        f.setsampwidth(2)
+        f.setframerate(rate)
+        f.writeframes(samples.T.astype("<i2").tobytes())
+
+
+def test_demucs_separates_a_long_video_in_pieces_without_a_seam(tmp_path):
+    np = pytest.importorskip("numpy")
+    worker = _demucs_worker()
+    mix = (np.random.default_rng(0).uniform(-0.5, 0.5, (2, 2345)) * 32767).astype(np.int16)
+    _wav(tmp_path / "mix.wav", mix)
+    pieces = []
+
+    def split(wav):                 # a stand-in model: a quarter of everything is the speech
+        pieces.append(wav.shape[1])
+        return {"vocals": wav * 0.25, "drums": wav * 0.5, "other": wav * 0.25}
+
+    sent = []
+    request = {"input": str(tmp_path / "mix.wav"), "background": str(tmp_path / "bg.wav"),
+               "speech": str(tmp_path / "speech.wav")}
+    seconds = worker.separate(split, 100, 2, request, sent.append,
+                              chunk_seconds=6, overlap_seconds=1)
+    assert seconds == 23.45
+    # 6-second pieces, each starting a second before the last one ended.
+    assert pieces == [600, 600, 600, 600, 345]
+    assert [m["progress"] for m in sent] == [round(n / 2345, 3) for n in (600, 1100, 1600, 2100)]
+    # Where the pieces overlap the crossfade blends two answers; here they agree, so a seam
+    # would show as a difference from the whole.
+    assert np.abs(_wav(tmp_path / "bg.wav") - mix * 0.75).max() <= 1
+    assert np.abs(_wav(tmp_path / "speech.wav") - mix * 0.25).max() <= 1
+
+
+def test_demucs_refuses_audio_it_wasnt_given_as_expected(tmp_path):
+    np = pytest.importorskip("numpy")
+    _wav(tmp_path / "mono.wav", np.zeros((1, 100), dtype=np.int16), channels=1)
+    request = {"input": str(tmp_path / "mono.wav"), "background": str(tmp_path / "bg.wav")}
+    with pytest.raises(ValueError, match="16-bit, 2-channel WAV at 100 Hz"):
+        _demucs_worker().separate(lambda wav: {}, 100, 2, request, print)
 
 
 # ── The console's engine routes ──────────────────────────
@@ -222,6 +299,11 @@ def test_engines_are_listed_and_unavailable_until_installed(server):
                                      "tts": "chatterbox"}}
     refused = client.post("/api/jobs", json=job)
     assert refused.status_code == 400 and "Install it under Models" in refused.json()["detail"]
+    # Keeping the background needs Demucs, whatever speaks the dub.
+    assert client.get("/api/options").json()["separateAvailable"] is False
+    job["config"].update(tts="edge", separate=True)
+    refused = client.post("/api/jobs", json=job)
+    assert refused.status_code == 400 and "Demucs isn't installed" in refused.json()["detail"]
 
 
 def test_install_from_the_console_runs_in_the_background(server, monkeypatch):
@@ -264,6 +346,9 @@ def test_engine_routes_refuse_what_they_cant_do(server, monkeypatch):
     monkeypatch.setitem(srv.JOBS, "j1", SimpleNamespace(
         config=SimpleNamespace(tts="chatterbox"), status="running"))
     assert "A dub is using it" in client.delete("/api/engines/chatterbox").json()["detail"]
+    monkeypatch.setitem(srv.JOBS, "j2", SimpleNamespace(
+        config=SimpleNamespace(tts="edge", separate=True), status="queued"))
+    assert "A dub is using it" in client.delete("/api/engines/demucs").json()["detail"]
 
 
 def test_installing_is_for_localhost_only(home):
@@ -290,6 +375,11 @@ def test_voxa_engines_command(home, capsys, monkeypatch):
     assert done.value.code == 0
     listed = json.loads(capsys.readouterr().out)
     assert listed[0]["id"] == "chatterbox" and listed[0]["installed"] is False
+    monkeypatch.setattr(sys, "argv", ["voxa", "engines"])
+    with pytest.raises(SystemExit):
+        voxa.cli()
+    out = capsys.readouterr().out
+    assert "23 languages" in out and "weights unlicensed, licence unclear; any language" in out
     monkeypatch.setattr(sys, "argv", ["voxa", "engines", "install", "nope"])
     with pytest.raises(SystemExit) as done:
         voxa.cli()

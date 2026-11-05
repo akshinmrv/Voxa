@@ -65,6 +65,31 @@ def test_a_silent_source_is_voiced_with_the_dub_as_its_only_track(tmp_path):
     assert _audio_seconds(out) >= 2.4
 
 
+def _max_volume(path) -> float:
+    out = subprocess.run(["ffmpeg", "-i", str(path), "-af", "volumedetect", "-f", "null", "-"],
+                         capture_output=True, text=True).stderr
+    return float(out.split("max_volume:")[1].split("dB")[0])
+
+
+def test_with_separate_the_bed_is_the_background_not_the_original(tmp_path):
+    # The original's own track (a loud tone here) must not be mixed in: with --separate the
+    # bed is the separated background, silent in this test, so the result is silent too.
+    src = tmp_path / "src.mp4"
+    _run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=320x240:d=3",
+          "-f", "lavfi", "-i", "sine=frequency=1000:duration=3",
+          "-c:v", "libx264", "-c:a", "aac", "-pix_fmt", "yuv420p", str(src)])
+    vo = tmp_path / "vo.wav"
+    _run(["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=22050:cl=mono", "-t", "3", str(vo)])
+    bg = tmp_path / "background.wav"
+    _run(["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", "3",
+          str(bg)])
+    faint, separated = tmp_path / "faint.mp4", tmp_path / "separated.mp4"
+    voxa._assemble_final_video(str(src), str(vo), str(faint), 1.0, 1.0)
+    voxa._assemble_final_video(str(src), str(vo), str(separated), 1.0, 1.0, bg)
+    assert _max_volume(faint) > -40                     # the tone is there without it
+    assert _max_volume(separated) < -80
+
+
 def test_assemble_does_not_truncate_a_long_final_line(tmp_path):
     # A source with 6s of video but only 4s of audio (audio ends before the video does).
     src = tmp_path / "src.mp4"

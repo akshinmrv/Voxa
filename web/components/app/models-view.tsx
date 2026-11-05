@@ -96,7 +96,9 @@ function InstallableEngineCard({
             </Badge>
           )}
           <Badge variant="outline" title={engine.languages.join(", ")}>
-            {t("languages", { count: engine.languages.length })}
+            {engine.languages.length
+              ? t("languages", { count: engine.languages.length })
+              : t("anyLanguage")}
           </Badge>
           {!engine.installed && (
             <Badge variant="outline">

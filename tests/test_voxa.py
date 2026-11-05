@@ -2176,6 +2176,30 @@ def test_plan_notes_subtitles_only_skips_speech():
     assert "skipped (--subtitles-only)" in _plan(_plan_args(subtitles_only=True))
 
 
+def test_plan_says_when_the_background_is_separated():
+    assert "background" not in _plan(_plan_args())
+    out = _plan(_plan_args(separate=True))
+    assert "speech taken out (Demucs)" in out and "licence of its weights is unclear" in out
+
+
+def test_blockers_flag_separate_without_demucs(monkeypatch, tmp_path):
+    monkeypatch.setenv("VOXA_ENGINES_DIR", str(tmp_path))
+    assert voxa.plan_blockers(_plan_args(separate=True)) == [
+        "--separate needs Demucs, which isn't installed — install it once with: "
+        "voxa engines install demucs"]
+    import voxa_engines
+    monkeypatch.setattr(voxa_engines, "is_installed", lambda engine_id: True)
+    assert voxa.plan_blockers(_plan_args(separate=True)) == []
+
+
+def test_a_separation_out_of_memory_says_what_to_free():
+    # Measured: Demucs failed this way while Ollama still held its model after translating.
+    oom = RuntimeError("Demucs: RuntimeError: [enforce fail at alloc_cpu.cpp:117] data. "
+                       "DefaultCPUAllocator: not enough memory: you tried to allocate 231211008")
+    assert "Ollama keeps its model loaded" in voxa._separation_hint(oom)
+    assert voxa._separation_hint(RuntimeError("Demucs: ValueError: the input has no audio")) == "."
+
+
 def test_plan_shows_llm_budget_only_for_llm_translators():
     assert "length budget" in _plan(_plan_args(translator="openai", openai_model="gpt-5"))
     assert "length budget" not in _plan(_plan_args(translator="google"))

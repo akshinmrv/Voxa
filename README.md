@@ -63,7 +63,7 @@ No API key is required. The defaults work out of the box.
 
 | Capability | Detail |
 |---|---|
-| **Video dubbing** | Dubbed voice mixed over the original as a faint ambience bed; video stream copied without re-encoding |
+| **Video dubbing** | Dubbed voice mixed over the original as a faint ambience bed, or over its music and effects alone with `--separate`; video stream copied without re-encoding |
 | **Speech recognition** | `openai-whisper` (tiny → turbo) or `faster-whisper` (2–4× faster, built-in VAD, no torch) |
 | **Automatic translation** | Google, Ollama (local), OpenAI, Anthropic, OpenRouter |
 | **Context-aware translation** | Lines are translated in blocks, not one by one, so pronouns, gender, names and tone stay consistent across a scene |
@@ -328,6 +328,7 @@ voxa doctor --deep     # also loads XTTS and pyannote, which break on dependency
 | `pipx install "voxa-dub[url]"` | `voxa <video-url>` — download the input first (yt-dlp) |
 | `pipx install "voxa-dub[diarize]"` | `--diarize` — a distinct voice per speaker (pyannote) |
 | `voxa engines install chatterbox` | `--tts chatterbox` — clones each speaker's voice in 23 languages, MIT. Installed into an environment of its own (about 4.5 GB); slow without a GPU |
+| `voxa engines install demucs` | `--separate` — keeps the original's music and effects at full volume, its speech taken out. Installed into an environment of its own (about 0.7 GB); the weights' licence is unclear (see [NOTICE](NOTICE.md#47-engines-in-environments-of-their-own-voxa-engines)) |
 
 > [!NOTE]
 > **Multiple speakers** (`--diarize`) detects who speaks when and gives each speaker a distinct
@@ -361,6 +362,18 @@ voxa doctor --deep     # also loads XTTS and pyannote, which break on dependency
 > CPU it took 40–60 seconds per sentence, so a GPU makes the difference here; every clip it
 > makes carries Resemble AI's inaudible PerTh watermark. With faster-whisper installed, Voxa
 > also cuts the words Chatterbox sometimes adds after a line.
+
+> [!NOTE]
+> **Keeping the music and effects** (`--separate`). By default the whole original stays
+> under the dub as a faint bed, so its music is barely audible and its speech is only
+> quieter. With `voxa engines install demucs` and `--separate`, Demucs takes the speech out
+> first, and the music and effects stay at full volume. In a test mix (speech over music)
+> the music came out 26 dB louder than in the faint bed, and the original speech 5 dB
+> quieter. On a laptop CPU it took about 0.6× the video's length and 1.7 GB of memory; the
+> result is kept, so dubbing the same video into another language doesn't separate it
+> again. Demucs' code is MIT, but its author says the weights' licence is unclear (part of
+> their training data was released for research only), so check that before commercial
+> use — see [NOTICE](NOTICE.md#47-engines-in-environments-of-their-own-voxa-engines).
 
 **4. GPU acceleration** — optional, NVIDIA only.
 
@@ -654,7 +667,8 @@ language in [NOTICE.md](NOTICE.md#41-piper-voices).
 
 No. The video stream is copied. Only the audio track is rebuilt: the original is mixed in at
 5% as a faint ambience bed, the dub at 150%, and `amix` halves both so the result cannot clip.
-Both levels are configurable.
+Both levels are configurable. With `--separate` the original's speech is taken out first,
+and its music and effects go in at 100% instead.
 </details>
 
 <details>

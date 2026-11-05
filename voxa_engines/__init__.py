@@ -1,6 +1,6 @@
 """Engines Voxa installs into environments of their own.
 
-Some speech engines pin their dependencies hard — Chatterbox wants torch 2.6 and
+Some engines pin their dependencies hard — Chatterbox wants torch 2.6 and
 transformers 5.2, XTTS an older transformers — so they can't share an environment with
 each other or with Voxa. Each engine listed in ENGINES gets its own virtual environment
 under ~/.voxa/engines/<id>/ (VOXA_ENGINES_DIR moves it), made with uv when it's available,
@@ -37,13 +37,13 @@ class EngineError(RuntimeError):
 class Engine:
     id: str
     label: str
-    kind: str                       # what it does in the pipeline: "tts"
+    kind: str                       # what it does in the pipeline: "tts" or "separation"
     description: str
     licence: str                    # the model weights' licence, as the model card gives it
     # What that licence allows commercially, in the terms of voxa.PIPER_LICENCE_USE:
     # "yes", "credit" (with attribution), "no" or "unknown".
     commercial: str
-    languages: Tuple[str, ...]      # ISO 639-1 codes it speaks
+    languages: Tuple[str, ...]      # ISO 639-1 codes it speaks; () when any will do
     cloning: bool                   # clones a voice from a reference recording
     python: str                     # the Python version its environment is made with
     packages: Tuple[str, ...]       # what goes into that environment
@@ -74,6 +74,26 @@ ENGINES: Dict[str, Engine] = {
         download_gb=4.5,
         homepage="https://github.com/resemble-ai/chatterbox",
         notice="Every clip it makes carries Resemble AI's inaudible PerTh watermark.",
+    ),
+    "demucs": Engine(
+        id="demucs",
+        label="Demucs",
+        kind="separation",
+        description="Takes the speech out of the original, so the dub keeps its music and "
+                    "effects at full volume.",
+        licence="code MIT, weights unlicensed",
+        commercial="unknown",
+        languages=(),
+        cloning=False,
+        python="3.11",
+        # Demucs converts its tensors with numpy but doesn't list it, so name it here.
+        packages=("demucs==4.1.0", "numpy"),
+        worker="demucs_worker.py",
+        download_gb=0.7,
+        homepage="https://github.com/adefossez/demucs",
+        notice="Its author says the weights' licence isn't clear: part of their training "
+               "data (MUSDB) was released for research only. Check that before using it "
+               "commercially.",
     ),
 }
 
@@ -224,9 +244,11 @@ class Worker:
             text=True, encoding="utf-8", env=env)
         return self.request(cmd="load", **options)
 
-    def request(self, **payload) -> dict:
-        """Send one request and wait for its answer. Raises EngineError if the worker
-        reports a failure or has gone away."""
+    def request(self, on_progress: Optional[Callable[[float], None]] = None,
+                **payload) -> dict:
+        """Send one request and wait for its answer. A long request may say how far it has
+        got first, in {"progress": 0.4} lines, which go to on_progress. Raises EngineError
+        if the worker reports a failure or has gone away."""
         if self._proc is None or self._proc.poll() is not None:
             raise EngineError(f"The {self.engine.label} worker isn't running"
                               f"{self._log_tail()}")
@@ -235,13 +257,19 @@ class Worker:
             try:
                 self._proc.stdin.write(json.dumps(payload) + "\n")
                 self._proc.stdin.flush()
-                line = self._proc.stdout.readline()
+                while True:
+                    line = self._proc.stdout.readline()
+                    if not line:
+                        raise EngineError(f"The {self.engine.label} worker exited"
+                                          f"{self._log_tail()}")
+                    reply = json.loads(line)
+                    if "progress" not in reply:
+                        break
+                    if on_progress:
+                        on_progress(reply["progress"])
             except OSError as e:
                 raise EngineError(f"The {self.engine.label} worker stopped ({e})"
                                   f"{self._log_tail()}") from e
-        if not line:
-            raise EngineError(f"The {self.engine.label} worker exited{self._log_tail()}")
-        reply = json.loads(line)
         if not reply.get("ok"):
             raise EngineError(f"{self.engine.label}: {reply.get('error', 'failed')}")
         return reply

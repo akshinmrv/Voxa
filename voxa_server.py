@@ -137,6 +137,8 @@ def build_options() -> dict:
         "diarizeAvailable": voxa._pyannote_available(),
         # So the job form can offer a URL source only when the yt-dlp extra is installed.
         "urlAvailable": voxa._ytdlp_available(),
+        # So the job form can offer keeping the background only once Demucs is installed.
+        "separateAvailable": voxa_engines.is_installed("demucs"),
     }
 
 
@@ -186,6 +188,8 @@ class JobConfigModel(BaseModel):
     diarize: bool = False
     numSpeakers: Optional[int] = None
     maxSpeakers: Optional[int] = None
+    # Keep the original's music and effects, its speech taken out (Demucs).
+    separate: bool = False
 
 
 class CreateJobModel(BaseModel):
@@ -346,6 +350,8 @@ async def _run_job(job: Job) -> None:
             if cfg.openaiVoice:
                 cmd += ["--openai-voice", cfg.openaiVoice]
         cmd += diarize_args(cfg)
+        if cfg.separate:
+            cmd += ["--separate"]
 
         # Force UTF-8 in the child so its emoji log lines encode to the pipe on any
         # console codepage (Windows defaults to a legacy ANSI codepage otherwise).
@@ -841,18 +847,25 @@ async def upload(file: UploadFile = File(...)) -> dict:
     return {"fileId": file_id, "fileName": file.filename, "size": size}
 
 
-def engine_problem(tts: str) -> Optional[str]:
-    """Why a job can't use this speech engine yet: one Voxa installs separately, not installed."""
-    if tts in voxa_engines.ENGINES and not voxa_engines.is_installed(tts):
-        label = voxa_engines.get(tts).label
-        return (f"{label} isn't installed. Install it under Models, or run: "
-                f"voxa engines install {tts}")
+def _job_engines(cfg) -> List[str]:
+    """The engines Voxa installs separately that a job runs with."""
+    engines = [cfg.tts] if cfg.tts in voxa_engines.ENGINES else []
+    return engines + (["demucs"] if getattr(cfg, "separate", False) else [])
+
+
+def engine_problem(cfg: JobConfigModel) -> Optional[str]:
+    """Why a job can't run yet: it needs an engine Voxa installs separately that isn't."""
+    for engine_id in _job_engines(cfg):
+        if not voxa_engines.is_installed(engine_id):
+            label = voxa_engines.get(engine_id).label
+            return (f"{label} isn't installed. Install it under Models, or run: "
+                    f"voxa engines install {engine_id}")
     return None
 
 
 @app.post("/api/jobs")
 async def create_job(body: CreateJobModel) -> dict:
-    problem = engine_problem(body.config.tts)
+    problem = engine_problem(body.config)
     if problem:
         raise HTTPException(status_code=400, detail=problem)
     job_id = uuid.uuid4().hex[:12]
@@ -1011,7 +1024,7 @@ async def remove_engine(engine_id: str, _: None = Depends(require_local)) -> dic
     _engine_status(engine_id)
     if ENGINE_INSTALLS.get(engine_id, {}).get("status") == "installing":
         raise HTTPException(status_code=409, detail="Wait for the install to finish first.")
-    if any(job.config.tts == engine_id and job.status in ("queued", "running")
+    if any(engine_id in _job_engines(job.config) and job.status in ("queued", "running")
            for job in JOBS.values()):
         raise HTTPException(status_code=409, detail="A dub is using it; remove it afterwards.")
     try:

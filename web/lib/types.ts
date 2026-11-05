@@ -64,6 +64,8 @@ export type VoxaOptions = {
   diarizeAvailable?: boolean;
   /** Whether the optional yt-dlp extra is installed, so the form can offer a URL source. */
   urlAvailable?: boolean;
+  /** Whether Demucs is installed, so the form can offer keeping the music and effects. */
+  separateAvailable?: boolean;
 };
 
 export type JobConfig = {
@@ -77,6 +79,8 @@ export type JobConfig = {
   diarize?: boolean;
   numSpeakers?: number;
   maxSpeakers?: number;
+  /** Keep the original's music and effects, its speech taken out (Demucs). */
+  separate?: boolean;
 };
 
 export type JobStatus = "queued" | "running" | "done" | "failed";

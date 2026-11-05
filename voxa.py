@@ -1327,6 +1327,8 @@ def plan_blockers(args) -> List[str]:
                         "PIPER_VOICES or choose another --tts")
     if args.tts == "chatterbox":
         problems.extend(_chatterbox_problems(getattr(args, "target_lang", "")))
+    if getattr(args, "separate", False):
+        problems.extend(_separation_problems())
     if any(_looks_like_url(v) for v in getattr(args, "videos", [])) and not _ytdlp_available():
         problems.append(_YTDLP_HINT)
     for video in getattr(args, "videos", []):
@@ -1399,6 +1401,9 @@ def build_run_plan(video_name: str, args, *, work_dir: Path, output_file: Path,
             lines.append(row("", f"{warn}{_piper_licence_note(licence)} — see NOTICE.md"))
         if args.tts == "openai" and (getattr(args, "openai_tts_instructions", "") or "").strip():
             lines.append(row("", f"style: {args.openai_tts_instructions[:58]}"))
+        if getattr(args, "separate", False):
+            lines.append(row("background", "music and effects, speech taken out (Demucs)"))
+            lines.append(row("", "⚠️  the licence of its weights is unclear — see NOTICE.md"))
 
     if args.quality_gate:
         lines.append(row("quality gate", f"on (scored with {args.gate_model})"))
@@ -3838,14 +3843,65 @@ TTS_PROVIDERS: Dict[str, Dict] = {
 }
 
 
+def _separation_problems() -> List[str]:
+    """Why --separate can't run here, if it can't: Demucs lives in an environment of its own."""
+    import voxa_engines
+    if voxa_engines.is_installed("demucs"):
+        return []
+    return ["--separate needs Demucs, which isn't installed — install it once with: "
+            "voxa engines install demucs"]
+
+
+def _separation_hint(error: Exception) -> str:
+    """What to do about a failed separation, when it's something the user can fix. Pure."""
+    text = str(error).lower()
+    if "not enough memory" in text or "out of memory" in text:
+        return (". Demucs needs about 2 GB of free memory: close what else is using it "
+                "(Ollama keeps its model loaded for a few minutes after translating).")
+    return "."
+
+
+def separate_background(video_path: Path, work_dir: Path, state, logger) -> Optional[Path]:
+    """The original's music and effects without its speech, separated by Demucs in its own
+    environment. It is kept in the workspace, so a dub of the same video into another language
+    reuses it. None for a video with no audio track, which has no background to keep."""
+    background = work_dir / "background.wav"
+    if state.is_completed('separation') and background.exists():
+        logger.info("🎚️  ✓ Background already separated")
+        return background
+    if _has_audio(video_path) is False:
+        return None
+    import voxa_engines
+    logger.info("🎚️  Taking the speech out of the original (Demucs; its first run downloads "
+                "the model)...")
+    worker = voxa_engines.Worker("demucs", log_path=work_dir / "demucs_worker.log")
+    mix = work_dir / "separation_input.wav"
+    try:
+        info = worker.start()
+        run_ffmpeg(["ffmpeg", "-y", "-i", str(video_path), "-vn", "-ac", str(info["channels"]),
+                    "-ar", str(info["sample_rate"]), "-acodec", "pcm_s16le", str(mix)],
+                   "Audio extraction for separation")
+        with tqdm(total=100, desc=f"Separating ({info['device']})", unit="%") as bar:
+            worker.request(on_progress=lambda done: bar.update(round(done * 100) - bar.n),
+                           cmd="separate", input=str(mix), background=str(background))
+            bar.update(100 - bar.n)
+    finally:
+        worker.close()
+        mix.unlink(missing_ok=True)
+    state.mark_completed('separation')
+    return background
+
+
 def _assemble_final_video(video_path, voiceover_path, output_file,
-                          background_volume: float, voice_volume: float) -> None:
-    """Mix the dubbed voiceover over the source as a faint bed and mux it onto the copied video.
+                          background_volume: float, voice_volume: float,
+                          background_path=None) -> None:
+    """Mix the dubbed voiceover over a bed and mux it onto the copied video. The bed is the
+    source as it is, or with --separate its music and effects alone (background_path).
     amix duration=longest (not first): a final line that runs past the source *audio* stream —
     which can be shorter than the video — must not be truncated. A silent source (voiced from
     --subtitles) has no bed to mix, so the dub is its only track. Extracted so the smoke test
     can exercise the real mux without the whole pipeline."""
-    if _has_audio(video_path) is False:
+    if background_path is None and _has_audio(video_path) is False:
         run_ffmpeg([
             "ffmpeg", "-y", "-i", str(video_path), "-i", str(voiceover_path),
             "-filter_complex", f"[1:a]volume={voice_volume}[fg]",
@@ -3853,12 +3909,14 @@ def _assemble_final_video(video_path, voiceover_path, output_file,
             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", str(output_file)
         ], "Final video assembly")
         return
+    bed = "[0:a]" if background_path is None else "[2:a]"
     run_ffmpeg([
         "ffmpeg", "-y",
         "-i", str(video_path),
         "-i", str(voiceover_path),
+        *(["-i", str(background_path)] if background_path is not None else []),
         "-filter_complex",
-        f"[0:a]volume={background_volume}[bg];[1:a]volume={voice_volume}[fg];"
+        f"{bed}volume={background_volume}[bg];[1:a]volume={voice_volume}[fg];"
         f"[bg][fg]amix=inputs=2:duration=longest:dropout_transition=2",
         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-map", "0:v:0",
         str(output_file)
@@ -4171,8 +4229,21 @@ async def process_video(video_path: str, args, logger: Logger):
 
     # Step 7: Final video assembly
     logger.info(f"[7/7] ({_elapsed()}) Assembling final video...")
+    background = None
+    if getattr(args, "separate", False):
+        import voxa_engines
+        try:
+            background = separate_background(video_path, work_dir, state, logger)
+        except voxa_engines.EngineError as e:
+            logger.error(f"❌ {str(e).rstrip('.')}{_separation_hint(e)} The dub is saved up "
+                         f"to this step, so running again resumes here; or drop --separate.")
+            return 1
+    # With --separate only music and effects are left, so they stay at full volume.
+    background_volume = args.background_volume
+    if background_volume is None:
+        background_volume = 1.0 if background else 0.05
     _assemble_final_video(video_path, voiceover_norm, output_file,
-                          args.background_volume, args.voice_volume)
+                          background_volume, args.voice_volume, background)
 
     if not args.keep_temp:
         logger.info("🧹 Cleaning up temporary files...")
@@ -4378,11 +4449,19 @@ Examples:
                              "an LLM tags each line with a delivery direction (A2 T1)")
     parser.add_argument("--auto-rate", action="store_true",
                         help="Auto adjust TTS rate")
-    parser.add_argument("--background-volume", type=float, default=0.05,
+    parser.add_argument("--separate", action="store_true",
+                        help="Take the speech out of the original and keep its music and "
+                             "effects under the dub at full volume, instead of the whole "
+                             "original as a faint bed. Needs Demucs, which Voxa installs "
+                             "separately: voxa engines install demucs (the licence of its "
+                             "weights is unclear, see NOTICE.md)")
+    parser.add_argument("--background-volume", type=float, default=None,
                         help="Original audio volume (0.0-1.0, default: 0.05 — keeps the "
                              "source as a faint ambience bed ~35 dB under the dub, so the "
                              "original speech is not intelligible; raise toward 0.15 to "
-                             "hear more of the original, 0.0 to mute it entirely)")
+                             "hear more of the original, 0.0 to mute it entirely). With "
+                             "--separate the default is 1.0, since only music and effects "
+                             "are left")
     parser.add_argument("--voice-volume", type=float, default=1.5,
                         help="Dubbed voice volume (0.0-2.0, default: 1.5)")
 
@@ -4495,6 +4574,9 @@ Examples:
         if problems:
             print("❌ " + "\n❌ ".join(problems))
             return 1
+    if args.separate and not args.dry_run and _separation_problems():
+        print("❌ " + _separation_problems()[0])
+        return 1
 
     # Preflight: fail before creating a workspace or loading a model, so a typo in a
     # filename or a missing FFmpeg produces a readable error and leaves no stray folder.
@@ -4875,10 +4957,11 @@ def doctor_checks(online: bool = False, deep: bool = False) -> List[DoctorCheck]
     import voxa_engines
     for engine in voxa_engines.catalogue():
         name = engine["label"].split()[0]
+        section = "Speech" if engine["kind"] == "tts" else "Extras"
         if engine["installed"]:
-            add("Speech", name, "ok", f"installed ({engine['path']})")
+            add(section, name, "ok", f"installed ({engine['path']})")
         else:
-            add("Speech", name, "off", f"{engine['description'][0].lower()}"
+            add(section, name, "off", f"{engine['description'][0].lower()}"
                 f"{engine['description'][1:].rstrip('.')}; not installed",
                 f"voxa engines install {engine['id']}   (about {engine['download_gb']:g} GB)")
 
@@ -5016,7 +5099,8 @@ def engines_cli(argv: Sequence[str]) -> int:
             if engine.notice:
                 print(f"ℹ️  {engine.notice}")
             voxa_engines.install(engine.id)
-            print(f"✅ Ready: voxa video.mp4 --tts {engine.id} --target_lang tr")
+            use = f"--tts {engine.id}" if engine.kind == "tts" else "--separate"
+            print(f"✅ Ready: voxa video.mp4 {use} --target_lang tr")
             return 0
         if args.action == "remove":
             voxa_engines.remove(args.engine)
@@ -5033,10 +5117,10 @@ def engines_cli(argv: Sequence[str]) -> int:
     print(f"Engines Voxa installs separately ({voxa_engines.engines_dir()})\n")
     for e in engines:
         icon = "✅" if e["installed"] else "➖"
+        languages = f"{len(e['languages'])} languages" if e["languages"] else "any language"
         print(f"  {icon} {e['id']:<12} {e['label']} — {e['description']}")
         print(f"     {'':<12} {e['licence']}, "
-              f"{_COMMERCIAL_NOTE.get(e['commercial'], e['commercial'])}; "
-              f"{len(e['languages'])} languages")
+              f"{_COMMERCIAL_NOTE.get(e['commercial'], e['commercial'])}; {languages}")
         if not e["installed"]:
             print(f"     {'':<12} → voxa engines install {e['id']}   "
                   f"(about {e['download_gb']:g} GB)")

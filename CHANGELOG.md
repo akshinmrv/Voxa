@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Keep the music and effects (`--separate`).** The original stays under the dub as a faint
+  bed, at 5%, which leaves its music barely audible and its speech only quieter. With
+  `voxa engines install demucs` and `--separate`, Demucs takes the speech out first, in an
+  environment of its own, and the music and effects go under the dub at full volume. In a
+  test mix of speech over music, dubbed into German, the music came out 26 dB louder than in
+  the faint bed and the original speech 5 dB quieter. On a laptop CPU it took 0.6× the
+  video's length and 1.7 GB of memory, however long the video, since it works two minutes at
+  a time; the result is kept for a dub of the same video into another language. The console
+  offers it as **Background → Keep the music and effects**. Demucs' code is MIT, but the
+  licence of its weights is unclear, which `voxa engines`, the console and the dry run say.
 - **The container image has the console, and engines install into a volume.** `docker run -p
   127.0.0.1:8000:8000 … ghcr.io/akshinmrv/voxa serve --host 0.0.0.0` opens the console on
   http://127.0.0.1:8000; it is built from `web/` in a stage of its own, so the image needs no
