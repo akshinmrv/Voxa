@@ -1402,7 +1402,8 @@ def build_run_plan(video_name: str, args, *, work_dir: Path, output_file: Path,
         if args.tts == "openai" and (getattr(args, "openai_tts_instructions", "") or "").strip():
             lines.append(row("", f"style: {args.openai_tts_instructions[:58]}"))
         if getattr(args, "separate", False):
-            lines.append(row("background", "music and effects, speech taken out (Demucs)"))
+            lines.append(row("separate", "Demucs: Whisper and cloning get the speech alone, "
+                                         "the dub keeps the music and effects"))
             lines.append(row("", "⚠️  the licence of its weights is unclear — see NOTICE.md"))
 
     if args.quality_gate:
@@ -3616,7 +3617,8 @@ def _clone_references(subs, args, work_dir, video_path, logger,
         auto_sample = work_dir / "auto_voice_sample.wav"
         if not auto_sample.exists():
             logger.info("🎤 No --voice-sample provided, extracting from source video...")
-            if not extract_voice_sample(str(video_path), str(auto_sample)):
+            if not extract_voice_sample(_voice_source(args, work_dir, video_path),
+                                        str(auto_sample)):
                 raise TTSError("Failed to extract voice sample")
         speaker_wav = str(auto_sample)
     else:
@@ -3626,7 +3628,8 @@ def _clone_references(subs, args, work_dir, video_path, logger,
 
     speaker_refs = None
     if getattr(args, "diarize", False):
-        speaker_refs = _extract_speaker_samples(str(video_path), subs, work_dir)
+        speaker_refs = _extract_speaker_samples(_voice_source(args, work_dir, video_path),
+                                                subs, work_dir)
         for spk, path in _parse_speaker_voices(getattr(args, "speaker_voices", None)).items():
             if Path(path).exists():
                 speaker_refs[spk] = path
@@ -3886,25 +3889,16 @@ def _separation_hint(error: Exception) -> str:
     return "."
 
 
-def separate_background(video_path: Path, work_dir: Path, state, logger,
-                        ollama_model: Optional[str] = None) -> Optional[Path]:
-    """The original's music and effects without its speech, separated by Demucs in its own
-    environment. It is kept in the workspace, so a dub of the same video into another language
-    reuses it. None for a video with no audio track, which has no background to keep.
-    Ollama keeps the model it translated with in memory for minutes afterwards, which left
-    Demucs without enough on a 14 GB machine, so that model is freed first."""
-    background = work_dir / "background.wav"
-    if state.is_completed('separation') and background.exists():
-        logger.info("🎚️  ✓ Background already separated")
-        return background
-    if _has_audio(video_path) is False:
-        return None
+def separate_audio(video_path: Path, background: Path, speech: Path, work_dir: Path,
+                   logger, ollama_model: Optional[str] = None) -> None:
+    """Split the original's audio with Demucs, in its own environment, into its speech and
+    its background (music, effects, ambience). Ollama keeps the model it translated with in
+    memory for minutes, so in a batch the previous video's could leave Demucs short (it did
+    on a 14 GB machine); that model is freed first."""
     freed = _ollama_unload(ollama_model) if ollama_model else None
     if freed is not None:
         logger.info(f"🧹 Freed the memory Ollama held for {ollama_model} ({freed:.1f} GB)")
     import voxa_engines
-    logger.info("🎚️  Taking the speech out of the original (Demucs; its first run downloads "
-                "the model)...")
     worker = voxa_engines.Worker("demucs", log_path=work_dir / "demucs_worker.log")
     mix = work_dir / "separation_input.wav"
     try:
@@ -3914,13 +3908,22 @@ def separate_background(video_path: Path, work_dir: Path, state, logger,
                    "Audio extraction for separation")
         with tqdm(total=100, desc=f"Separating ({info['device']})", unit="%") as bar:
             worker.request(on_progress=lambda done: bar.update(round(done * 100) - bar.n),
-                           cmd="separate", input=str(mix), background=str(background))
+                           cmd="separate", input=str(mix), background=str(background),
+                           speech=str(speech))
             bar.update(100 - bar.n)
     finally:
         worker.close()
         mix.unlink(missing_ok=True)
-    state.mark_completed('separation')
-    return background
+
+
+def _voice_source(args, work_dir: Path, video_path) -> str:
+    """Where a cloning reference is cut from: with --separate, the speech Demucs took out of
+    the original, which carries its music about 21 dB under the voice instead of at the
+    voice's own level; otherwise the video itself."""
+    speech = work_dir / "speech.wav"
+    if getattr(args, "separate", False) and speech.exists():
+        return str(speech)
+    return str(video_path)
 
 
 def _assemble_final_video(video_path, voiceover_path, output_file,
@@ -4020,8 +4023,41 @@ async def process_video(video_path: str, args, logger: Logger):
         ], "Audio extraction")
         state.mark_completed('extract_audio')
 
-    # Step 2: Audio enhancement (only for transcription — skipped with provided subtitles)
-    if using_subtitles:
+    # Step 2: Audio enhancement (only for transcription — skipped with provided subtitles).
+    # With --separate, Demucs splits the original into its speech and its background here
+    # instead: Whisper and a cloned voice get the speech alone, and step 7 the background. Over
+    # music 12 dB louder than the speech, Whisper's word error rate fell from 32% (it made up
+    # the last sentence) to 12%; at equal loudness the two were within a word of each other.
+    # It runs with --subtitles too, which need no transcript but still a background.
+    background_wav = work_dir / "background.wav"
+    speech_wav = work_dir / "speech.wav"
+    transcription_sig = stage_signature('transcription', args)
+    transcribed = state.is_valid('transcription', transcription_sig) and transcript_json.exists()
+    separate = getattr(args, "separate", False)
+    if separate:
+        if state.is_completed('separation') and background_wav.exists() and speech_wav.exists():
+            logger.info("[2/7] ✓ Speech already separated from the music and effects")
+        elif _has_audio(video_path) is False:
+            logger.info("[2/7] ✓ Separation skipped (the video has no audio track)")
+        else:
+            logger.info(f"[2/7] ({_elapsed()}) Separating the speech from the music and effects "
+                        f"(Demucs; its first run downloads the model)...")
+            import voxa_engines
+            try:
+                separate_audio(video_path, background_wav, speech_wav, work_dir, logger,
+                               ollama_model=args.ollama_model)
+            except voxa_engines.EngineError as e:
+                logger.error(f"❌ {str(e).rstrip('.')}{_separation_hint(e)} Run again to retry "
+                             f"it, or drop --separate.")
+                return 1
+            state.mark_completed('separation')
+        # Whisper hears the speech alone whenever it is about to transcribe. A transcript it
+        # already made is kept, so adding --separate to a finished dub only remixes it.
+        if speech_wav.exists() and not using_subtitles and not transcribed:
+            run_ffmpeg(["ffmpeg", "-y", "-i", str(speech_wav), "-acodec", "pcm_s16le",
+                        "-ar", "16000", "-ac", "1", str(audio_clean)], "Speech for transcription")
+            state.mark_completed('audio_enhancement')
+    elif using_subtitles:
         logger.info("[2/7] ✓ Audio enhancement skipped (using provided subtitles)")
     elif state.is_completed('audio_enhancement') and audio_clean.exists():
         logger.info("[2/7] ✓ Audio enhancement already completed")
@@ -4032,8 +4068,7 @@ async def process_video(video_path: str, args, logger: Logger):
 
     # Step 3: Transcription
     segments = []
-    transcription_sig = stage_signature('transcription', args)
-    if state.is_valid('transcription', transcription_sig) and transcript_json.exists():
+    if transcribed:
         logger.info("[3/7] ✓ Transcription already completed")
         with open(transcript_json, 'r', encoding='utf-8') as f:
             segments = json.load(f)
@@ -4260,17 +4295,9 @@ async def process_video(video_path: str, args, logger: Logger):
 
     # Step 7: Final video assembly
     logger.info(f"[7/7] ({_elapsed()}) Assembling final video...")
-    background = None
-    if getattr(args, "separate", False):
-        import voxa_engines
-        try:
-            background = separate_background(video_path, work_dir, state, logger,
-                                             ollama_model=args.ollama_model)
-        except voxa_engines.EngineError as e:
-            logger.error(f"❌ {str(e).rstrip('.')}{_separation_hint(e)} The dub is saved up "
-                         f"to this step, so running again resumes here; or drop --separate.")
-            return 1
-    # With --separate only music and effects are left, so they stay at full volume.
+    # With --separate the bed is the background step 2 split off: music and effects alone,
+    # so they stay at full volume.
+    background = background_wav if separate and background_wav.exists() else None
     background_volume = args.background_volume
     if background_volume is None:
         background_volume = 1.0 if background else 0.05
@@ -4484,7 +4511,8 @@ Examples:
     parser.add_argument("--separate", action="store_true",
                         help="Take the speech out of the original and keep its music and "
                              "effects under the dub at full volume, instead of the whole "
-                             "original as a faint bed. Needs Demucs, which Voxa installs "
+                             "original as a faint bed; Whisper and a cloned voice get the "
+                             "speech alone. Needs Demucs, which Voxa installs "
                              "separately: voxa engines install demucs (the licence of its "
                              "weights is unclear, see NOTICE.md)")
     parser.add_argument("--background-volume", type=float, default=None,

@@ -359,7 +359,12 @@ voxa doctor --deep     # bağımlılık güncellemelerinde bozulan XTTS ve pyann
 > dublajın altında hafif bir fon olarak kalır: müziği zor duyulur, konuşması ise yalnızca
 > kısılır. `voxa engines install demucs` ve `--separate` ile Demucs önce konuşmayı çıkarır,
 > müzik ve efektler tam seviyede kalır. Bir deneme miksinde (müzik üstüne konuşma) müzik
-> hafif fona göre 26 dB daha yüksek, orijinal konuşma ise 5 dB daha alçak çıktı. Bir
+> hafif fona göre 26 dB daha yüksek, orijinal konuşma ise 5 dB daha alçak çıktı. Whisper
+> ve klonlanan ses de ayrılmış konuşmayı alır: konuşmadan 12 dB yüksek müziğin altında
+> Whisper'ın kelime hata oranı %32'den (son cümleyi uydurmuştu) %12'ye düştü, ondan
+> kesilen klonlama örneğinde ise kelimelerin arasında müzik kalmaz. Arka plan orijinal
+> seviyesini korur, bu yüzden konuşmayı bastıran müzik dublajı da bastırır; onu
+> `--background-volume` ile kısın (`--separate` ile varsayılan 1.0). Bir
 > dizüstü CPU'sunda videonun süresinin yaklaşık 0,6 katı kadar sürdü ve 1,7 GB bellek
 > kullandı; sonuç saklanır, bu yüzden aynı video başka bir dile dublajlanırken yeniden
 > ayrılmaz. Demucs'un kodu MIT'dir, ama yazarına göre ağırlıkların lisansı belirsizdir

@@ -2177,9 +2177,10 @@ def test_plan_notes_subtitles_only_skips_speech():
 
 
 def test_plan_says_when_the_background_is_separated():
-    assert "background" not in _plan(_plan_args())
+    assert "Demucs" not in _plan(_plan_args())
     out = _plan(_plan_args(separate=True))
-    assert "speech taken out (Demucs)" in out and "licence of its weights is unclear" in out
+    assert "Whisper and cloning get the speech alone" in out
+    assert "licence of its weights is unclear" in out
 
 
 def test_blockers_flag_separate_without_demucs(monkeypatch, tmp_path):
@@ -2198,6 +2199,16 @@ def test_a_separation_out_of_memory_says_what_to_free():
                        "DefaultCPUAllocator: not enough memory: you tried to allocate 231211008")
     assert "ollama ps" in voxa._separation_hint(oom)
     assert voxa._separation_hint(RuntimeError("Demucs: ValueError: the input has no audio")) == "."
+
+
+def test_a_cloned_voice_is_cut_from_the_separated_speech(tmp_path):
+    video = tmp_path / "clip.mp4"
+    args = SimpleNamespace(separate=True)
+    # Before (or without) a separation there is only the video to cut it from.
+    assert voxa._voice_source(args, tmp_path, video) == str(video)
+    (tmp_path / "speech.wav").write_bytes(b"RIFF")
+    assert voxa._voice_source(args, tmp_path, video) == str(tmp_path / "speech.wav")
+    assert voxa._voice_source(SimpleNamespace(separate=False), tmp_path, video) == str(video)
 
 
 def test_ollama_frees_the_model_voxa_translated_with(monkeypatch):

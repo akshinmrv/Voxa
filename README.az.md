@@ -357,7 +357,12 @@ voxa doctor --deep     # asılılıq yeniləmələrində sınan XTTS və pyannot
 > dublyajın altında zəif fon kimi qalır: musiqisi çətin eşidilir, danışığı isə sadəcə
 > sakitləşir. `voxa engines install demucs` və `--separate` ilə Demucs əvvəlcə danışığı
 > çıxarır, musiqi və effektlər isə tam səslə qalır. Sınaq miksində (musiqi üstündə danışıq)
-> musiqi zəif fondakından 26 dB uca, orijinal danışıq isə 5 dB sakit çıxdı. Noutbuk
+> musiqi zəif fondakından 26 dB uca, orijinal danışıq isə 5 dB sakit çıxdı. Whisper və
+> klonlanan səs də ayrılmış danışığı alır: danışıqdan 12 dB uca musiqinin altında
+> Whisper-in söz xətası 32%-dən (son cümləni uydurmuşdu) 12%-ə düşdü, ondan kəsilən
+> klonlama nümunəsində isə sözlərin arasında musiqi qalmır. Fon öz orijinal səviyyəsini
+> saxlayır, ona görə danışığı basdıran musiqi dublyajı da basdırır; onu
+> `--background-volume` ilə azaldın (`--separate` ilə standart 1.0). Noutbuk
 > CPU-sunda videonun uzunluğunun təxminən 0.6-sı qədər vaxt və 1.7 GB yaddaş tələb etdi;
 > nəticə saxlanılır, ona görə eyni videonu başqa dilə dublyaj edəndə yenidən ayrılmır.
 > Demucs-un kodu MIT-dir, amma müəllifinə görə çəkilərin lisenziyası aydın deyil (təlim

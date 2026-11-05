@@ -10,17 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Keep the music and effects (`--separate`).** The original stays under the dub as a faint
-  bed, at 5%, which leaves its music barely audible and its speech only quieter. With
-  `voxa engines install demucs` and `--separate`, Demucs takes the speech out first, in an
-  environment of its own, and the music and effects go under the dub at full volume. In a
-  test mix of speech over music, dubbed into German, the music came out 26 dB louder than in
-  the faint bed and the original speech 5 dB quieter. On a laptop CPU it took 0.6× the
-  video's length and 1.7 GB of memory, however long the video, since it works two minutes at
-  a time; the result is kept for a dub of the same video into another language. Ollama keeps
-  the model it translated with in memory for five minutes, which on a 14 GB laptop left Demucs
-  short of memory, so Voxa asks Ollama to free that model first (5.0 GB for llama3). The console
-  offers it as **Background → Keep the music and effects**. Demucs' code is MIT, but the
-  licence of its weights is unclear, which `voxa engines`, the console and the dry run say.
+  bed, at 5%, which leaves its music barely audible and its speech only quieter. With `voxa
+  engines install demucs` and `--separate`, Demucs takes the speech out first, in an
+  environment of its own, and the music and effects go under the dub at full volume. In a test
+  mix of speech over music, dubbed into German, the music came out 26 dB louder than in the
+  faint bed and the original speech 5 dB quieter. The separation runs before transcription, so
+  Whisper and a cloned voice get the speech alone: over music 12 dB louder than the speech,
+  Whisper's word error rate fell from 32% (it made up the last sentence) to 12%, and in a
+  cloning reference cut from it the gaps between words are 30 dB under the voice instead of 3.
+  A transcript already made is kept, so adding `--separate` to a finished dub only remixes it.
+  The background keeps its original level, so music that drowns the speech drowns the dub too
+  (over a mix with the music 12 dB louder, it came out 7 dB over the dub);
+  `--background-volume` lowers it. On a laptop CPU it took 0.6× the video's length and 1.7 GB
+  of memory, however long the video, since it works two minutes at a time; the result is kept
+  for a dub of the same video into another language. Ollama keeps the model it translated with
+  in memory for five minutes, which in a batch left Demucs short on a 14 GB laptop, so Voxa
+  asks Ollama to free that model first (5.0 GB for llama3). The console offers it as
+  **Background → Keep the music and effects**. Demucs' code is MIT, but the licence of its
+  weights is unclear, which `voxa engines`, the console and the dry run say.
 - **The container image has the console, and engines install into a volume.** `docker run -p
   127.0.0.1:8000:8000 … ghcr.io/akshinmrv/voxa serve --host 0.0.0.0` opens the console on
   http://127.0.0.1:8000; it is built from `web/` in a stage of its own, so the image needs no
