@@ -1881,6 +1881,31 @@ def translate_ollama(text: str, target_lang: str, model_name: str) -> str:
         return text
 
 
+def _ollama_unload(model: str) -> Optional[float]:
+    """Ask Ollama to free `model` now, if it has it loaded, rather than keep it in memory for
+    its keep-alive (five minutes by default). Returns the GB it held, or None when nothing was
+    freed: not loaded, or Ollama not reachable. Other models are left alone."""
+    try:
+        with urllib.request.urlopen(_ollama_url("/api/ps"), timeout=2) as r:
+            loaded = json.loads(r.read()).get("models", [])
+    except Exception:
+        return None
+    names = {model, model if ":" in model else f"{model}:latest"}
+    found = next((m for m in loaded if m.get("name") in names), None)
+    if found is None:
+        return None
+    request = urllib.request.Request(
+        _ollama_url("/api/generate"), method="POST",
+        data=json.dumps({"model": found["name"], "keep_alive": 0}).encode(),
+        headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as r:
+            r.read()
+    except Exception:
+        return None
+    return found.get("size", 0) / 1024 ** 3
+
+
 # ─────────────────────────────────────────────
 #  LLM translation providers (OpenAI, Anthropic, …)
 # ─────────────────────────────────────────────
@@ -3857,20 +3882,26 @@ def _separation_hint(error: Exception) -> str:
     text = str(error).lower()
     if "not enough memory" in text or "out of memory" in text:
         return (". Demucs needs about 2 GB of free memory: close what else is using it "
-                "(Ollama keeps its model loaded for a few minutes after translating).")
+                "(a model Ollama still holds counts too; `ollama ps` lists them).")
     return "."
 
 
-def separate_background(video_path: Path, work_dir: Path, state, logger) -> Optional[Path]:
+def separate_background(video_path: Path, work_dir: Path, state, logger,
+                        ollama_model: Optional[str] = None) -> Optional[Path]:
     """The original's music and effects without its speech, separated by Demucs in its own
     environment. It is kept in the workspace, so a dub of the same video into another language
-    reuses it. None for a video with no audio track, which has no background to keep."""
+    reuses it. None for a video with no audio track, which has no background to keep.
+    Ollama keeps the model it translated with in memory for minutes afterwards, which left
+    Demucs without enough on a 14 GB machine, so that model is freed first."""
     background = work_dir / "background.wav"
     if state.is_completed('separation') and background.exists():
         logger.info("🎚️  ✓ Background already separated")
         return background
     if _has_audio(video_path) is False:
         return None
+    freed = _ollama_unload(ollama_model) if ollama_model else None
+    if freed is not None:
+        logger.info(f"🧹 Freed the memory Ollama held for {ollama_model} ({freed:.1f} GB)")
     import voxa_engines
     logger.info("🎚️  Taking the speech out of the original (Demucs; its first run downloads "
                 "the model)...")
@@ -4233,7 +4264,8 @@ async def process_video(video_path: str, args, logger: Logger):
     if getattr(args, "separate", False):
         import voxa_engines
         try:
-            background = separate_background(video_path, work_dir, state, logger)
+            background = separate_background(video_path, work_dir, state, logger,
+                                             ollama_model=args.ollama_model)
         except voxa_engines.EngineError as e:
             logger.error(f"❌ {str(e).rstrip('.')}{_separation_hint(e)} The dub is saved up "
                          f"to this step, so running again resumes here; or drop --separate.")

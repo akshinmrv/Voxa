@@ -2196,8 +2196,35 @@ def test_a_separation_out_of_memory_says_what_to_free():
     # Measured: Demucs failed this way while Ollama still held its model after translating.
     oom = RuntimeError("Demucs: RuntimeError: [enforce fail at alloc_cpu.cpp:117] data. "
                        "DefaultCPUAllocator: not enough memory: you tried to allocate 231211008")
-    assert "Ollama keeps its model loaded" in voxa._separation_hint(oom)
+    assert "ollama ps" in voxa._separation_hint(oom)
     assert voxa._separation_hint(RuntimeError("Demucs: ValueError: the input has no audio")) == "."
+
+
+def test_ollama_frees_the_model_voxa_translated_with(monkeypatch):
+    import io
+    import json
+    monkeypatch.delenv("OLLAMA_HOST", raising=False)
+    loaded = [{"name": "llama3:latest", "size": 5 * 1024 ** 3}, {"name": "qwen3:8b", "size": 1}]
+    sent = []
+
+    def urlopen(request, timeout=None):
+        if isinstance(request, str):                        # GET /api/ps
+            return io.BytesIO(json.dumps({"models": loaded}).encode())
+        sent.append((request.full_url, json.loads(request.data)))
+        return io.BytesIO(b'{"done": true, "done_reason": "unload"}')
+
+    monkeypatch.setattr(voxa.urllib.request, "urlopen", urlopen)
+    assert voxa._ollama_unload("llama3") == 5.0
+    assert sent == [("http://localhost:11434/api/generate",
+                     {"model": "llama3:latest", "keep_alive": 0})]
+    sent.clear()
+    assert voxa._ollama_unload("mistral") is None and sent == []   # not loaded: nothing sent
+
+    def refused(request, timeout=None):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(voxa.urllib.request, "urlopen", refused)
+    assert voxa._ollama_unload("llama3") is None                   # Ollama not running
 
 
 def test_plan_shows_llm_budget_only_for_llm_translators():
