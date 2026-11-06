@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **VoxCPM2 (`--tts voxcpm`), cloning in 30 languages.** `voxa engines install voxcpm` puts
+  OpenBMB's VoxCPM2 (Apache-2.0, code and weights) in an environment of its own, and `--tts
+  voxcpm` clones each speaker from the original video, as Chatterbox does, in 30 languages:
+  seven of them (Vietnamese, Thai, Indonesian, Tagalog, Khmer, Lao, Burmese) no other cloning
+  engine in Voxa speaks. It is made for an NVIDIA GPU. On a laptop CPU (Ryzen 5 5600H) a
+  sentence took 2–3 minutes, 18–22× its length in its own voices and 26–31× cloning, and
+  loading it peaked at 9.5 GB of memory (in float32 it doesn't fit 14 GB at all), so the dry
+  run says so, and on a CPU the run says how long its speech may take: a 29-second clip dubbed
+  into German took 12.5 minutes, 11 of them speaking, where the run had said 8 to 14. In a
+  test in five languages (en, de, tr, vi, id) Whisper heard every word it said; its clones of
+  an English speaker scored 0.74 for speaker similarity (ECAPA), 0.50 speaking German, against
+  0.02–0.17 for its own voices.
+
+### Changed
+
+- **Ollama lets go of its model before Chatterbox or VoxCPM2 loads**, as it already did before
+  Demucs: translation is over by then, and llama3's 5 GB plus the 9.5 GB VoxCPM2 peaks at
+  while loading come to more than a 14 GB laptop has.
+
+### Fixed
+
+- **The console's voice sample reaches Chatterbox.** The console sent its **Voice sample** to
+  XTTS only, so a Chatterbox dub cloned from a sample cut from the video instead of the one
+  given. Every cloning engine gets it now.
+
 ## [1.12.0] - 2026-11-05
 
 ### Added

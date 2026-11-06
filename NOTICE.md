@@ -22,6 +22,7 @@ Read this file before using Voxa commercially.
 | `--tts edge` (default) | ⚠️ Grey area | Uses an **unofficial** Microsoft endpoint (see §3) |
 | `--translator google` (default) | ⚠️ Grey area | Uses an **unofficial** Google endpoint (see §3) |
 | `--tts chatterbox` | ✅ Yes | MIT weights; every clip carries an inaudible watermark (see §4.7) |
+| `--tts voxcpm` | ✅ Yes | Apache-2.0 code and weights; its model card forbids impersonation (see §4.7) |
 | `--separate` | ⚠️ Unclear | Demucs' code is MIT, but its weights have no licence; part of their training data was for research only (see §4.7) |
 | `--tts xtts` | ❌ **No** | XTTS-v2 model weights are **non-commercial only** (see §4.4) |
 | `--openai-tts-base-url` (self-hosted) | ⚠️ **Depends on the model** | The server's model decides: Chatterbox is MIT, VoiceStudio's default OmniVoice is non-commercial (see §4.6) |
@@ -243,6 +244,7 @@ program and imports none of it.
 |---|---|---|:---:|
 | Chatterbox Multilingual | [`chatterbox-tts`](https://github.com/resemble-ai/chatterbox), MIT | MIT | ✅ |
 | Demucs (`--separate`) | [`demucs`](https://github.com/adefossez/demucs), MIT | None stated | ⚠️ Unclear |
+| VoxCPM2 | [`voxcpm`](https://github.com/OpenBMB/VoxCPM), Apache-2.0 | Apache-2.0 | ✅ |
 
 Chatterbox marks every clip it makes with Resemble AI's PerTh watermark, which is inaudible and
 survives compression; a detector can tell the audio was generated. Its environment also
@@ -255,6 +257,13 @@ can't clarify it further. An MIT tag on one of its Hugging Face model cards was 
 August 2026; the cards now state no licence. Voxa uses the default `htdemucs` model, which the first separation
 downloads from Hugging Face (about 80 MB). Its environment also installs PyTorch and numpy
 under their own licences.
+
+VoxCPM2's weights are Apache-2.0, as its Hugging Face model card states, and its authors call it
+free for commercial use; the speech it was trained on (over 2 million hours) isn't published. The
+card forbids using it for impersonation, fraud or disinformation, and asks that what it makes be
+labelled as AI-generated. The first dub with it downloads the model from Hugging Face (about 5
+GB). Its environment also installs PyTorch, transformers, Gradio, FunASR and ModelScope under
+their own licences.
 
 ---
 

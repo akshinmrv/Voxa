@@ -3,7 +3,7 @@ Unit tests for voxa_engines: the catalogue, installing an engine into an environ
 own, and the worker protocol Voxa uses to talk to it.
 
 Installs run against a recording stand-in for uv/pip, and the worker tests use a tiny fake
-worker (plus the real Chatterbox worker's protocol handling, which needs no Chatterbox), so
+worker (plus the real workers' protocol handling, which needs none of their engines), so
 nothing is downloaded.
 
 Run:  pytest -q tests/test_engines.py
@@ -190,6 +190,7 @@ def test_an_engine_that_isnt_installed_has_no_worker(home):
     ("chatterbox_worker.py", {"cmd": "speak", "text": "Merhaba", "language": "tr",
                               "out": "x.wav"}),
     ("demucs_worker.py", {"cmd": "separate", "input": "mix.wav", "background": "bg.wav"}),
+    ("voxcpm_worker.py", {"cmd": "speak", "text": "Xin chào", "out": "x.wav"}),
 ])
 def test_a_workers_protocol_without_its_engine(worker, first):
     # Before loading, nothing imports the engine, so the protocol itself can be checked here.
@@ -295,6 +296,7 @@ def test_engines_are_listed_and_unavailable_until_installed(server):
     assert listed[0]["id"] == "chatterbox" and listed[0]["installed"] is False
     tts = {e["id"]: e for e in client.get("/api/options").json()["ttsEngines"]}
     assert tts["chatterbox"]["available"] is False and tts["edge"]["available"] is True
+    assert tts["voxcpm"]["available"] is False and tts["voxcpm"]["requiresVoiceSample"]
     job = {"fileId": "x", "config": {"targetLang": "tr", "translator": "google",
                                      "tts": "chatterbox"}}
     refused = client.post("/api/jobs", json=job)
@@ -360,12 +362,41 @@ def test_installing_is_for_localhost_only(home):
 
 
 # ── In the pipeline ──────────────────────────────────────
-def test_chatterbox_problems(home):
-    problems = voxa._chatterbox_problems("az")
+@pytest.mark.parametrize("engine, name", [("chatterbox", "Chatterbox"), ("voxcpm", "VoxCPM2")])
+def test_an_engine_says_what_it_lacks(home, engine, name):
+    problems = voxa._engine_problems(engine, "az")
     assert any("doesn't speak 'az'" in p for p in problems)
-    assert any("voxa engines install chatterbox" in p for p in problems)
-    assert voxa._chatterbox_problems("tr") == [
-        "Chatterbox isn't installed — install it once with: voxa engines install chatterbox"]
+    assert any(f"voxa engines install {engine}" in p for p in problems)
+    assert voxa._engine_problems(engine, "tr") == [
+        f"{name} isn't installed — install it once with: voxa engines install {engine}"]
+
+
+def test_voxcpm_speaks_languages_chatterbox_doesnt(home, monkeypatch):
+    monkeypatch.setattr(ve, "is_installed", lambda engine_id: True)
+    assert voxa._engine_problems("voxcpm", "vi") == []
+    assert "doesn't speak 'vi'" in voxa._engine_problems("chatterbox", "vi")[0]
+
+
+@pytest.mark.parametrize("tts", ["xtts", "chatterbox", "voxcpm"])
+def test_the_console_hands_every_cloning_engine_its_voice_sample(server, monkeypatch,
+                                                                 tmp_path, tts):
+    import asyncio
+    srv, _ = server
+    ran = {}
+
+    async def launch(*cmd, **kwargs):
+        ran["cmd"] = list(cmd)
+        raise OSError("not launched in a test")
+
+    monkeypatch.setattr(srv, "read_settings", lambda: {})
+    monkeypatch.setattr(srv.asyncio, "create_subprocess_exec", launch)
+    config = srv.JobConfigModel(targetLang="de", translator="google", tts=tts,
+                                voiceSample="me.wav")
+    job = srv.Job(id="j", file_name="v.mp4", config=config, work_dir=tmp_path)
+    asyncio.run(srv._run_job(job))
+    assert job.status == "failed"
+    at = ran["cmd"].index("--voice-sample")
+    assert ran["cmd"][at + 1] == "me.wav"
 
 
 def test_voxa_engines_command(home, capsys, monkeypatch):

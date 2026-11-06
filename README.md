@@ -328,6 +328,7 @@ voxa doctor --deep     # also loads XTTS and pyannote, which break on dependency
 | `pipx install "voxa-dub[url]"` | `voxa <video-url>` — download the input first (yt-dlp) |
 | `pipx install "voxa-dub[diarize]"` | `--diarize` — a distinct voice per speaker (pyannote) |
 | `voxa engines install chatterbox` | `--tts chatterbox` — clones each speaker's voice in 23 languages, MIT. Installed into an environment of its own (about 4.5 GB); slow without a GPU |
+| `voxa engines install voxcpm` | `--tts voxcpm` — VoxCPM2: clones each speaker's voice in 30 languages, Vietnamese, Thai and Indonesian among them, Apache-2.0. Installed into an environment of its own (about 6.4 GB); made for an NVIDIA GPU |
 | `voxa engines install demucs` | `--separate` — keeps the original's music and effects at full volume, its speech taken out. Installed into an environment of its own (about 0.7 GB); the weights' licence is unclear (see [NOTICE](NOTICE.md#47-engines-in-environments-of-their-own-voxa-engines)) |
 
 > [!NOTE]
@@ -362,6 +363,12 @@ voxa doctor --deep     # also loads XTTS and pyannote, which break on dependency
 > CPU it took 40–60 seconds per sentence, so a GPU makes the difference here; every clip it
 > makes carries Resemble AI's inaudible PerTh watermark. With faster-whisper installed, Voxa
 > also cuts the words Chatterbox sometimes adds after a line.
+>
+> VoxCPM2 (`voxa engines install voxcpm`) speaks 30 languages, seven of them ones Chatterbox
+> doesn't, and needs a GPU even more: on a laptop CPU a sentence took 2–3 minutes (18–31× its
+> length), and loading it peaked at 9.5 GB of memory. In a test in five languages Whisper heard
+> every word it said, and its clones of an English speaker scored 0.74 for speaker similarity
+> (0.50 speaking German), against 0.02–0.17 for its own voices.
 
 > [!NOTE]
 > **Keeping the music and effects** (`--separate`). By default the whole original stays
@@ -649,6 +656,8 @@ Install Chatterbox (MIT) and dub with it; it clones each speaker from the origin
 voxa engines install chatterbox
 voxa video.mp4 --tts chatterbox --target_lang de
 ```
+
+With an NVIDIA GPU, VoxCPM2 (Apache-2.0) does the same in 30 languages: `voxa engines install voxcpm`, then `--tts voxcpm`.
 
 Or run an MIT-licensed, OpenAI-compatible speech server locally and point Voxa at it:
 

@@ -95,6 +95,28 @@ ENGINES: Dict[str, Engine] = {
                "data (MUSDB) was released for research only. Check that before using it "
                "commercially.",
     ),
+    "voxcpm": Engine(
+        id="voxcpm",
+        label="VoxCPM2",
+        kind="tts",
+        description="Clones each speaker's voice from the original video, in 30 languages; "
+                    "made for an NVIDIA GPU.",
+        licence="Apache-2.0",
+        commercial="yes",
+        languages=("ar", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "id", "it",
+                   "ja", "km", "ko", "lo", "ms", "my", "nl", "no", "pl", "pt", "ru", "sv",
+                   "sw", "th", "tl", "tr", "vi", "zh"),
+        cloning=True,
+        python="3.11",
+        packages=("voxcpm==2.0.3",),
+        worker="voxcpm_worker.py",
+        download_gb=6.4,
+        homepage="https://github.com/OpenBMB/VoxCPM",
+        notice="Without an NVIDIA GPU it is slow: on a laptop CPU each line took 18 to 31 "
+               "times as long as its speech, so a ten-minute video takes hours, and loading "
+               "it used 9.5 GB of memory. Its model card forbids using it to impersonate "
+               "anyone, and asks that what it makes be labelled as AI-generated.",
+    ),
 }
 
 

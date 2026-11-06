@@ -165,6 +165,14 @@ XTTS_SUPPORTED_LANGS = {
     'cs', 'ar', 'zh', 'hu', 'ko', 'ja', 'hi'
 }
 
+# The --tts engines that copy a voice: from --voice-sample, or from the video's own speech.
+CLONING_TTS = ("xtts", "chatterbox", "voxcpm")
+# The --tts engines Voxa installs into environments of their own (voxa_engines).
+ENGINE_TTS = ("chatterbox", "voxcpm")
+# How long VoxCPM2 took per second of speech on a laptop CPU (Ryzen 5 5600H, bf16): 18× to
+# 22× in its own voices, 26× to 31× cloning. A GPU is what it is made for.
+VOXCPM_CPU_RTF = (18, 31)
+
 # Piper voice per target language: lang → (locale, voice, quality, licence), laid out as in
 # rhasspy/piper-voices, which download_piper_model fetches from on first use. Every entry has
 # been checked to exist there. The licence is the one the voice's MODEL_CARD gives — that of
@@ -1291,7 +1299,7 @@ def _silent_video_problems(name: str, args, has_audio: Optional[bool]) -> List[s
     if not getattr(args, "subtitles", None):
         return [f"{name} has no audio track, so there's no speech to transcribe. To voice a "
                 f"silent video, give its script as subtitles: --subtitles script.srt"]
-    if args.tts in ("xtts", "chatterbox") and not getattr(args, "voice_sample", None):
+    if args.tts in CLONING_TTS and not getattr(args, "voice_sample", None):
         return [f"{name} has no audio track for {args.tts} to copy a voice from: pass "
                 f"--voice-sample, or choose another --tts"]
     return []
@@ -1321,13 +1329,13 @@ def plan_blockers(args) -> List[str]:
             problems.append("no API key for OpenAI speech — set OPENAI_API_KEY, or point "
                             "--openai-tts-base-url at a compatible server")
     sample = getattr(args, "voice_sample", None)
-    if args.tts == "xtts" and sample and not Path(sample).exists():
+    if args.tts in CLONING_TTS and sample and not Path(sample).exists():
         problems.append(f"voice sample not found: {sample}")
     if args.tts == "piper" and _piper_voice(getattr(args, "target_lang", "")) is None:
         problems.append(f"no Piper voice is mapped for '{args.target_lang}' — add one to "
                         "PIPER_VOICES or choose another --tts")
-    if args.tts == "chatterbox":
-        problems.extend(_chatterbox_problems(getattr(args, "target_lang", "")))
+    if args.tts in ENGINE_TTS:
+        problems.extend(_engine_problems(args.tts, getattr(args, "target_lang", "")))
     if getattr(args, "separate", False):
         problems.extend(_separation_problems())
     if any(_looks_like_url(v) for v in getattr(args, "videos", [])) and not _ytdlp_available():
@@ -1387,7 +1395,7 @@ def build_run_plan(video_name: str, args, *, work_dir: Path, output_file: Path,
         speak = args.tts
         if args.tts == "openai":
             speak += f" {args.openai_tts_model} / voice {args.openai_voice}"
-        elif args.tts in ("xtts", "chatterbox"):
+        elif args.tts in CLONING_TTS:
             speak += f"  (voice sample: {args.voice_sample or 'auto-extracted from the video'})"
         piper_voice = _piper_voice(args.target_lang) if args.tts == "piper" else None
         if piper_voice:
@@ -1402,6 +1410,10 @@ def build_run_plan(video_name: str, args, *, work_dir: Path, output_file: Path,
             lines.append(row("", f"{warn}{_piper_licence_note(licence)} — see NOTICE.md"))
         if args.tts == "openai" and (getattr(args, "openai_tts_instructions", "") or "").strip():
             lines.append(row("", f"style: {args.openai_tts_instructions[:58]}"))
+        if args.tts == "voxcpm":
+            low, high = VOXCPM_CPU_RTF
+            lines.append(row("", f"⚠️  made for an NVIDIA GPU: on a laptop CPU each line takes "
+                                 f"{low}–{high}× its length"))
         if getattr(args, "separate", False):
             lines.append(row("separate", "Demucs: Whisper and cloning get the speech alone, "
                                          "the dub keeps the music and effects"))
@@ -1909,6 +1921,15 @@ def _ollama_unload(model: str) -> Optional[float]:
     except Exception:
         return None
     return found.get("size", 0) / 1024 ** 3
+
+
+def _free_ollama(model: Optional[str], logger) -> None:
+    """Free the model Voxa translated with before a large local model loads (Demucs,
+    Chatterbox, VoxCPM2): translation is over by then, and Ollama would otherwise keep it in
+    memory for minutes — enough, on a 14 GB machine, to leave Demucs short."""
+    freed = _ollama_unload(model) if model else None
+    if freed is not None:
+        logger.info(f"🧹 Freed the memory Ollama held for {model} ({freed:.1f} GB)")
 
 
 # ─────────────────────────────────────────────
@@ -3611,7 +3632,7 @@ async def _tts_piper(subs, args, work_dir, video_path, gate_asr, logger):
 
 def _clone_references(subs, args, work_dir, video_path, logger,
                       engine: str) -> Tuple[str, Optional[Dict[str, str]]]:
-    """The voice a cloning engine (XTTS, Chatterbox) copies: --voice-sample, or a sample cut
+    """The voice a cloning engine (CLONING_TTS) copies: --voice-sample, or a sample cut
     from the video. Under --diarize also one per speaker, cut from where that speaker talks,
     so every dubbed speaker keeps the original speaker's voice; --speaker-voices values, if
     given, are reference wav paths that override the auto extraction for those speakers."""
@@ -3777,18 +3798,19 @@ def _cut_trailing_speech(path: Path, text: str, asr_model, lang: str, index: int
     return True
 
 
-def _chatterbox_problems(target_lang: str) -> List[str]:
-    """Why Chatterbox can't dub into `target_lang` here, if it can't: it runs in an
-    environment of its own (voxa engines install chatterbox) and covers 23 languages."""
+def _engine_problems(engine_id: str, target_lang: str) -> List[str]:
+    """Why an engine Voxa installs separately (Chatterbox, VoxCPM2) can't dub into
+    `target_lang` here, if it can't: it doesn't speak it, or it isn't installed."""
     import voxa_engines
-    engine = voxa_engines.get("chatterbox")
+    engine = voxa_engines.get(engine_id)
+    name = engine.label.split()[0]
     problems = []
     if (target_lang or "")[:2].lower() not in engine.languages:
-        problems.append(f"Chatterbox doesn't speak '{target_lang}' — it covers "
+        problems.append(f"{name} doesn't speak '{target_lang}' — it covers "
                         f"{', '.join(engine.languages)}; choose another --tts")
-    if not voxa_engines.is_installed("chatterbox"):
-        problems.append("Chatterbox isn't installed — install it once with: "
-                        "voxa engines install chatterbox")
+    if not voxa_engines.is_installed(engine_id):
+        problems.append(f"{name} isn't installed — install it once with: "
+                        f"voxa engines install {engine_id}")
     return problems
 
 
@@ -3853,13 +3875,93 @@ async def generate_chatterbox(subs, speaker_wav: str, lang_code: str, concat_lis
 
 
 async def _tts_chatterbox(subs, args, work_dir, video_path, gate_asr, logger):
-    problems = _chatterbox_problems(args.target_lang)
+    problems = _engine_problems("chatterbox", args.target_lang)
     if problems:
         raise TTSError("❌ " + "\n❌ ".join(problems))
     speaker_wav, speaker_refs = _clone_references(subs, args, work_dir, video_path, logger,
                                                   "Chatterbox")
+    _free_ollama(getattr(args, "ollama_model", None), logger)
     concat_list, temp_files = [], []
     await generate_chatterbox(
+        subs, speaker_wav, args.target_lang[:2].lower(), concat_list, temp_files, work_dir,
+        enable_stretch=not args.no_stretch, quality_gate=args.quality_gate,
+        asr_model=gate_asr, media_ms=_media_ms(video_path), speaker_refs=speaker_refs)
+    return concat_list, temp_files
+
+
+def _voxcpm_cpu_estimate(speech_s: float) -> str:
+    """How long VoxCPM2 may take on a CPU for `speech_s` seconds of speech, as the range it
+    took on a laptop CPU (VOXCPM_CPU_RTF). Pure."""
+    def span(seconds: float) -> str:
+        if seconds >= 5400:
+            return f"{seconds / 3600:.1f} h"
+        return f"{max(1, round(seconds / 60))} min"
+    low, high = (span(speech_s * rtf) for rtf in VOXCPM_CPU_RTF)
+    return f"about {low}" if low == high else f"{low} to {high}"
+
+
+async def generate_voxcpm(subs, speaker_wav: str, lang_code: str, concat_list: list,
+                          temp_files: list, work_dir: Path, enable_stretch: bool,
+                          quality_gate: bool = False, asr_model=None,
+                          media_ms: Optional[float] = None,
+                          speaker_refs: Optional[Dict[str, str]] = None):
+    """Cloned speech with VoxCPM2, made by its worker in the engine's own environment. It
+    reads the language from the text, so `lang_code` is for the quality gate only."""
+    import voxa_engines
+    worker = voxa_engines.Worker("voxcpm", log_path=work_dir / "voxcpm_worker.log")
+    _LOG.info("🔄 Loading VoxCPM2 (its first run downloads the model, about 5 GB)...")
+    try:
+        info = await asyncio.to_thread(worker.start)
+    except voxa_engines.EngineError as e:
+        worker.close()
+        raise TTSError(f"❌ {e}") from e
+    sample_rate = info["sample_rate"]
+    _LOG.info(f"🎙️  VoxCPM2 on {info['device']}, cloning from: {speaker_wav}")
+    if info["device"] == "cpu":
+        speech_s = sum(max(0, _sub_end_ms(s) - _sub_start_ms(s)) for s in subs) / 1000.0
+        low, high = VOXCPM_CPU_RTF
+        _LOG.warning(f"⚠️  VoxCPM2 is made for an NVIDIA GPU, and this is a CPU: on a laptop "
+                     f"CPU each line took {low}–{high}× its length, so these "
+                     f"{speech_s / 60:.1f} minutes of speech may take "
+                     f"{_voxcpm_cpu_estimate(speech_s)}.")
+
+    def _render(i, text, final_file, target_duration):
+        raw_file = work_dir / f"vcpm_raw_{i}.wav"
+        reference = speaker_wav
+        if speaker_refs:
+            reference = speaker_refs.get(getattr(subs[i], "speaker", None), speaker_wav)
+        try:
+            worker.request(cmd="speak", text=text, reference=reference, out=str(raw_file))
+        except voxa_engines.EngineError as e:
+            _LOG.warning(f"VoxCPM2 segment {i}: {e}")
+            return False
+        if not _has_content(raw_file, 1000):
+            return False
+        temp_files.append(str(raw_file))
+        return _fit_to_window(raw_file, final_file, target_duration, work_dir,
+                              sample_rate, enable_stretch)
+
+    try:
+        await synthesize_timeline(
+            subs, engine="voxcpm", prefix="vcpm", sample_rate=sample_rate,
+            work_dir=work_dir, concat_list=concat_list, temp_files=temp_files,
+            render=_render, text_of=lambda s: normalize_tts_text(s.text),
+            desc="VoxCPM2", unit="phrase",
+            quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code,
+            media_ms=media_ms)
+    finally:
+        worker.close()
+
+
+async def _tts_voxcpm(subs, args, work_dir, video_path, gate_asr, logger):
+    problems = _engine_problems("voxcpm", args.target_lang)
+    if problems:
+        raise TTSError("❌ " + "\n❌ ".join(problems))
+    speaker_wav, speaker_refs = _clone_references(subs, args, work_dir, video_path, logger,
+                                                  "VoxCPM2")
+    _free_ollama(getattr(args, "ollama_model", None), logger)
+    concat_list, temp_files = [], []
+    await generate_voxcpm(
         subs, speaker_wav, args.target_lang[:2].lower(), concat_list, temp_files, work_dir,
         enable_stretch=not args.no_stretch, quality_gate=args.quality_gate,
         asr_model=gate_asr, media_ms=_media_ms(video_path), speaker_refs=speaker_refs)
@@ -3872,6 +3974,7 @@ TTS_PROVIDERS: Dict[str, Dict] = {
     "piper":  {"synthesize": _tts_piper},
     "xtts":   {"synthesize": _tts_xtts},
     "openai": {"synthesize": _tts_openai},
+    "voxcpm": {"synthesize": _tts_voxcpm},
 }
 
 
@@ -3899,9 +4002,7 @@ def separate_audio(video_path: Path, background: Path, speech: Path, work_dir: P
     its background (music, effects, ambience). Ollama keeps the model it translated with in
     memory for minutes, so in a batch the previous video's could leave Demucs short (it did
     on a 14 GB machine); that model is freed first."""
-    freed = _ollama_unload(ollama_model) if ollama_model else None
-    if freed is not None:
-        logger.info(f"🧹 Freed the memory Ollama held for {ollama_model} ({freed:.1f} GB)")
+    _free_ollama(ollama_model, logger)
     import voxa_engines
     worker = voxa_engines.Worker("demucs", log_path=work_dir / "demucs_worker.log")
     mix = work_dir / "separation_input.wav"
@@ -4578,6 +4679,8 @@ Examples:
     parser.add_argument("--tts", choices=sorted(TTS_PROVIDERS), default="edge",
                         help="TTS engine: edge (online), piper (offline), chatterbox "
                              "(cloning, MIT; install it with `voxa engines install chatterbox`), "
+                             "voxcpm (VoxCPM2: cloning in 30 languages, Apache-2.0, made for "
+                             "an NVIDIA GPU; `voxa engines install voxcpm`), "
                              "xtts (cloning, non-commercial), openai (multilingual, "
                              "instructable — best for languages the cloning engines can't do, "
                              "e.g. az)")
@@ -4602,8 +4705,9 @@ Examples:
                              "(steady pace, no added pauses), so an expressive style changes "
                              "delivery without breaking dub sync.")
     parser.add_argument("--voice-sample", type=str, default=None,
-                        help="Path to reference WAV for XTTS voice cloning (optional, "
-                             "auto-extracted from source video if not provided)")
+                        help="Path to the reference WAV a cloning engine (xtts, chatterbox, "
+                             "voxcpm) copies the voice from (optional, auto-extracted from "
+                             "the source video if not provided)")
     parser.add_argument("--tts-workers", type=int, default=4,
                         help="Parallel synthesis requests for network TTS engines "
                              "(openai, edge) — most of their time is spent awaiting the API, "
@@ -4741,10 +4845,10 @@ Examples:
               "   or point --openai-tts-base-url at a compatible server (no key needed).")
         return 1
 
-    # Chatterbox runs in an environment of its own: check it's installed and speaks the
-    # language before minutes of transcription and translation, not after.
-    if args.tts == "chatterbox" and not args.dry_run:
-        problems = _chatterbox_problems(args.target_lang)
+    # Chatterbox and VoxCPM2 run in environments of their own: check the engine is installed
+    # and speaks the language before minutes of transcription and translation, not after.
+    if args.tts in ENGINE_TTS and not args.dry_run:
+        problems = _engine_problems(args.tts, args.target_lang)
         if problems:
             print("❌ " + "\n❌ ".join(problems))
             return 1

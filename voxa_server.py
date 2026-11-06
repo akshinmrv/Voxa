@@ -101,6 +101,8 @@ _TTS_META = {
     "edge": {"label": "Edge", "description": "Cloud, many natural voices"},
     "openai": {"label": "OpenAI", "description": "Cloud or self-hosted endpoint"},
     "piper": {"label": "Piper", "description": "Fully offline neural TTS", "offline": True},
+    "voxcpm": {"label": "VoxCPM2", "description": "Voice cloning in 30 languages, made for a GPU",
+               "requiresVoiceSample": True},
     "xtts": {"label": "XTTS", "description": "Voice cloning from a sample",
              "requiresVoiceSample": True},
 }
@@ -342,7 +344,7 @@ async def _run_job(job: Job) -> None:
         cmd += speech_style_args(cfg.tts, current_settings)
         cmd += translation_fallback_args(current_settings)
         cmd += advanced_timing_args(current_settings)
-        if cfg.tts == "xtts" and cfg.voiceSample:
+        if cfg.tts in voxa.CLONING_TTS and cfg.voiceSample:
             cmd += ["--voice-sample", cfg.voiceSample]
         if cfg.tts == "openai":
             if cfg.openaiTtsModel:

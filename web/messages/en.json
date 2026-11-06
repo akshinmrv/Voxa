@@ -245,7 +245,7 @@
       "openaiVoice": "Voice",
       "whisperModel": "Whisper model",
       "voiceSample": "Voice sample",
-      "voiceSampleHint": "XTTS clones the voice from this reference clip.",
+      "voiceSampleHint": "The voice is cloned from this clip. Leave it empty to cut one from the video.",
       "diarize": "Speakers",
       "diarizeHint": "Detect who speaks when and give each speaker their own voice. Needs a Hugging Face token (HF_TOKEN) and the diarize extra.",
       "diarizeToggle": "Give each speaker their own voice",

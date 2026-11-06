@@ -320,6 +320,7 @@ voxa doctor --deep     # asılılıq yeniləmələrində sınan XTTS və pyannot
 | `pipx install "voxa-dub[url]"` | `voxa <video-url>` — girişi əvvəlcə yüklə (yt-dlp) |
 | `pipx install "voxa-dub[diarize]"` | `--diarize` — hər danışana ayrı səs (pyannote) |
 | `voxa engines install chatterbox` | `--tts chatterbox` — hər danışanın səsini 23 dildə klonlayır, MIT. Öz mühitinə quraşdırılır (təxminən 4.5 GB); GPU olmadan yavaşdır |
+| `voxa engines install voxcpm` | `--tts voxcpm` — VoxCPM2: hər danışanın səsini 30 dildə klonlayır, aralarında vyetnam, tay və indoneziya dilləri də var, Apache-2.0. Öz mühitinə quraşdırılır (təxminən 6.4 GB); NVIDIA GPU üçün nəzərdə tutulub |
 | `voxa engines install demucs` | `--separate` — orijinalın musiqi və effektlərini tam səslə saxlayır, danışığını çıxarır. Öz mühitinə quraşdırılır (təxminən 0.7 GB); çəkilərin lisenziyası aydın deyil ([NOTICE](NOTICE.md#47-engines-in-environments-of-their-own-voxa-engines)) |
 
 > [!NOTE]
@@ -351,6 +352,12 @@ voxa doctor --deep     # asılılıq yeniləmələrində sınan XTTS və pyannot
 > saniyə çəkdi, yəni burada GPU həlledicidir; yaratdığı hər klipdə Resemble AI-ın eşidilməyən
 > PerTh su nişanı var. faster-whisper quraşdırılıbsa, Voxa Chatterbox-un bəzən sətrin sonuna
 > əlavə etdiyi sözləri də kəsir.
+>
+> VoxCPM2 (`voxa engines install voxcpm`) 30 dildə danışır, onlardan yeddisini Chatterbox
+> bilmir, və GPU-ya daha çox ehtiyac duyur: noutbuk CPU-sunda bir cümlə 2–3 dəqiqə çəkdi (öz
+> uzunluğunun 18–31 misli), yüklənərkən isə 9.5 GB-a qədər yaddaş tutdu. Beş dildə sınaqda
+> Whisper onun dediyi hər sözü eşitdi; ingiliscə danışanın klonları danışan oxşarlığında 0.74
+> (almanca danışanda 0.50) topladı, öz səsləri isə 0.02–0.17.
 
 > [!NOTE]
 > **Musiqi və effektləri saxlamaq** (`--separate`). Standart olaraq bütün orijinal
@@ -597,6 +604,8 @@ klonlayır:
 voxa engines install chatterbox
 voxa video.mp4 --tts chatterbox --target_lang de
 ```
+
+NVIDIA GPU-nuz varsa, VoxCPM2 (Apache-2.0) eyni işi 30 dildə görür: `voxa engines install voxcpm`, sonra `--tts voxcpm`.
 
 Ya da MIT lisenziyalı, OpenAI-uyğun nitq serverini lokal işlədin və Voxa-nı ona yönləndirin:
 

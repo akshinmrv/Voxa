@@ -59,6 +59,8 @@ def test_a_plain_install_is_ready_with_the_extras_off(machine, capsys):
     assert checks[("Translation", "Ollama")].status == "off"
     chatterbox = checks[("Speech", "Chatterbox")]
     assert chatterbox.status == "off" and chatterbox.fix.startswith("voxa engines install")
+    voxcpm = checks[("Speech", "VoxCPM2")]
+    assert voxcpm.status == "off" and "about 6.4 GB" in voxcpm.fix
     demucs = checks[("Extras", "Demucs")]               # not a voice, so not under Speech
     assert demucs.status == "off" and demucs.fix.startswith("voxa engines install demucs")
     assert not any(c.status == "fail" for c in checks.values())

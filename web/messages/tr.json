@@ -245,7 +245,7 @@
       "openaiVoice": "Ses",
       "whisperModel": "Whisper modeli",
       "voiceSample": "Ses örneği",
-      "voiceSampleHint": "XTTS sesi bu referans klipten klonlar.",
+      "voiceSampleHint": "Ses bu klipten klonlanır. Boş bırakırsanız videonun kendisinden kesilir.",
       "diarize": "Konuşmacılar",
       "diarizeHint": "Kimin ne zaman konuştuğunu algıla ve her konuşmacıya kendi sesini ver. Bir Hugging Face token'ı (HF_TOKEN) ve diarize ekstrası gerekir.",
       "diarizeToggle": "Her konuşmacıya kendi sesini ver",

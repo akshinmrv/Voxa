@@ -321,6 +321,7 @@ voxa doctor --deep     # bağımlılık güncellemelerinde bozulan XTTS ve pyann
 | `pipx install "voxa-dub[url]"` | `voxa <video-url>` — girişi önce indir (yt-dlp) |
 | `pipx install "voxa-dub[diarize]"` | `--diarize` — her konuşmacıya ayrı ses (pyannote) |
 | `voxa engines install chatterbox` | `--tts chatterbox` — her konuşmacının sesini 23 dilde klonlar, MIT. Kendi ortamına kurulur (yaklaşık 4,5 GB); GPU olmadan yavaştır |
+| `voxa engines install voxcpm` | `--tts voxcpm` — VoxCPM2: her konuşmacının sesini 30 dilde klonlar, aralarında Vietnamca, Tayca ve Endonezce de var, Apache-2.0. Kendi ortamına kurulur (yaklaşık 6,4 GB); NVIDIA GPU için tasarlanmıştır |
 | `voxa engines install demucs` | `--separate` — orijinalin müzik ve efektlerini tam seviyede tutar, konuşmasını çıkarır. Kendi ortamına kurulur (yaklaşık 0,7 GB); ağırlıkların lisansı belirsizdir ([NOTICE](NOTICE.md#47-engines-in-environments-of-their-own-voxa-engines)) |
 
 > [!NOTE]
@@ -353,6 +354,12 @@ voxa doctor --deep     # bağımlılık güncellemelerinde bozulan XTTS ve pyann
 > başına 40–60 saniye sürdü, yani burada GPU belirleyicidir; ürettiği her klipte Resemble AI'ın
 > duyulmayan PerTh filigranı vardır. faster-whisper kuruluysa, Voxa Chatterbox'ın bazen satırın
 > sonuna eklediği sözcükleri de keser.
+>
+> VoxCPM2 (`voxa engines install voxcpm`) 30 dil konuşur, bunların yedisini Chatterbox bilmez,
+> ve GPU'ya daha da çok ihtiyaç duyar: bir dizüstü CPU'sunda bir cümle 2–3 dakika sürdü (kendi
+> uzunluğunun 18–31 katı), yüklenirken de 9,5 GB'a kadar bellek kullandı. Beş dilde bir denemede
+> Whisper söylediği her sözcüğü duydu; İngilizce bir konuşmacının klonları konuşmacı
+> benzerliğinde 0,74 (Almanca konuşurken 0,50), kendi sesleri ise 0,02–0,17 aldı.
 
 > [!NOTE]
 > **Müzik ve efektleri korumak** (`--separate`). Varsayılan olarak orijinalin tamamı
@@ -596,6 +603,8 @@ Chatterbox'ı (MIT) kurun ve onunla dublaj yapın; her konuşmacıyı orijinal v
 voxa engines install chatterbox
 voxa video.mp4 --tts chatterbox --target_lang de
 ```
+
+NVIDIA GPU'nuz varsa, VoxCPM2 (Apache-2.0) aynısını 30 dilde yapar: `voxa engines install voxcpm`, ardından `--tts voxcpm`.
 
 Ya da MIT lisanslı, OpenAI uyumlu bir konuşma sunucusunu yerel çalıştırın ve Voxa'yı ona yönlendirin:
 

@@ -1002,7 +1002,8 @@ def _fake_logger():
 
 def test_tts_providers_registry_shape():
     # Registry is the single source of truth for --tts; every engine has an adapter.
-    assert set(voxa.TTS_PROVIDERS) == {"edge", "piper", "xtts", "openai", "chatterbox"}
+    assert set(voxa.TTS_PROVIDERS) == {"edge", "piper", "xtts", "openai", "chatterbox",
+                                       "voxcpm"}
     for name, spec in voxa.TTS_PROVIDERS.items():
         assert callable(spec["synthesize"]), name
 
@@ -1758,7 +1759,7 @@ def test_a_silent_video_is_explained_not_failed_on():
     [problem] = voxa._silent_video_problems("v.mp4", args, False)
     assert "no audio track" in problem and "--subtitles" in problem
     assert voxa._silent_video_problems("v.mp4", _plan_args(subtitles="s.srt"), False) == []
-    for tts in ("xtts", "chatterbox"):
+    for tts in voxa.CLONING_TTS:
         [problem] = voxa._silent_video_problems(
             "v.mp4", _plan_args(subtitles="s.srt", tts=tts), False)
         assert "--voice-sample" in problem
@@ -2185,6 +2186,33 @@ def test_plan_says_when_the_background_is_separated():
     assert "to stay" not in _plan(_plan_args(separate=True, no_duck=True))
 
 
+def test_plan_warns_that_voxcpm_is_made_for_a_gpu(monkeypatch, tmp_path):
+    out = _plan(_plan_args(tts="voxcpm"))
+    assert "voice sample: auto-extracted from the video" in out
+    assert "made for an NVIDIA GPU: on a laptop CPU each line takes 18–31× its length" in out
+    assert "NVIDIA" not in _plan(_plan_args(tts="chatterbox"))
+    monkeypatch.setenv("VOXA_ENGINES_DIR", str(tmp_path))
+    assert voxa.plan_blockers(_plan_args(tts="voxcpm", target_lang="az")) == [
+        "VoxCPM2 doesn't speak 'az' — it covers " + ", ".join(voxa_engines_langs("voxcpm"))
+        + "; choose another --tts",
+        "VoxCPM2 isn't installed — install it once with: voxa engines install voxcpm"]
+
+
+def voxa_engines_langs(engine_id):
+    import voxa_engines
+    return voxa_engines.get(engine_id).languages
+
+
+@pytest.mark.parametrize("speech_s, said", [
+    (60, "18 min to 31 min"),       # a minute of speech
+    (200, "60 min to 1.7 h"),
+    (600, "3.0 h to 5.2 h"),        # ten minutes: what a CPU user should expect
+    (1, "about 1 min"),
+])
+def test_voxcpm_says_how_long_a_cpu_may_take(speech_s, said):
+    assert voxa._voxcpm_cpu_estimate(speech_s) == said
+
+
 def test_blockers_flag_separate_without_demucs(monkeypatch, tmp_path):
     monkeypatch.setenv("VOXA_ENGINES_DIR", str(tmp_path))
     assert voxa.plan_blockers(_plan_args(separate=True)) == [
@@ -2285,6 +2313,30 @@ def test_ollama_frees_the_model_voxa_translated_with(monkeypatch):
 
     monkeypatch.setattr(voxa.urllib.request, "urlopen", refused)
     assert voxa._ollama_unload("llama3") is None                   # Ollama not running
+
+
+@pytest.mark.parametrize("tts, generate", [("chatterbox", "generate_chatterbox"),
+                                           ("voxcpm", "generate_voxcpm")])
+def test_ollama_lets_go_of_its_model_before_a_cloning_engine_loads(monkeypatch, tmp_path,
+                                                                   tts, generate):
+    # VoxCPM2 peaked at 9.5 GB loading on a 14 GB laptop: with llama3's 5 GB still held
+    # after translating, the two don't fit.
+    import asyncio
+    order, logged = [], []
+
+    async def generated(*a, **k):
+        order.append("generate")
+
+    monkeypatch.setattr(voxa, "_engine_problems", lambda engine, lang: [])
+    monkeypatch.setattr(voxa, "_clone_references", lambda *a: ("ref.wav", None))
+    monkeypatch.setattr(voxa, "_media_ms", lambda path: None)
+    monkeypatch.setattr(voxa, "_ollama_unload", lambda model: order.append(model) or 5.0)
+    monkeypatch.setattr(voxa, generate, generated)
+    args = _plan_args(tts=tts, target_lang="de", ollama_model="llama3")
+    asyncio.run(voxa.TTS_PROVIDERS[tts]["synthesize"](
+        [], args, tmp_path, tmp_path / "v.mp4", None, SimpleNamespace(info=logged.append)))
+    assert order == ["llama3", "generate"]
+    assert logged == ["🧹 Freed the memory Ollama held for llama3 (5.0 GB)"]
 
 
 def test_plan_shows_llm_budget_only_for_llm_translators():
