@@ -153,11 +153,18 @@ jobs:
           docker run --rm voxa:ci doctor
           docker run -d --name voxa -p 127.0.0.1:8000:8000 voxa:ci serve --host 0.0.0.0
           for _ in $(seq 60); do curl -fs http://127.0.0.1:8000/api/health && break; sleep 1; done
-          curl -fs http://127.0.0.1:8000/en/app/ | grep -q "</html>"
-          curl -fs http://127.0.0.1:8000/api/engines | grep -q '"chatterbox"'
-          # Port-mapped requests aren't loopback; the refusal says what to do in a container.
-          curl -s -X POST http://127.0.0.1:8000/api/engines/chatterbox/install \
-            | grep -q "voxa engines install"
+          # Listening beyond loopback, it made up an access token and printed the link with it.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/engines)" = 401
+          link=$(docker logs voxa 2>&1 | grep -o 'http://127.0.0.1:8000/?token=[^ ]*' | head -n 1)
+          test -n "$link"
+          curl -fs -c jar -o /dev/null "$link"
+          curl -fs -b jar http://127.0.0.1:8000/en/app/ | grep -q "</html>"
+          curl -fs -b jar http://127.0.0.1:8000/api/engines | grep -q '"chatterbox"'
+          # A port-mapped request is never loopback; the token is what lets the console's
+          # Settings and Models pages work in a container.
+          curl -fs -b jar -X PUT -H 'Content-Type: application/json' -d '{"defaultTts":"edge"}' \
+            http://127.0.0.1:8000/api/settings > /dev/null
+          docker logs voxa 2>&1 | grep -q 'token=\[hidden\]'      # not in the access log
           docker exec voxa sh -c 'command -v uv && echo "$VOXA_ENGINES_DIR"'
           docker rm -f voxa
 

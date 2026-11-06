@@ -275,18 +275,19 @@ docker run --rm -v "$PWD:/data" -v voxa-cache:/cache \
     ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
 ```
 
-Image ~3.0 GB-dır, çoxu torch-un CPU buildi, FFmpeg və Whisper-dir. Konsol da içindədir — bundan
-sonra http://127.0.0.1:8000 ünvanını açın:
+Image ~3.0 GB-dır, çoxu torch-un CPU buildi, FFmpeg və Whisper-dir. Konsol da içindədir:
 
 ```bash
 docker run --rm -p 127.0.0.1:8000:8000 -v "$PWD:/data" -v voxa-cache:/cache \
     -v voxa-engines:/engines ghcr.io/akshinmrv/voxa serve --host 0.0.0.0
 ```
 
-`127.0.0.1`-də açmaq konsolu şəbəkənizdən kənarda saxlayır. Yükləmələr, işlər və dublyajlar
-mount edilmiş qovluqda qalır. Konteynerin içindən konsol ayarları, açarları və mühərrikləri
-dəyişə bilmir, çünki port-mapped sorğu loopback deyil: açarları `-e` ilə ötürün, mühərriki isə
-CLI ilə `voxa-engines` volume-una qurun — konsol onu oradan götürür:
+Çap etdiyi linki açın: `http://127.0.0.1:8000/?token=…`. Konteynerin loopback-ından kənarda
+dinlədiyi üçün konsol giriş tokeni istəyir: hər başlanğıcda yenisi, ya da `-e VOXA_TOKEN=…` ilə
+öz tokeniniz. `127.0.0.1`-də açmaq onu həm də şəbəkənizdən kənarda saxlayır. Yükləmələr, işlər
+və dublyajlar mount edilmiş qovluqda qalır, Settings-də əlavə etdiyiniz açarlar da (onun
+`.env`-ində); əvəzində onları `-e` ilə də ötürə bilərsiniz. Mühərriklər `voxa-engines`
+volume-una qurulur — konsolun Models səhifəsindən, ya da CLI ilə:
 
 ```bash
 docker run --rm -v voxa-cache:/cache -v voxa-engines:/engines \
@@ -514,6 +515,10 @@ voxa serve                              # eyni, brauzeri açmadan
 
 Konsol paketin içindədir: Node da, ikinci terminal da lazım deyil. Konsolun özü üzərində
 işləyirsinizsə, `voxa serve` ilə yanaşı [`web/`](web/)-də `npm run dev` işlədin.
+
+Server yalnız `localhost` və `127.0.0.1` adlarına cavab verir, ona görə başqa sayt onu
+brauzerinizdən idarə edə bilməz. Başqa maşından çatmaq üçün `--host 0.0.0.0` ilə başladanda
+giriş tokeni istəyir — çap etdiyi linkdə olanı, ya da `--token` / `VOXA_TOKEN` ilə öz tokeninizi.
 
 Development, mühit dəyişənləri və deploy üçün: [`web/README.md`](web/README.md).
 

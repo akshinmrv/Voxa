@@ -22,6 +22,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   On 3.9, pip keeps installing 1.13.0, the last release that runs there. The one-line installer
   and the Docker image bring their own Python 3.12, so they aren't affected.
 
+### Security
+
+- **Another site can no longer drive the console from your browser, and the console asks for
+  a token when other machines can reach it.** On 1.13.0, a request addressed to another site's
+  name, which is what a page that points its own domain at 127.0.0.1 sends, could list the
+  keys (masked) and the jobs and change the settings, and another site could upload a file;
+  started with `--host 0.0.0.0`, anyone who reached the port could dub with your keys and
+  download your dubs. Now `voxa serve` on 127.0.0.1 answers only to `localhost` and
+  `127.0.0.1` and refuses changes another site sends, and on any other `--host` (as in Docker)
+  it asks for an access token: a new one each start, printed in the link to open, or your own
+  from `--token` or `VOXA_TOKEN`. The link leaves the token in an HttpOnly, SameSite=Strict
+  cookie and the access log shows it as `[hidden]`. With the token, the console can change
+  settings, keys and engines from inside a container too, which it couldn't before.
+
 ## [1.13.0] - 2026-11-06
 
 ### Added

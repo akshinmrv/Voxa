@@ -5,9 +5,12 @@
 #   docker build -t voxa .
 #   docker run --rm -v "$PWD:/data" voxa talk.mp4 --target_lang ru
 #
-# The console, on http://127.0.0.1:8000 (published on loopback only, so it isn't on the LAN):
+# The console, published on loopback only, so it isn't on the LAN:
 #
 #   docker run --rm -p 127.0.0.1:8000:8000 -v "$PWD:/data" voxa serve --host 0.0.0.0
+#
+# It prints the link to open, http://127.0.0.1:8000/?token=...: listening beyond the
+# container's loopback, it asks for an access token (your own with -e VOXA_TOKEN=...).
 #
 # The defaults (google translation, edge speech) need no API key. To use a provider that
 # does, pass it through:  -e OPENAI_API_KEY=...

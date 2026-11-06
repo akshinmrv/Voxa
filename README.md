@@ -283,18 +283,19 @@ docker run --rm -v "$PWD:/data" -v voxa-cache:/cache \
     ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
 ```
 
-The image is ~3.0 GB, most of it torch's CPU build, FFmpeg and Whisper. It includes the console —
-open http://127.0.0.1:8000 after:
+The image is ~3.0 GB, most of it torch's CPU build, FFmpeg and Whisper. It includes the console:
 
 ```bash
 docker run --rm -p 127.0.0.1:8000:8000 -v "$PWD:/data" -v voxa-cache:/cache \
     -v voxa-engines:/engines ghcr.io/akshinmrv/voxa serve --host 0.0.0.0
 ```
 
-Publishing on `127.0.0.1` keeps the console off your network. Uploads, jobs and dubs stay in
-the mounted folder. From inside a container the console can't change settings, keys or
-engines, since a port-mapped request isn't loopback: pass keys with `-e`, and install an
-engine with the CLI into the `voxa-engines` volume the console then uses:
+Open the link it prints, `http://127.0.0.1:8000/?token=…`. Listening beyond the container's
+loopback, the console asks for an access token: a new one each start, or your own with
+`-e VOXA_TOKEN=…`. Publishing on `127.0.0.1` keeps it off your network as well. Uploads, jobs
+and dubs stay in the mounted folder, and so do keys you add in Settings (in its `.env`); you can
+pass them with `-e` instead. Engines go into the `voxa-engines` volume, from the console's Models
+page or from the CLI:
 
 ```bash
 docker run --rm -v voxa-cache:/cache -v voxa-engines:/engines \
@@ -536,7 +537,10 @@ voxa video.mp4 --target_lang az --tts openai \
 
 The CLI is the product. If you'd rather click than type, `voxa serve` starts a local console
 that **shells out to the very same `voxa` command** — so the UI cannot drift away from the
-engine, because it *is* the engine. It binds to `127.0.0.1`; nothing is uploaded anywhere.
+engine, because it *is* the engine. It binds to `127.0.0.1`; nothing is uploaded anywhere. It
+answers only to `localhost` and `127.0.0.1`, so another site can't drive it from your browser.
+Started with `--host 0.0.0.0`, to reach it from another machine, it asks for an access token,
+given in the link it prints (or yours, from `--token` or `VOXA_TOKEN`).
 
 <div align="center">
 <img src="docs/assets/app-en.png" alt="The local operator console after a finished dubbing job" width="820">

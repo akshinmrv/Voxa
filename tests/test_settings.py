@@ -227,16 +227,11 @@ def test_guard_blocks_non_local_caller(store):
     assert c.put("/api/settings", json={"defaultTts": "openai"}).status_code == 403
 
 
-def test_guard_says_what_to_do_in_a_container(store, monkeypatch):
-    # In a container every request comes from the network bridge, so the console's Settings
-    # and Models pages always get the refusal; it should say how to do it there instead.
-    c = TestClient(srv.app)
-    monkeypatch.setattr(srv.voxa, "_in_container", lambda: False)
-    plain = c.put("/api/settings", json={"defaultTts": "openai"}).json()["detail"]
-    assert "only from the machine Voxa runs on" in plain and "docker" not in plain
-    monkeypatch.setattr(srv.voxa, "_in_container", lambda: True)
-    boxed = c.post("/api/engines/chatterbox/install").json()["detail"]
-    assert "-e OPENAI_API_KEY" in boxed and "voxa engines install" in boxed
+def test_guard_says_how_to_do_it_from_elsewhere(store):
+    # From another machine (a container's bridge too), the way in is the access token.
+    detail = TestClient(srv.app).put("/api/settings", json={"defaultTts": "openai"}).json()
+    assert "only from the machine Voxa runs on" in detail["detail"]
+    assert "access token" in detail["detail"]
 
 
 def test_get_settings_is_open(store):

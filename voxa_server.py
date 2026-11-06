@@ -24,12 +24,15 @@ import argparse
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import re
+import secrets
 import shutil
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
 import uuid
 import webbrowser
@@ -37,11 +40,18 @@ from collections import deque
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -564,18 +574,199 @@ def read_key_status() -> List[dict]:
     return out
 
 
+# --------------------------------------------------------------------------- #
+# Access: whom the server answers
+# --------------------------------------------------------------------------- #
+
+# The names a browser on this machine reaches the server by.
+_LOOPBACK_NAMES = {"localhost", "127.0.0.1", "::1"}
+_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+TOKEN_COOKIE_DAYS = 30
+
+
+@dataclass
+class Access:
+    """How the running server admits a request. Without a token it answers only requests
+    addressed to this machine by name — a page that points its own domain at 127.0.0.1 (DNS
+    rebinding) still sends that domain — and refuses changes another site sends. With one,
+    every request but /api/health must carry it: as the cookie the ?token= link leaves, or
+    as `Authorization: Bearer <token>`."""
+    token: Optional[str] = None
+    cookie: str = "voxa_token"
+
+
+# Set by run_from_cli. None, as when tests import the app, checks nothing.
+ACCESS: Optional[Access] = None
+
+
+def _hostname(netloc: str) -> str:
+    """The host of a Host header or an origin's netloc: lower-case, without port or brackets."""
+    return urllib.parse.urlsplit("//" + netloc).hostname or ""
+
+
+def is_loopback_bind(host: str) -> bool:
+    return host in ("localhost", "::1") or host.startswith("127.")
+
+
+def server_token(host: str, given: Optional[str], env: Optional[str]) -> Tuple[Optional[str], bool]:
+    """The token the server asks for, and whether it was made up just now: the one given
+    (--token, else VOXA_TOKEN); else, when it listens beyond loopback — where anyone who
+    reaches the port could otherwise dub with your keys and download your dubs — a new one;
+    else none."""
+    if given or env:
+        return given or env, False
+    if is_loopback_bind(host):
+        return None, False
+    return secrets.token_urlsafe(24), True
+
+
+def _same_token(offered: str, token: str) -> bool:
+    return secrets.compare_digest(offered.encode(), token.encode())
+
+
+def _carries_token(request: Request, access: Access) -> bool:
+    offered = [request.cookies.get(access.cookie, "")]
+    scheme, _, credentials = request.headers.get("authorization", "").partition(" ")
+    if scheme.lower() == "bearer":
+        offered.append(credentials.strip())
+    return any(value and _same_token(value, access.token) for value in offered)
+
+
+_GATE_TEXT = {
+    "en": ("Voxa asks for its access token",
+           "This server can be reached from beyond the computer it runs on, so it opens only "
+           "for the token in the link <code>voxa serve</code> printed when it started, or the "
+           "one you set with <code>VOXA_TOKEN</code>.",
+           "Access token", "Open", "That isn't this server's token."),
+    "az": ("Voxa giriş tokenini istəyir",
+           "Bu serverə işlədiyi kompüterdən kənardan da çatmaq olur, ona görə yalnız "
+           "<code>voxa serve</code> başlayanda yazdığı linkdəki tokenlə, ya da "
+           "<code>VOXA_TOKEN</code> ilə özünüz təyin etdiyiniz tokenlə açılır.",
+           "Giriş tokeni", "Aç", "Bu, bu serverin tokeni deyil."),
+    "tr": ("Voxa erişim belirtecini istiyor",
+           "Bu sunucuya çalıştığı bilgisayarın dışından da ulaşılabiliyor, bu yüzden yalnızca "
+           "<code>voxa serve</code> başlarken yazdırdığı bağlantıdaki belirteçle ya da "
+           "<code>VOXA_TOKEN</code> ile kendiniz belirlediğinizle açılıyor.",
+           "Erişim belirteci", "Aç", "Bu, bu sunucunun belirteci değil."),
+}
+
+
+def gate_page(request: Request, wrong: bool) -> HTMLResponse:
+    """The page a visitor without the token gets instead of the console: a field for it."""
+    locale = console_locale(request.cookies.get("NEXT_LOCALE", ""),
+                            request.headers.get("accept-language", ""))
+    title, body, label, button, mismatch = _GATE_TEXT[locale]
+    error = f'<p class="error">{mismatch}</p>' if wrong else ""
+    page = f"""<!doctype html>
+<html lang="{locale}"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<style>
+body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0a0b;color:#e7e7ea;
+font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px;box-sizing:border-box}}
+main{{max-width:28rem}} h1{{font-size:1.25rem;margin:0 0 .5rem}} p{{color:#a1a1aa;margin:0 0 1rem}}
+code{{color:#e7e7ea}} label{{display:block;font-size:.875rem;margin-bottom:.25rem}}
+input{{width:100%;box-sizing:border-box;padding:.6rem .75rem;border-radius:.5rem;
+border:1px solid #3f3f46;background:#18181b;color:inherit;font:inherit}}
+button{{margin-top:.75rem;padding:.55rem 1.1rem;border:0;border-radius:.5rem;background:#e7e7ea;
+color:#0a0a0b;font:inherit;font-weight:600;cursor:pointer}} .error{{color:#f87171}}
+</style></head>
+<body><main><h1>{title}</h1><p>{body}</p>{error}
+<form method="get"><label for="token">{label}</label>
+<input id="token" name="token" type="password" autocomplete="off" required autofocus>
+<button type="submit">{button}</button></form></main></body></html>"""
+    return HTMLResponse(page, status_code=401)
+
+
+def _is_https(request: Request) -> bool:
+    forwarded = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+    return request.url.scheme == "https" or forwarded == "https"
+
+
+def admission(request: Request, access: Access) -> Optional[Response]:
+    """None to let the request through, else the response that turns it away."""
+    host = request.headers.get("host", "")
+    path = request.url.path
+    if access.token is None:
+        if _hostname(host) not in _LOOPBACK_NAMES:
+            return JSONResponse(status_code=403, content={"detail": (
+                "Voxa answers only to localhost and 127.0.0.1. To open it from another "
+                "machine, or through a proxy, start it with --host 0.0.0.0 or --token, and it "
+                "will ask for an access token.")})
+        origin = request.headers.get("origin")
+        if request.method in _UNSAFE_METHODS and origin is not None:
+            netloc = urllib.parse.urlsplit(origin).netloc
+            if netloc.lower() != host.lower() and _hostname(netloc) not in _LOOPBACK_NAMES:
+                return JSONResponse(status_code=403, content={
+                    "detail": "Voxa doesn't take changes another site sends."})
+        return None
+    # With a token, another site's request carries neither the SameSite=Strict cookie nor
+    # (without passing CORS) the header, so the token alone settles it — and the Host can be
+    # whatever a proxy in front says.
+    if path == "/api/health":
+        return None
+    offered = request.query_params.get("token")
+    if offered is not None and not path.startswith("/api/"):
+        if not _same_token(offered, access.token):
+            return gate_page(request, wrong=True)
+        # Keep the token in a cookie the console's own calls carry, and out of the address.
+        rest = [(k, v) for k, v in request.query_params.multi_items() if k != "token"]
+        target = "/" + path.lstrip("/") + (f"?{urllib.parse.urlencode(rest)}" if rest else "")
+        response = RedirectResponse(target, status_code=303)
+        response.set_cookie(access.cookie, access.token, max_age=TOKEN_COOKIE_DAYS * 86400,
+                            httponly=True, samesite="strict", secure=_is_https(request))
+        return response
+    if _carries_token(request, access):
+        return None
+    if path.startswith("/api/"):
+        return JSONResponse(status_code=401, headers={"WWW-Authenticate": "Bearer"}, content={
+            "detail": "This Voxa server asks for its access token: open the link voxa serve "
+                      "printed when it started (it ends in ?token=…), or send "
+                      "Authorization: Bearer <token>."})
+    return gate_page(request, wrong=False)
+
+
+_TOKEN_IN_QUERY = re.compile(r"([?&]token=)[^&\s]*")
+
+
+class HideToken(logging.Filter):
+    """uvicorn's access log writes each request's address, so opening the ?token= link would
+    put the token in the log (and in `docker logs`); it gets [hidden] instead."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(_TOKEN_IN_QUERY.sub(r"\1[hidden]", arg) if isinstance(arg, str)
+                                else arg for arg in record.args)
+        return True
+
+
+class AccessGuard:
+    """ASGI middleware that puts every HTTP request through admission() first."""
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] == "http" and ACCESS is not None:
+            refusal = admission(Request(scope), ACCESS)
+            if refusal is not None:
+                await refusal(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
 def require_local(request: Request) -> None:
     """Reject any non-loopback caller. Defense in depth: the server binds 127.0.0.1 by
-    default, but this still holds if it is ever started with --host 0.0.0.0. In a
-    container no caller is loopback, so the refusal says what to do there instead."""
+    default, but this still holds if it is ever started with --host 0.0.0.0. With a token,
+    its holder — whom the access check alone lets this far — may change them from anywhere,
+    as in a container, where no caller is loopback."""
+    if ACCESS is not None and ACCESS.token is not None:
+        return
     host = request.client.host if request.client else ""
     if host not in _LOCAL_HOSTS:
-        detail = ("Settings, keys and engines can be changed only from the machine Voxa "
-                  "runs on.")
-        if voxa._in_container():
-            detail += (" In a container, pass keys with -e (docker run -e OPENAI_API_KEY=...) "
-                       "and install an engine with: docker run ... voxa engines install <id>")
-        raise HTTPException(status_code=403, detail=detail)
+        raise HTTPException(status_code=403, detail=(
+            "Settings, keys and engines can be changed only from the machine Voxa runs on, "
+            "or with the access token Voxa asks for when started with --host 0.0.0.0."))
 
 
 class SettingsPatch(BaseModel):
@@ -709,6 +900,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Added last, so it runs first: nothing reaches a route, or the console, before admission().
+app.add_middleware(AccessGuard)
 
 
 @app.get("/api/health")
@@ -1108,15 +1301,17 @@ except ImportError:                      # installed without the console package
 CONSOLE_BUNDLED = mount_console(app, _console_dir())
 
 
-def _open_when_ready(url: str, timeout: float = 30.0) -> None:
+def _open_when_ready(url: str, token: Optional[str] = None, timeout: float = 30.0) -> None:
     """Open the console in the browser once the server answers, from a background thread
     so it doesn't hold up the server start."""
+    entry = f"{url}/?token={urllib.parse.quote(token)}" if token else f"{url}/"
+
     def _wait_then_open() -> None:
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
                 urllib.request.urlopen(f"{url}/api/health", timeout=2)
-                webbrowser.open(f"{url}/")
+                webbrowser.open(entry)
                 return
             except OSError:
                 time.sleep(0.3)
@@ -1136,6 +1331,10 @@ def run_from_cli(argv: List[str], prog: str = "voxa serve") -> int:
     parser.add_argument("--port", type=int, default=8000, help="Bind port (default: 8000)")
     parser.add_argument("--env-file", default=".env",
                         help="Load API keys from this .env file (default: .env)")
+    parser.add_argument("--token", default=None,
+                        help="The access token the console and API ask for (default: "
+                             "VOXA_TOKEN; with neither, a new one whenever --host isn't "
+                             "loopback, printed in the link to open)")
     parser.add_argument("--open", action="store_true",
                         help="Open the console in the browser once the server is up "
                              "(`voxa studio` does this)")
@@ -1168,6 +1367,12 @@ def run_from_cli(argv: List[str], prog: str = "voxa serve") -> int:
               "   Install them with:  pip install \"voxa-dub[serve]\"")
         return 1
 
+    # After the .env load, so a VOXA_TOKEN kept there counts. Cookies don't tell ports apart,
+    # so each port gets its own, and two servers on one machine don't trade tokens.
+    global ACCESS
+    token, made_up = server_token(args.host, args.token, os.environ.get("VOXA_TOKEN"))
+    ACCESS = Access(token=token, cookie=f"voxa_token_{args.port}")
+
     WORKSPACE.mkdir(parents=True, exist_ok=True)
     detected = [k for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY") if os.environ.get(k)]
     # A wildcard bind is reachable on loopback; the browser can't open 0.0.0.0 itself.
@@ -1175,12 +1380,20 @@ def run_from_cli(argv: List[str], prog: str = "voxa serve") -> int:
     url = f"http://{local}:{args.port}"
     print(f"🌐 Voxa operator server → http://{args.host}:{args.port}")
     print(f"🔑 API keys detected: {', '.join(detected) if detected else 'none'}")
+    if made_up:
+        print("🔐 It listens beyond this machine, so the console and the API ask for this "
+              f"access token (set your own with --token or VOXA_TOKEN):\n   {token}")
+    elif token:
+        print("🔐 The console and the API ask for the access token you set.")
     if CONSOLE_BUNDLED:
-        print(f"🖥️  Console → {url}/")
+        entry = f"{url}/?token={urllib.parse.quote(token)}" if made_up else f"{url}/"
+        print(f"🖥️  Console → {entry}")
         if args.open:
-            _open_when_ready(url)
+            _open_when_ready(url, token)
     else:
         print("   This install has no built console. Run it from web/ (npm run dev) and point it\n"
               "   at this address, or build it into the package with: npm run build:console")
+    # uvicorn's logging setup keeps a logger's filters, so this one outlasts it.
+    logging.getLogger("uvicorn.access").addFilter(HideToken())
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     return 0

@@ -137,14 +137,20 @@ def test_open_waits_for_a_bundled_console(tmp_path, monkeypatch):
     opened = []
     # A stand-in, so the test needs neither a real server nor uvicorn installed (CI has none).
     monkeypatch.setitem(sys.modules, "uvicorn", SimpleNamespace(run=lambda *a, **kw: None))
-    monkeypatch.setattr(srv, "_open_when_ready", opened.append)
+    monkeypatch.setattr(srv, "_open_when_ready",
+                        lambda url, token=None: opened.append((url, token)))
     monkeypatch.setattr(srv, "WORKSPACE", tmp_path / ".voxa_serve")
     monkeypatch.setattr(srv, "ENV_FILE", srv.ENV_FILE)          # run_from_cli reassigns it
+    monkeypatch.setattr(srv, "ACCESS", srv.ACCESS)              # ...and this
+    monkeypatch.delenv("VOXA_TOKEN", raising=False)
     env = ["--env-file", str(tmp_path / ".env")]                 # not the developer's own .env
 
     monkeypatch.setattr(srv, "CONSOLE_BUNDLED", True)
     assert srv.run_from_cli(["--open", "--host", "0.0.0.0", "--port", "9100", *env]) == 0
-    assert opened == ["http://127.0.0.1:9100"]
+    # Beyond loopback it made up a token, and the browser opens with it.
+    assert opened == [("http://127.0.0.1:9100", srv.ACCESS.token)] and srv.ACCESS.token
+    assert srv.ACCESS.cookie == "voxa_token_9100"
     monkeypatch.setattr(srv, "CONSOLE_BUNDLED", False)
     assert srv.run_from_cli(["--open", *env]) == 0
-    assert opened == ["http://127.0.0.1:9100"]              # nothing to open without a build
+    assert len(opened) == 1                                  # nothing to open without a build
+    assert srv.ACCESS.token is None                          # on 127.0.0.1 it asks for none

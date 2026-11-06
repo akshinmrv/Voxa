@@ -276,18 +276,19 @@ docker run --rm -v "$PWD:/data" -v voxa-cache:/cache \
     ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
 ```
 
-İmaj ~3,0 GB'dır, çoğu torch'un CPU derlemesi, FFmpeg ve Whisper'dır. Konsolu da içerir — ardından
-http://127.0.0.1:8000 adresini açın:
+İmaj ~3,0 GB'dır, çoğu torch'un CPU derlemesi, FFmpeg ve Whisper'dır. Konsolu da içerir:
 
 ```bash
 docker run --rm -p 127.0.0.1:8000:8000 -v "$PWD:/data" -v voxa-cache:/cache \
     -v voxa-engines:/engines ghcr.io/akshinmrv/voxa serve --host 0.0.0.0
 ```
 
-`127.0.0.1` üzerinde yayınlamak konsolu ağınızın dışında tutar. Yüklemeler, işler ve dublajlar
-bağlanan klasörde kalır. Konteynerin içinden konsol ayarları, anahtarları ve motorları
-değiştiremez, çünkü port eşlemeli bir istek loopback değildir: anahtarları `-e` ile aktarın,
-motoru ise CLI ile `voxa-engines` birimine kurun — konsol onu oradan kullanır:
+Yazdırdığı bağlantıyı açın: `http://127.0.0.1:8000/?token=…`. Konteynerin loopback'inin dışında
+dinlediği için konsol bir erişim belirteci ister: her başlangıçta yenisi, ya da
+`-e VOXA_TOKEN=…` ile kendi belirteciniz. `127.0.0.1` üzerinde yayınlamak onu ağınızın dışında
+da tutar. Yüklemeler, işler ve dublajlar bağlanan klasörde kalır, Settings'te eklediğiniz
+anahtarlar da (onun `.env` dosyasında); bunun yerine onları `-e` ile de aktarabilirsiniz.
+Motorlar `voxa-engines` birimine kurulur — konsolun Models sayfasından ya da CLI ile:
 
 ```bash
 docker run --rm -v voxa-cache:/cache -v voxa-engines:/engines \
@@ -515,6 +516,11 @@ voxa serve                              # aynısı, tarayıcı açmadan
 
 Konsol paketin içinde gelir: Node da ikinci bir terminal da gerekmez. Konsolun kendisi
 üzerinde çalışıyorsanız `voxa serve` ile birlikte [`web/`](web/) içinde `npm run dev` çalıştırın.
+
+Sunucu yalnızca `localhost` ve `127.0.0.1` adlarına yanıt verir, bu yüzden başka bir site onu
+tarayıcınızdan yönetemez. Başka bir makineden ulaşmak için `--host 0.0.0.0` ile başlatıldığında
+bir erişim belirteci ister — yazdırdığı bağlantıdakini ya da `--token` / `VOXA_TOKEN` ile
+kendi belirtecinizi.
 
 Geliştirme, ortam değişkenleri ve dağıtım için: [`web/README.md`](web/README.md).
 
