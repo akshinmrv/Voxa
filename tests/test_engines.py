@@ -145,7 +145,7 @@ def fake_engine(tmp_path, monkeypatch):
     monkeypatch.setattr(ve, "WORKERS_DIR", tmp_path)
     monkeypatch.setitem(ve.ENGINES, "fake", ve.Engine(
         id="fake", label="Fake", kind="tts", description="", licence="MIT",
-        commercial="yes", languages=("tr",), cloning=False, python="3.9",
+        commercial="yes", languages=("tr",), cloning=False, python="3.11",
         packages=("fake",), worker="fake_worker.py", download_gb=0.1, homepage=""))
     monkeypatch.setattr(ve, "is_installed", lambda engine_id: True)
     monkeypatch.setattr(ve, "env_python", lambda engine_id: Path(sys.executable))

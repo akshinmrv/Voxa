@@ -290,9 +290,9 @@ def _workdir_lock(work_dir: Path) -> asyncio.Lock:
 
 
 def _job_slots() -> asyncio.Condition:
-    """Created on first use, inside the server's event loop. On Python 3.9 an asyncio primitive
-    binds to whatever loop is current when it is constructed, and at import time that isn't the
-    one uvicorn runs — a queued job would then fail with "attached to a different loop"."""
+    """Created on first use, inside the loop that runs the jobs. An asyncio primitive belongs to
+    the first loop that uses it, and a queued job waiting on it from another loop fails with "is
+    bound to a different event loop" — which is why the tests reset it for each loop they run."""
     global _JOB_SLOTS
     if _JOB_SLOTS is None:
         _JOB_SLOTS = asyncio.Condition()

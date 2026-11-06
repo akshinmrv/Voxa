@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **Python 3.9.** It reached its end of life in October 2025, so Voxa now needs 3.10 or newer.
+  On 3.9, pip keeps installing 1.13.0, the last release that runs there. The one-line installer
+  and the Docker image bring their own Python 3.12, so they aren't affected.
+
 ## [1.13.0] - 2026-11-06
 
 ### Added
