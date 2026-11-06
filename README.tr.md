@@ -11,7 +11,7 @@ beş çeviri arka ucu ve tavizsiz bir özellik: dublaj konuşmacıdan kaymaz.
 [![CI](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml/badge.svg)](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/akshinmrv/Voxa?display_name=tag&sort=semver)](https://github.com/akshinmrv/Voxa/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 [![Dublaj senkron kalıyor: naif araç +18s geride, Voxa 0.0s'de tutuyor](docs/assets/voxa_drift.gif)](https://voxa.servoogle.com/#demo)
@@ -226,7 +226,7 @@ brew install ffmpeg          # macOS
 winget install Gyan.FFmpeg   # Windows
 ```
 
-**2. Voxa** — Python 3.10 veya üzeri.
+**2. Voxa** — Python 3.10 veya üzeri (Intel Mac'te 3.10–3.12: PyTorch orada 3.13 ve sonrası için derleme sunmuyor).
 
 ```bash
 pipx install voxa-dub          # önerilen: izole, PATH'inize `voxa` ekler

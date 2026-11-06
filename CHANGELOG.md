@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Python 3.13 and 3.14.** CI and the release now test them alongside 3.10–3.12. On both, Voxa
+  and its `[serve]` and `[piper]` extras install from ready-made wheels, `voxa serve` runs, and
+  a 29-second clip dubbed into German came out whole: Whisper missed at most one word of Edge's,
+  and 3–4 of Piper's, a voice that misses 5 of the same clip on 3.11. On an Intel Mac stay on
+  3.10–3.12, since PyTorch has no build for 3.13 or later there, and on any Mac, Piper on 3.14
+  needs macOS 14 or newer, as far back as onnxruntime builds for it.
+
 ### Removed
 
 - **Python 3.9.** It reached its end of life in October 2025, so Voxa now needs 3.10 or newer.

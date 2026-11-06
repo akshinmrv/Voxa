@@ -11,7 +11,7 @@ backend-i və bir güzəştsiz xüsusiyyət: dublyaj danışandan sürüşmür.
 [![CI](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml/badge.svg)](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/akshinmrv/Voxa?display_name=tag&sort=semver)](https://github.com/akshinmrv/Voxa/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 [![Dublyaj sinxron qalır: naive alət +18s geri sürüşür, Voxa 0.0s-də saxlayır](docs/assets/voxa_drift.gif)](https://voxa.servoogle.com/#demo)
@@ -225,7 +225,7 @@ brew install ffmpeg          # macOS
 winget install Gyan.FFmpeg   # Windows
 ```
 
-**2. Voxa** — Python 3.10 və ya daha yeni.
+**2. Voxa** — Python 3.10 və ya daha yeni (Intel Mac-də 3.10–3.12: PyTorch orada 3.13 və sonrası üçün build vermir).
 
 ```bash
 pipx install voxa-dub          # tövsiyə olunan: izolyasiya, PATH-ə `voxa` əlavə edir

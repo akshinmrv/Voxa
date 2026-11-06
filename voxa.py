@@ -2905,7 +2905,7 @@ async def _prerender_parallel(subs, *, render, text_of, prefix, work_dir, min_by
     — only the waiting overlaps. A per-segment failure is logged and left for the placement
     pass to skip, exactly as in the sequential path."""
     sem = asyncio.Semaphore(max(1, concurrency))
-    render_is_async = asyncio.iscoroutinefunction(render)
+    render_is_async = inspect.iscoroutinefunction(render)
     pbar = tqdm(total=len(subs), desc=f"{desc} ×{concurrency}", unit="segment")
 
     async def _one(i, sub):

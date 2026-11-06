@@ -12,7 +12,7 @@ away from the speaker.
 [![CI](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml/badge.svg)](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/akshinmrv/Voxa?display_name=tag&sort=semver)](https://github.com/akshinmrv/Voxa/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 [![The dub stays in sync: a naive tool drifts +18s behind while Voxa holds at 0.0s](docs/assets/voxa_drift.gif)](https://voxa.servoogle.com/#demo)
@@ -233,7 +233,7 @@ brew install ffmpeg          # macOS
 winget install Gyan.FFmpeg   # Windows
 ```
 
-**2. Voxa** — Python 3.10 or newer.
+**2. Voxa** — Python 3.10 or newer (on an Intel Mac, 3.10–3.12: PyTorch has no build for 3.13 or later there).
 
 ```bash
 pipx install voxa-dub          # recommended: isolated, puts `voxa` on your PATH
@@ -585,7 +585,7 @@ Voxa/
 │   └── config.json             # A complete, verified configuration file
 │
 ├── .github/
-│   ├── workflows/ci.yml        # ruff + pytest on Python 3.10–3.12
+│   ├── workflows/ci.yml        # ruff + pytest on Python 3.10–3.14
 │   ├── workflows/release.yml   # A tag becomes a release only if it passes
 │   ├── ISSUE_TEMPLATE/         # Bug report and feature request forms
 │   └── dependabot.yml
