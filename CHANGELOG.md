@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-11-06
+
 ### Added
 
 - **VoxCPM2 (`--tts voxcpm`), cloning in 30 languages.** `voxa engines install voxcpm` puts
@@ -551,7 +553,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.13.0...HEAD
+[1.13.0]: https://github.com/akshinmrv/Voxa/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/akshinmrv/Voxa/compare/v1.11.1...v1.12.0
 [1.11.1]: https://github.com/akshinmrv/Voxa/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/akshinmrv/Voxa/compare/v1.10.0...v1.11.0
