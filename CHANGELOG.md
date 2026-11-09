@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-11-09
+
 ### Added
 
 - **Python 3.13 and 3.14.** CI and the release now test them alongside 3.10–3.12. On both, Voxa
@@ -582,7 +584,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.13.0...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/akshinmrv/Voxa/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/akshinmrv/Voxa/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/akshinmrv/Voxa/compare/v1.11.1...v1.12.0
 [1.11.1]: https://github.com/akshinmrv/Voxa/compare/v1.11.0...v1.11.1
