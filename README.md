@@ -216,7 +216,7 @@ curl -fsSL https://voxa.servoogle.com/install.sh | sh     # macOS / Linux
 ```
 
 The installer uses [uv](https://docs.astral.sh/uv/) to put Voxa and its browser console in an
-environment of their own, with the Python they run on (about 1 GB, most of it PyTorch: the
+environment of their own, with the Python they run on (0.85 GB on Windows, about 1.3 GB on Linux, most of it PyTorch: the
 CUDA build only when uv finds an NVIDIA GPU, the CPU one otherwise). It
 installs FFmpeg on Windows (winget) and macOS (Homebrew) — on Linux it prints the command,
 since that needs `sudo` — adds a **Voxa Studio** shortcut, and ends with `voxa doctor`.

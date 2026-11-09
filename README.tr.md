@@ -209,7 +209,7 @@ curl -fsSL https://voxa.servoogle.com/install.sh | sh     # macOS / Linux
 ```
 
 Kurulum aracı [uv](https://docs.astral.sh/uv/) ile Voxa'yı ve tarayıcı konsolunu, çalıştıkları
-Python ile birlikte kendi ortamlarına kurar (yaklaşık 1 GB, çoğu PyTorch: CUDA sürümü yalnızca
+Python ile birlikte kendi ortamlarına kurar (Windows'ta 0,85 GB, Linux'ta yaklaşık 1,3 GB, çoğu PyTorch: CUDA sürümü yalnızca
 uv bir NVIDIA GPU bulduğunda, aksi hâlde CPU sürümü). FFmpeg'i Windows'ta
 (winget) ve macOS'ta (Homebrew) kurar — Linux'ta `sudo` gerektirdiği için komutu gösterir —,
 bir **Voxa Studio** kısayolu ekler ve `voxa doctor` ile biter. Yeniden çalıştırmak Voxa'yı

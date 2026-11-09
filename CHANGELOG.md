@@ -14,8 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   libraries, on machines without an NVIDIA GPU too, where the CPU build comes to 0.66 GB. Now
   it sets `UV_TORCH_BACKEND=auto`, so uv takes the CUDA build matched to the driver when it
   finds an NVIDIA GPU and the CPU one otherwise; on Windows, where PyPI's build is CPU-only, a
-  GPU no longer goes unused. Set `UV_TORCH_BACKEND` yourself (`cpu`, `cu128`, …) to choose. On
-  Windows without a GPU it installed torch 2.15.0+cpu, 0.85 GB in all.
+  GPU no longer goes unused. Set `UV_TORCH_BACKEND` yourself (`cpu`, `cu128`, …) to choose. Beside
+  the CPU build on Linux it also leaves out Triton, 1.04 GB that Whisper only runs on an NVIDIA
+  GPU (the Docker image already did), so a Linux install comes to about 1.3 GB, where it was
+  2.3 GB with Triton; on Windows without a GPU it installed torch 2.15.0+cpu, 0.85 GB in all.
 
 ### Fixed
 

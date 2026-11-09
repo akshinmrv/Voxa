@@ -58,6 +58,17 @@ say "Installing $spec (the first time downloads Python and PyTorch, which takes 
 bin="$("$uv" tool dir --bin)"
 voxa="$bin/voxa"
 [ -x "$voxa" ] || { warn "Voxa was installed, but $voxa is missing"; exit 1; }
+
+# Whisper requires Triton on Linux, but imports it only for a tensor on an NVIDIA GPU: with
+# the CPU build of PyTorch it is a gigabyte that never runs (the Docker image drops it too).
+# Only then, as a CUDA build's Whisper would fail without it.
+if [ "$(uname)" = "Linux" ]; then
+    python="$("$uv" tool dir)/voxa-dub/bin/python"
+    if "$uv" pip show --python "$python" torch 2>/dev/null | grep -q '^Version: .*+cpu'; then
+        "$uv" pip uninstall --python "$python" triton >/dev/null 2>&1 \
+            && say "Left out Triton (1 GB): Whisper only runs it on an NVIDIA GPU"
+    fi
+fi
 if [ -z "${VOXA_NO_MODIFY_PATH:-}" ]; then
     "$uv" tool update-shell >/dev/null 2>&1 || true
 fi

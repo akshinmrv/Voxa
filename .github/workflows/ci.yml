@@ -152,9 +152,24 @@ jobs:
           uv="$(command -v uv || echo "$HOME/.local/bin/uv")"
           env="$("$uv" tool dir)/voxa-dub"
           "$env/bin/python" -c "import torch; print('torch', torch.__version__); assert torch.__version__.endswith('+cpu')"
-          if "$uv" pip list --python "$env/bin/python" | grep -i '^nvidia'; then exit 1; fi
+          if "$uv" pip list --python "$env/bin/python" | grep -iE '^(nvidia|triton)'; then exit 1; fi
           du -sh "$env"
           "$("$uv" tool dir --bin)/voxa" --version
+      # Triton is left out beside the CPU build; word timestamps take Whisper through the code
+      # that would use it on a GPU.
+      - name: Check Whisper runs without Triton
+        run: |
+          uv="$(command -v uv || echo "$HOME/.local/bin/uv")"
+          "$("$uv" tool dir)/voxa-dub/bin/python" -c "
+          import soundfile, whisper
+          from scipy.signal import resample_poly
+          audio, rate = soundfile.read('web/public/tts-samples/onyx.mp3', dtype='float32', always_2d=True)
+          audio = resample_poly(audio.mean(axis=1), 16000, rate).astype('float32')
+          result = whisper.load_model('tiny').transcribe(audio, word_timestamps=True, fp16=False)
+          words = [w for s in result['segments'] for w in s.get('words', [])]
+          assert words, result
+          print(len(words), 'words, timed on the CPU without triton:', result['text'])
+          "
 
   docker:
     name: docker (image + console)

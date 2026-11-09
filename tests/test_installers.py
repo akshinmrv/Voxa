@@ -46,6 +46,7 @@ def run(tmp_path):
             printf '#!/bin/sh\\necho "voxa $* in $PWD" >> "{log}"\\n' > "{tool_bin}/voxa"
             chmod +x "{tool_bin}/voxa" ;;
           "tool dir") echo "{tool_bin}" ;;
+          "pip show") printf 'Name: torch\\nVersion: %s\\n' "${{STUB_TORCH:-2.15.0}}" ;;
         esac
         """)
     _stub(stubs / "ffmpeg", "exit 0\n")
@@ -86,6 +87,22 @@ def test_a_chosen_pytorch_build_is_kept(run):
     result, calls = run(UV_TORCH_BACKEND="cpu")
     assert result.returncode == 0, result.stderr
     assert "torch backend cpu" in calls and "torch backend auto" not in calls
+
+
+@pytest.mark.parametrize("system, torch, dropped", [
+    ("Linux", "2.15.0+cpu", True),    # a gigabyte Whisper runs only on an NVIDIA GPU
+    ("Linux", "2.15.0", False),       # a CUDA build's Whisper needs it
+    ("Linux", "2.15.0+cu130", False),
+    ("Darwin", "2.15.0", False),      # Whisper doesn't ask for it on a Mac
+])
+def test_triton_is_left_out_only_beside_the_cpu_build(run, system, torch, dropped):
+    _stub(run.stubs / "uname", f'echo "{system}"\n')
+    result, calls = run(STUB_TORCH=torch)
+    assert result.returncode == 0, result.stderr
+    python = f"{run.tool_bin}/voxa-dub/bin/python"
+    assert (f"uv pip uninstall --python {python} triton" in calls) is dropped
+    assert (f"uv pip show --python {python} torch" in calls) is (system == "Linux")
+    assert ("Left out Triton" in result.stdout) is dropped
 
 
 @pytest.mark.parametrize("no_modify, told", [("1", "1"), ("", "unset")])
