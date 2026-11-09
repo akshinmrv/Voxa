@@ -1,5 +1,6 @@
 [build-system]
-requires = ["setuptools>=64", "wheel"]
+# 77 reads `license` as an SPDX expression; the table form stops building in February 2027.
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -11,7 +12,9 @@ version = "1.14.1"
 description = "Voxa — automatic video translation and dubbing (Whisper + LLM translation + multi-engine TTS)"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+# Named, not globbed: setuptools' default LICEN[CS]E* would also ship a local LICENSE_*.md.
+license-files = ["LICENSE", "NOTICE.md"]
 authors = [{ name = "Akshin Miranov", email = "akshinmiranov@gmail.com" }]
 keywords = ["dubbing", "video", "translation", "whisper", "tts", "openai", "subtitles", "voice-cloning"]
 
@@ -20,7 +23,6 @@ classifiers = [
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",

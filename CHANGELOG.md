@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The package states its licence as an SPDX expression** (`License-Expression: MIT`), which
+  setuptools will require from February 2027 (until then it warned on every build), and names
+  its licence files, `LICENSE` and `NOTICE.md`, rather than taking every `LICENSE*` file it
+  finds next to them in a local checkout.
+
 ### Fixed
 
 - **`--tts piper` runs the Piper installed with Voxa before one on PATH.** It took whatever
