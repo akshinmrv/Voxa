@@ -209,7 +209,8 @@ curl -fsSL https://voxa.servoogle.com/install.sh | sh     # macOS / Linux
 ```
 
 Kurulum aracı [uv](https://docs.astral.sh/uv/) ile Voxa'yı ve tarayıcı konsolunu, çalıştıkları
-Python ile birlikte kendi ortamlarına kurar (yaklaşık 1 GB, çoğu PyTorch). FFmpeg'i Windows'ta
+Python ile birlikte kendi ortamlarına kurar (yaklaşık 1 GB, çoğu PyTorch: CUDA sürümü yalnızca
+uv bir NVIDIA GPU bulduğunda, aksi hâlde CPU sürümü). FFmpeg'i Windows'ta
 (winget) ve macOS'ta (Homebrew) kurar — Linux'ta `sudo` gerektirdiği için komutu gösterir —,
 bir **Voxa Studio** kısayolu ekler ve `voxa doctor` ile biter. Yeniden çalıştırmak Voxa'yı
 günceller; `uv tool uninstall voxa-dub` kaldırır. `VOXA_EXTRAS=serve,piper` gibi ayarlar her
@@ -394,6 +395,7 @@ Voxa CUDA'yı kendisi algılar; açmak için bir bayrak yoktur. Neyi hızlandır
 | Konuşma — Edge / OpenAI | ➖ bulut |
 | Konuşma — Piper | ➖ CPU (ONNX) |
 
+Tek satırlık kurulum aracı bir NVIDIA GPU bulduğunda bunu kendisi yapar. Elle kurarken
 Adım 2'deki CPU tekerleği yerine PyTorch'un **CUDA** sürümünü kurun:
 
 ```bash

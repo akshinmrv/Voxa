@@ -16,6 +16,8 @@
 #   VOXA_NO_SHORTCUT=1        don't create a shortcut
 #   VOXA_NO_FFMPEG=1          don't install FFmpeg
 #   VOXA_NO_MODIFY_PATH=1     don't add uv's tool folder to PATH
+#   UV_TORCH_BACKEND=cpu      the PyTorch build to install: cpu, cu128, ... (default: auto,
+#                             CUDA when uv finds an NVIDIA GPU and its driver, CPU otherwise)
 
 $ErrorActionPreference = "Stop"
 
@@ -29,7 +31,14 @@ $voxaHome = if ($env:VOXA_HOME) { $env:VOXA_HOME } else { Join-Path $HOME "Voxa"
 $uv = (Get-Command uv -ErrorAction SilentlyContinue).Source
 if (-not $uv) {
     Say "Installing uv (it installs Voxa and the Python it runs on)"
-    Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
+    # Its installer adds its folder to PATH unless told not to; VOXA_NO_MODIFY_PATH tells it.
+    $noModifyPath = $env:UV_NO_MODIFY_PATH
+    if ($env:VOXA_NO_MODIFY_PATH) { $env:UV_NO_MODIFY_PATH = "1" }
+    try {
+        Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
+    } finally {
+        $env:UV_NO_MODIFY_PATH = $noModifyPath
+    }
     $uvDir = if ($env:UV_INSTALL_DIR) { $env:UV_INSTALL_DIR } else { Join-Path $HOME ".local\bin" }
     $uv = Join-Path $uvDir "uv.exe"
     if (-not (Test-Path $uv)) { throw "uv was installed, but not found at $uv" }
@@ -45,8 +54,17 @@ if ($env:VOXA_WHEEL) {
 } else {
     $spec = "voxa-dub[$extras]"
 }
+# uv picks the PyTorch build that fits: CUDA when it finds an NVIDIA GPU and its driver, CPU
+# otherwise (PyPI's Windows build is CPU-only, so a GPU went unused). Set back afterwards,
+# since `irm | iex` runs in your own session.
+$torchBackend = $env:UV_TORCH_BACKEND
+if (-not $torchBackend) { $env:UV_TORCH_BACKEND = "auto" }
 Say "Installing $spec (the first time downloads Python and PyTorch, which takes a while)"
-& $uv tool install --upgrade --python 3.12 $spec
+try {
+    & $uv tool install --upgrade --python 3.12 $spec
+} finally {
+    $env:UV_TORCH_BACKEND = $torchBackend
+}
 if ($LASTEXITCODE -ne 0) { throw "uv tool install failed (exit code $LASTEXITCODE)" }
 
 $bin = (& $uv tool dir --bin).Trim()

@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The one-line installer lets uv pick the PyTorch build that fits the machine.** On Linux it
+  installed PyPI's PyTorch, a CUDA build: of the 3.15 GB it downloaded, 2.5 GB were NVIDIA
+  libraries, on machines without an NVIDIA GPU too, where the CPU build comes to 0.66 GB. Now
+  it sets `UV_TORCH_BACKEND=auto`, so uv takes the CUDA build matched to the driver when it
+  finds an NVIDIA GPU and the CPU one otherwise; on Windows, where PyPI's build is CPU-only, a
+  GPU no longer goes unused. Set `UV_TORCH_BACKEND` yourself (`cpu`, `cu128`, …) to choose. On
+  Windows without a GPU it installed torch 2.15.0+cpu, 0.85 GB in all.
+
 ### Fixed
+
+- **`VOXA_NO_MODIFY_PATH` now keeps uv's own installer off PATH too.** When uv wasn't there
+  yet, the one-line installer fetched it with astral's installer, which added `~/.local/bin`
+  to PATH regardless; it now passes `UV_NO_MODIFY_PATH=1` along.
 
 - **Intel Macs: installing no longer builds numba from source, and Whisper can read the
   audio.** PyTorch stops at 2.2.2 on an Intel Mac, built against NumPy 1, and pip put NumPy 2

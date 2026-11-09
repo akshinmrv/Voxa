@@ -130,6 +130,32 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+  # The real one-line installer, with a wheel of this commit. A runner has no GPU, so it should
+  # get the CPU build of PyTorch, not PyPI's CUDA one with 2.5 GB of NVIDIA libraries.
+  installer:
+    name: installer (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip wheel --no-deps -w dist .
+      - name: Run install.sh
+        env:
+          VOXA_NO_SHORTCUT: "1"
+          VOXA_NO_FFMPEG: "1"
+          VOXA_NO_MODIFY_PATH: "1"
+        run: VOXA_WHEEL="$(ls dist/*.whl)" sh web/public/install.sh
+      - name: Check it got the CPU build of PyTorch
+        run: |
+          uv="$(command -v uv || echo "$HOME/.local/bin/uv")"
+          env="$("$uv" tool dir)/voxa-dub"
+          "$env/bin/python" -c "import torch; print('torch', torch.__version__); assert torch.__version__.endswith('+cpu')"
+          if "$uv" pip list --python "$env/bin/python" | grep -i '^nvidia'; then exit 1; fi
+          du -sh "$env"
+          "$("$uv" tool dir --bin)/voxa" --version
+
   docker:
     name: docker (image + console)
     runs-on: ubuntu-latest

@@ -17,6 +17,8 @@
 #   VOXA_NO_SHORTCUT=1        don't create a launcher
 #   VOXA_NO_FFMPEG=1          don't install FFmpeg
 #   VOXA_NO_MODIFY_PATH=1     don't add uv's tool folder to PATH
+#   UV_TORCH_BACKEND=cpu      the PyTorch build to install: cpu, cu128, ... (default: auto,
+#                             CUDA when uv finds an NVIDIA GPU and its driver, CPU otherwise)
 set -eu
 
 say() { printf '\033[36m==> %s\033[0m\n' "$1"; }
@@ -30,7 +32,8 @@ if command -v uv >/dev/null 2>&1; then
     uv="$(command -v uv)"
 else
     say "Installing uv (it installs Voxa and the Python it runs on)"
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+    # Its installer adds its folder to PATH unless told not to; VOXA_NO_MODIFY_PATH tells it.
+    curl -LsSf https://astral.sh/uv/install.sh | env ${VOXA_NO_MODIFY_PATH:+UV_NO_MODIFY_PATH=1} sh
     uv="${UV_INSTALL_DIR:-$HOME/.local/bin}/uv"
     [ -x "$uv" ] || { warn "uv was installed, but not found at $uv"; exit 1; }
 fi
@@ -45,6 +48,10 @@ elif [ -n "${VOXA_VERSION:-}" ]; then
 else
     spec="voxa-dub[$extras]"
 fi
+# On Linux, PyTorch from PyPI is a CUDA build that brings 2.5 GB of NVIDIA libraries along,
+# which a machine without an NVIDIA GPU never uses; uv picks the build that fits. (A uv too
+# old to know this setting ignores it and installs from PyPI, as before.)
+export UV_TORCH_BACKEND="${UV_TORCH_BACKEND:-auto}"
 say "Installing $spec (the first time downloads Python and PyTorch, which takes a while)"
 "$uv" tool install --upgrade --python 3.12 "$spec"
 

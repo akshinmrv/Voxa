@@ -41,6 +41,7 @@ def run(tmp_path):
         echo "uv $*" >> "{log}"
         case "$1 $2" in
           "tool install")
+            echo "torch backend ${{UV_TORCH_BACKEND:-unset}}" >> "{log}"
             mkdir -p "{tool_bin}"
             printf '#!/bin/sh\\necho "voxa $* in $PWD" >> "{log}"\\n' > "{tool_bin}/voxa"
             chmod +x "{tool_bin}/voxa" ;;
@@ -72,6 +73,48 @@ def test_installs_the_console_and_adds_a_launcher(run):
     launcher = (run.tmp / "launchers" / "voxa-studio.desktop").read_text(encoding="utf-8")
     assert f'Exec="{run.tool_bin}/voxa" studio' in launcher
     assert f"Path={home}" in launcher and "Terminal=true" in launcher
+
+
+def test_uv_picks_the_pytorch_build_that_fits(run):
+    # PyPI's Linux torch brings 2.5 GB of NVIDIA libraries a machine without a GPU never uses.
+    result, calls = run()
+    assert result.returncode == 0, result.stderr
+    assert "torch backend auto" in calls
+
+
+def test_a_chosen_pytorch_build_is_kept(run):
+    result, calls = run(UV_TORCH_BACKEND="cpu")
+    assert result.returncode == 0, result.stderr
+    assert "torch backend cpu" in calls and "torch backend auto" not in calls
+
+
+@pytest.mark.parametrize("no_modify, told", [("1", "1"), ("", "unset")])
+def test_no_modify_path_reaches_uvs_own_installer(tmp_path, no_modify, told):
+    # Without uv, the script runs astral's installer, which adds its folder to PATH unless
+    # told not to: VOXA_NO_MODIFY_PATH has to reach it too.
+    stubs, log, tool_bin = tmp_path / "stubs", tmp_path / "calls.log", tmp_path / "tool-bin"
+    stubs.mkdir()
+    _stub(tmp_path / "uv", f"""\
+        case "$1 $2" in
+          "tool install") mkdir -p "{tool_bin}"; printf '#!/bin/sh\\n' > "{tool_bin}/voxa"
+                          chmod +x "{tool_bin}/voxa" ;;
+          "tool dir") echo "{tool_bin}" ;;
+        esac
+        """)
+    # curl hands over an "installer" that notes what it was told and puts that uv in place.
+    _stub(stubs / "curl", f"""\
+        cat <<'EOF'
+        echo "uv installer: UV_NO_MODIFY_PATH=${{UV_NO_MODIFY_PATH:-unset}}" >> "{log}"
+        mkdir -p "$HOME/.local/bin" && cp "{tmp_path}/uv" "$HOME/.local/bin/uv"
+        EOF
+        """)
+    env = {"PATH": f"{stubs}{os.pathsep}/usr/bin{os.pathsep}/bin", "HOME": str(tmp_path / "home"),
+           "VOXA_NO_SHORTCUT": "1", "VOXA_NO_FFMPEG": "1", "VOXA_NO_MODIFY_PATH": no_modify}
+    result = subprocess.run(["sh", str(SCRIPT)], env=env, capture_output=True, text=True,
+                            timeout=60)
+    assert result.returncode == 0, result.stderr
+    assert log.read_text(encoding="utf-8").splitlines() == [
+        f"uv installer: UV_NO_MODIFY_PATH={told}"]
 
 
 def test_version_extras_and_path_settings(run):

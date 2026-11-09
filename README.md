@@ -216,7 +216,8 @@ curl -fsSL https://voxa.servoogle.com/install.sh | sh     # macOS / Linux
 ```
 
 The installer uses [uv](https://docs.astral.sh/uv/) to put Voxa and its browser console in an
-environment of their own, with the Python they run on (about 1 GB, most of it PyTorch). It
+environment of their own, with the Python they run on (about 1 GB, most of it PyTorch: the
+CUDA build only when uv finds an NVIDIA GPU, the CPU one otherwise). It
 installs FFmpeg on Windows (winget) and macOS (Homebrew) — on Linux it prints the command,
 since that needs `sudo` — adds a **Voxa Studio** shortcut, and ends with `voxa doctor`.
 Running it again upgrades Voxa; `uv tool uninstall voxa-dub` removes it. Settings such as
@@ -403,7 +404,8 @@ Voxa detects CUDA on its own; there is no flag to turn it on. What it speeds up:
 | Speech — Edge / OpenAI | ➖ cloud |
 | Speech — Piper | ➖ CPU (ONNX) |
 
-Install the **CUDA** build of PyTorch instead of the CPU wheel from step 2:
+The one-line installer does this on its own when it finds an NVIDIA GPU. Installing by hand,
+install the **CUDA** build of PyTorch instead of the CPU wheel from step 2:
 
 ```bash
 # Match the CUDA version your driver supports — https://pytorch.org/get-started/locally/
