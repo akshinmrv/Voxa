@@ -12,3 +12,8 @@ updates:
     schedule:
       interval: monthly
     labels: [dependencies, ci]
+    # One pull request for all of them: they move together (Node 24 came to seven at once),
+    # and as separate ones they went stale side by side.
+    groups:
+      github-actions:
+        patterns: ["*"]
