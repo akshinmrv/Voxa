@@ -17,7 +17,7 @@
 
 # The console is a static build of web/, made here so the image needs no Node at run time.
 # It is the same build the wheel on PyPI ships (see voxa_ui/).
-FROM node:20-slim AS console
+FROM node:24-slim AS console
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
