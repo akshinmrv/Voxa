@@ -23,6 +23,7 @@ import re
 import shutil
 import subprocess
 import sys
+import sysconfig
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1555,16 +1556,20 @@ def _resolve_piper_model(name: str) -> Optional[str]:
 
 
 def _find_piper() -> Optional[str]:
-    """The Piper binary: on PATH, or next to this Python — in a pipx or venv install the
-    environment's scripts aren't on PATH, and on Windows the file is piper.exe."""
-    found = shutil.which("piper")
-    if found:
-        return found
-    for name in ("piper", "piper.exe"):
-        candidate = Path(sys.executable).parent / name
-        if candidate.exists():
-            return str(candidate)
-    return None
+    """The Piper binary. The one installed beside this Python comes first: `voxa-dub[piper]` put
+    it there, at the version Voxa runs, and in a pipx or uv install it isn't on PATH, where a
+    `piper` may be another install's, or not Piper at all (GNOME's mouse settings app is
+    /usr/bin/piper). Then PATH. On Windows the file is piper.exe."""
+    folders = [Path(sys.executable).parent]
+    scripts = sysconfig.get_path("scripts")          # a global Windows Python keeps it apart
+    if scripts and Path(scripts) not in folders:
+        folders.append(Path(scripts))
+    for folder in folders:
+        for name in ("piper", "piper.exe"):
+            candidate = folder / name
+            if candidate.exists():
+                return str(candidate)
+    return shutil.which("piper")
 
 
 async def generate_piper(subs, model_path: Path, concat_list: list, temp_files: list,

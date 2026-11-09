@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`--tts piper` runs the Piper installed with Voxa before one on PATH.** It took whatever
+  `piper` came first on PATH, and only then the one `voxa-dub[piper]` installed beside Voxa's
+  own Python: another install's, at another version, or on Linux GNOME's mouse settings app,
+  which is `/usr/bin/piper` too. `voxa doctor` showed the one it would run, so in a test it
+  pointed at a different Python's Piper. On a Python installed for everyone on Windows, it also
+  looks in its `Scripts` folder, where pip puts Piper apart from `python.exe`.
+
 ## [1.14.1] - 2026-11-09
 
 ### Changed

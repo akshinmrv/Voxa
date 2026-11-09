@@ -136,7 +136,37 @@ def test_find_piper_next_to_python_when_it_isnt_on_path(monkeypatch, tmp_path):
     (scripts / "piper.exe").write_bytes(b"")
     monkeypatch.setattr(voxa.shutil, "which", lambda name: None)
     monkeypatch.setattr(sys, "executable", str(scripts / "python.exe"))
+    monkeypatch.setattr(voxa.sysconfig, "get_path", lambda name: str(scripts))
     assert voxa._find_piper() == str(scripts / "piper.exe")
+
+
+def test_the_environments_own_piper_wins_over_one_on_path(monkeypatch, tmp_path):
+    # The one on PATH may be another install's, older, or GNOME's mouse app (/usr/bin/piper).
+    env_bin = tmp_path / "env" / "bin"
+    env_bin.mkdir(parents=True)
+    (env_bin / "piper").write_bytes(b"")
+    monkeypatch.setattr(voxa.shutil, "which", lambda name: "/usr/bin/piper")
+    monkeypatch.setattr(sys, "executable", str(env_bin / "python"))
+    monkeypatch.setattr(voxa.sysconfig, "get_path", lambda name: str(env_bin))
+    assert voxa._find_piper() == str(env_bin / "piper")
+
+
+def test_a_global_windows_python_keeps_piper_in_scripts(monkeypatch, tmp_path):
+    # python.exe sits in the install folder, the scripts pip writes in its Scripts folder.
+    scripts = tmp_path / "Python312" / "Scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "piper.exe").write_bytes(b"")
+    monkeypatch.setattr(voxa.shutil, "which", lambda name: None)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "Python312" / "python.exe"))
+    monkeypatch.setattr(voxa.sysconfig, "get_path", lambda name: str(scripts))
+    assert voxa._find_piper() == str(scripts / "piper.exe")
+
+
+def test_without_its_own_piper_it_takes_the_one_on_path(monkeypatch, tmp_path):
+    monkeypatch.setattr(voxa.shutil, "which", lambda name: "/opt/piper/piper")
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "python"))
+    monkeypatch.setattr(voxa.sysconfig, "get_path", lambda name: str(tmp_path / "Scripts"))
+    assert voxa._find_piper() == "/opt/piper/piper"
 
 
 @pytest.mark.parametrize("models, status", [(None, "off"), ([], "warn"),
