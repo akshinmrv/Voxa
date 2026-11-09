@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Intel Macs: installing no longer builds numba from source, and Whisper can read the
+  audio.** PyTorch stops at 2.2.2 on an Intel Mac, built against NumPy 1, and pip put NumPy 2
+  beside it, so `torch.from_numpy` failed ("Numpy is not available") and every transcription
+  with it. And numba 0.63 and llvmlite 0.46 dropped their Intel Mac wheels, so pip set out to
+  build them from source, which needs cmake and LLVM. On Intel Macs only, Voxa now asks for
+  NumPy below 2 and numba below 0.63, and everything it installs comes as a ready-made wheel;
+  nothing changes elsewhere. With those versions on Windows (torch 2.2.2, NumPy 1.26.4, numba
+  0.62.1) Whisper heard the clip and a dub came out whole, where NumPy 2.3.5 failed; it hasn't
+  been run on an Intel Mac itself.
+
 ## [1.14.0] - 2026-11-09
 
 ### Added

@@ -48,6 +48,12 @@ dependencies = [
     "soundfile",
     "noisereduce",
     "numpy",
+    # Intel Macs. PyTorch stops at 2.2.2 there, built against NumPy 1: with NumPy 2,
+    # torch.from_numpy fails ("Numpy is not available"), and Whisper reads every clip through
+    # it. And numba 0.63 / llvmlite 0.46 dropped their Intel Mac wheels, so a newer one would
+    # be built from source, which needs cmake and LLVM.
+    "numpy<2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "numba<0.63; sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
 
 [project.optional-dependencies]
