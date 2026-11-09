@@ -53,7 +53,7 @@ dependencies = [
     # it. And numba 0.63 / llvmlite 0.46 dropped their Intel Mac wheels, so a newer one would
     # be built from source, which needs cmake and LLVM.
     "numpy<2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "numba<0.63; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "numba<0.69; sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
 
 [project.optional-dependencies]
