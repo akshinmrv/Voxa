@@ -6,6 +6,13 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     labels: [dependencies]
+    # numpy<2 and numba<0.63 hold for Intel Macs only, where PyTorch stops at 2.2.2 (built
+    # against NumPy 1) and numba has no wheels after 0.62. Dependabot can't see the marker
+    # and offers to raise both, which would break Voxa there; tests/test_packaging.py
+    # fails if they go.
+    ignore:
+      - dependency-name: numpy
+      - dependency-name: numba
 
   - package-ecosystem: github-actions
     directory: "/"
