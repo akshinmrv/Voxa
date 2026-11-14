@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.2] - 2026-11-14
+
 ### Changed
 
 - **The package states its licence as an SPDX expression** (`License-Expression: MIT`), which
@@ -630,7 +632,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.14.1...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.14.2...HEAD
+[1.14.2]: https://github.com/akshinmrv/Voxa/compare/v1.14.1...v1.14.2
 [1.14.1]: https://github.com/akshinmrv/Voxa/compare/v1.14.0...v1.14.1
 [1.14.0]: https://github.com/akshinmrv/Voxa/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/akshinmrv/Voxa/compare/v1.12.0...v1.13.0
