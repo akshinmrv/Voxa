@@ -8,7 +8,7 @@
 # again upgrades Voxa. Uninstall with:  uv tool uninstall voxa-dub
 #
 # Optional settings, as environment variables:
-#   VOXA_EXTRAS=serve,piper   extras to install (default: serve, the browser console)
+#   VOXA_EXTRAS=studio,piper  extras to install (default: studio, the console in a window)
 #   VOXA_VERSION=1.11.0       install this version instead of the latest
 #   VOXA_WHEEL=C:\...\x.whl   install from this wheel instead of PyPI
 #   VOXA_HOME=C:\...          the folder the console keeps its jobs and .env in (default: ~\Voxa)
@@ -24,7 +24,7 @@ $ErrorActionPreference = "Stop"
 function Say($message) { Write-Host "==> $message" -ForegroundColor Cyan }
 function Warn($message) { Write-Host "!!  $message" -ForegroundColor Yellow }
 
-$extras = if ($env:VOXA_EXTRAS) { $env:VOXA_EXTRAS } else { "serve" }
+$extras = if ($env:VOXA_EXTRAS) { $env:VOXA_EXTRAS } else { "studio" }
 $voxaHome = if ($env:VOXA_HOME) { $env:VOXA_HOME } else { Join-Path $HOME "Voxa" }
 
 # --- uv ------------------------------------------------------------------------------
@@ -93,14 +93,22 @@ if (-not $env:VOXA_NO_SHORTCUT) {
     $folders = @([Environment]::GetFolderPath("Programs"), [Environment]::GetFolderPath("Desktop"))
     if ($env:VOXA_SHORTCUT_DIR) { $folders = @($env:VOXA_SHORTCUT_DIR) }
     $shell = New-Object -ComObject WScript.Shell
+    # voxa-studio.exe (the [studio] extra) opens the console in a window and no terminal;
+    # without it, `voxa studio` opens it in the browser, beside a terminal running the server.
+    $studio = Join-Path $bin "voxa-studio.exe"
     foreach ($folder in $folders) {
         New-Item -ItemType Directory -Force -Path $folder | Out-Null
         $link = $shell.CreateShortcut((Join-Path $folder "Voxa Studio.lnk"))
-        $link.TargetPath = $voxa
-        $link.Arguments = "studio"
+        if (Test-Path $studio) {
+            $link.TargetPath = $studio
+            $link.Arguments = ""
+        } else {
+            $link.TargetPath = $voxa
+            $link.Arguments = "studio"
+        }
         # The console keeps its jobs, uploads and saved API keys (.env) in this folder.
         $link.WorkingDirectory = $voxaHome
-        $link.Description = "Voxa Studio - dub videos in your browser"
+        $link.Description = "Voxa Studio - dub videos"
         $link.Save()
     }
     Say "Added a 'Voxa Studio' shortcut ($($folders -join ', '))"

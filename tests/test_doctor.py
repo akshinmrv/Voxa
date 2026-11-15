@@ -213,6 +213,21 @@ def test_console_needs_the_server_and_a_build(machine, monkeypatch, tmp_path):
     assert console.status == "ok" and "voxa studio" in console.detail
 
 
+@pytest.mark.parametrize("platform, offered", [("win32", True), ("darwin", True),
+                                               ("linux", False)])
+def test_console_says_whether_it_opens_in_a_window(machine, monkeypatch, tmp_path,
+                                                   platform, offered):
+    machine.modules.update({"fastapi", "uvicorn"})
+    monkeypatch.setattr(voxa_ui, "static_dir", lambda: tmp_path)
+    monkeypatch.setattr(voxa.sys, "platform", platform)
+    console = _by_name(voxa.doctor_checks())[("Extras", "Console")]
+    assert "in the browser" in console.detail
+    assert ("studio" in (console.fix or "")) is offered       # Linux needs GTK or Qt besides
+    machine.modules.add("webview")
+    console = _by_name(voxa.doctor_checks())[("Extras", "Console")]
+    assert "a window of its own" in console.detail and not console.fix
+
+
 def test_low_disk_space_is_a_warning(machine):
     machine.free_gb = 3
     assert _by_name(voxa.doctor_checks())[("Disk", "Free space")].status == "warn"

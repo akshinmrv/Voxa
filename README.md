@@ -551,10 +551,16 @@ given in the link it prints (or yours, from `--token` or `VOXA_TOKEN`).
 </div>
 
 ```bash
-pipx install "voxa-dub[serve]"
-voxa studio                             # starts it and opens the console in your browser
-voxa serve                              # the same, without opening a browser
+pipx install "voxa-dub[studio]"
+voxa studio                             # starts it and opens the console in a window of its own
+voxa studio --browser                   # the same, in your browser
+voxa serve                              # just the server, at http://127.0.0.1:8000
 ```
+
+`voxa studio` shows the console in a window of its own (Edge WebView2 on Windows, WebKit on
+macOS, from the `[studio]` extra); the one-line installer sets this up, and its **Voxa Studio**
+shortcut opens no terminal. Closing the window stops the server, after asking if a dub is still
+running. Without the extra, or on Linux without GTK or Qt, it opens your browser instead.
 
 The console comes inside the package: no Node, no second terminal. Working on the console
 itself? Run `npm run dev` in [`web/`](web/) next to `voxa serve`.

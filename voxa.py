@@ -5277,8 +5277,13 @@ def doctor_checks(online: bool = False, deep: bool = False) -> List[DoctorCheck]
         if bundled and _in_container():
             add("Extras", "Console", "ok", "run: docker run -p 127.0.0.1:8000:8000 … "
                 "serve --host 0.0.0.0, then open http://127.0.0.1:8000")
+        elif bundled and _has_module("webview"):
+            add("Extras", "Console", "ok", "run: voxa studio (it opens in a window of its own)")
+        elif bundled and sys.platform in ("win32", "darwin"):
+            add("Extras", "Console", "ok", "run: voxa studio (it opens in the browser)",
+                f"for a window of its own: {_install_hint('studio')}")
         elif bundled:
-            add("Extras", "Console", "ok", "run: voxa studio")
+            add("Extras", "Console", "ok", "run: voxa studio (it opens in the browser)")
         else:
             add("Extras", "Console", "warn", "server installed, but this install has no console",
                 "in a source checkout: cd web && npm run build:console")
@@ -5419,8 +5424,8 @@ def cli():
     if sys.argv[1:2] == ["engines"]:
         sys.exit(engines_cli(sys.argv[2:]))
     # `voxa serve` launches the optional operator web server (see voxa_server.py), and
-    # `voxa studio` does the same and opens its console in the browser. Both live behind
-    # the [serve] extra so the default install stays lean.
+    # `voxa studio` runs it and shows its console in a window of its own (voxa_studio.py),
+    # or the browser. Both live behind the [serve] extra so the default install stays lean.
     if sys.argv[1:2] in (["serve"], ["studio"]):
         command = sys.argv[1]
         try:
@@ -5429,8 +5434,10 @@ def cli():
             print(f"❌ `voxa {command}` needs extra dependencies.\n"
                   "   Install them with:  pip install \"voxa-dub[serve]\"")
             sys.exit(1)
-        extra = ["--open"] if command == "studio" else []
-        sys.exit(run_from_cli(sys.argv[2:] + extra, prog=f"voxa {command}"))
+        if command == "studio":
+            from voxa_studio import run as run_studio
+            sys.exit(run_studio(sys.argv[2:]))
+        sys.exit(run_from_cli(sys.argv[2:], prog="voxa serve"))
     sys.exit(asyncio.run(main()))
 
 

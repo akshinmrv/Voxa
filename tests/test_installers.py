@@ -76,6 +76,14 @@ def test_installs_the_console_and_adds_a_launcher(run):
     assert f"Path={home}" in launcher and "Terminal=true" in launcher
 
 
+def test_macos_gets_the_console_in_a_window(run):
+    # pywebview runs on macOS's own WebKit; on Linux a window would need GTK or Qt besides.
+    _stub(run.stubs / "uname", 'echo "Darwin"\n')
+    result, calls = run()
+    assert result.returncode == 0, result.stderr
+    assert "uv tool install --upgrade --python 3.12 voxa-dub[studio]" in calls
+
+
 def test_uv_picks_the_pytorch_build_that_fits(run):
     # PyPI's Linux torch brings 2.5 GB of NVIDIA libraries a machine without a GPU never uses.
     result, calls = run()

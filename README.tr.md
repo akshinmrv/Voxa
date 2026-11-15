@@ -511,10 +511,16 @@ operatör arka ucu sunar — tek tasarım sistemi, iki yüzey:
   (SSE) ve sonucu indir. Hiçbir şey sunucuya yüklenmez — kendi makinende çalışır.
 
 ```bash
-pipx install "voxa-dub[serve]"
-voxa studio                             # sunucuyu başlatır ve konsolu tarayıcıda açar
-voxa serve                              # aynısı, tarayıcı açmadan
+pipx install "voxa-dub[studio]"
+voxa studio                             # sunucuyu başlatır ve konsolu kendi penceresinde açar
+voxa studio --browser                   # aynısı, tarayıcıda
+voxa serve                              # yalnızca sunucu, http://127.0.0.1:8000
 ```
+
+`voxa studio` konsolu kendi penceresinde gösterir (Windows'ta Edge WebView2, macOS'ta WebKit,
+`[studio]` ekinden); tek satırlık kurulum aracı bunu kurar ve **Voxa Studio** kısayolu terminal
+açmaz. Pencereyi kapatmak sunucuyu durdurur, süren bir dublaj varsa önce sorar. Ek olmadan ya da
+GTK ve Qt bulunmayan Linux'ta tarayıcıyı açar.
 
 Konsol paketin içinde gelir: Node da ikinci bir terminal da gerekmez. Konsolun kendisi
 üzerinde çalışıyorsanız `voxa serve` ile birlikte [`web/`](web/) içinde `npm run dev` çalıştırın.

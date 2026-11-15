@@ -9,7 +9,8 @@
 # Uninstall with:  uv tool uninstall voxa-dub
 #
 # Optional settings, as environment variables:
-#   VOXA_EXTRAS=serve,piper   extras to install (default: serve, the browser console)
+#   VOXA_EXTRAS=serve,piper   extras to install (default: studio on macOS, the console in a
+#                             window; serve on Linux, where a window needs GTK or Qt besides)
 #   VOXA_VERSION=1.11.0       install this version instead of the latest
 #   VOXA_WHEEL=/path/x.whl    install from this wheel instead of PyPI
 #   VOXA_HOME=/path           the folder the console keeps its jobs and .env in (default: ~/Voxa)
@@ -24,7 +25,8 @@ set -eu
 say() { printf '\033[36m==> %s\033[0m\n' "$1"; }
 warn() { printf '\033[33m!!  %s\033[0m\n' "$1"; }
 
-extras="${VOXA_EXTRAS:-serve}"
+if [ "$(uname)" = "Darwin" ]; then default_extras=studio; else default_extras=serve; fi
+extras="${VOXA_EXTRAS:-$default_extras}"
 voxa_home="${VOXA_HOME:-$HOME/Voxa}"
 
 # --- uv ------------------------------------------------------------------------------

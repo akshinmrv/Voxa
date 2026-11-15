@@ -510,10 +510,16 @@ backend təqdim edir — bir dizayn sistemi, iki səth:
   izlə (SSE) və nəticəni yüklə. Heç nə serverə yüklənmir — öz maşınında işləyir.
 
 ```bash
-pipx install "voxa-dub[serve]"
-voxa studio                             # serveri işə salır və konsolu brauzerdə açır
-voxa serve                              # eyni, brauzeri açmadan
+pipx install "voxa-dub[studio]"
+voxa studio                             # serveri işə salır və konsolu öz pəncərəsində açır
+voxa studio --browser                   # eyni, brauzerdə
+voxa serve                              # yalnız server, http://127.0.0.1:8000
 ```
+
+`voxa studio` konsolu öz pəncərəsində göstərir (Windows-da Edge WebView2, macOS-da WebKit,
+`[studio]` extra-sından); bir sətirlik quraşdırıcı bunu qurur və onun **Voxa Studio** qısayolu
+terminal açmır. Pəncərəni bağlamaq serveri dayandırır, dublyaj hələ gedirsə əvvəlcə soruşur.
+Extra olmadan, ya da GTK və Qt olmayan Linux-da brauzeri açır.
 
 Konsol paketin içindədir: Node da, ikinci terminal da lazım deyil. Konsolun özü üzərində
 işləyirsinizsə, `voxa serve` ilə yanaşı [`web/`](web/)-də `npm run dev` işlədin.

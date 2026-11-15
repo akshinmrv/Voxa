@@ -70,6 +70,7 @@ licence file the package ships (October 2026).
 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | `[url]` | Dubbing from a URL | Unlicense |
 | [pyannote.audio](https://github.com/pyannote/pyannote-audio) | `[diarize]` | `--diarize` | MIT (see §4.5 for the models) |
 | [fastapi](https://github.com/fastapi/fastapi) · [uvicorn](https://github.com/Kludex/uvicorn) · [python-multipart](https://github.com/Kludex/python-multipart) | `[serve]` | `voxa serve` | MIT · BSD-3-Clause · Apache-2.0 |
+| [pywebview](https://github.com/r0x0r/pywebview), with [pythonnet](https://github.com/pythonnet/pythonnet) and [clr-loader](https://github.com/pythonnet/clr-loader) on Windows and [PyObjC](https://github.com/ronaldoussoren/pyobjc) on macOS | `[studio]` | `voxa studio` in a window of its own | BSD-3-Clause · MIT · MIT · MIT |
 
 ### The console
 

@@ -29,6 +29,7 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import sys
 import threading
 import time
@@ -1402,6 +1403,25 @@ except ImportError:                      # installed without the console package
 CONSOLE_BUNDLED = mount_console(app, _console_dir())
 
 
+def _exit_with_studio() -> None:
+    """Started by Voxa Studio on macOS or Linux, end when its window's process does, even if
+    that one crashes: the server leads a process group of its own there, so the dubs it
+    started end too. (On Windows a job object does this.)"""
+    parent = os.environ.get("VOXA_STUDIO_PARENT", "")
+    if os.name == "nt" or not parent.isdigit():
+        return
+
+    def _watch() -> None:
+        while os.getppid() == int(parent):
+            time.sleep(2)
+        if os.getpgrp() == os.getpid():
+            os.killpg(os.getpgrp(), signal.SIGTERM)
+        else:
+            os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Thread(target=_watch, daemon=True).start()
+
+
 def _open_when_ready(url: str, token: Optional[str] = None, timeout: float = 30.0) -> None:
     """Open the console in the browser once the server answers, from a background thread
     so it doesn't hold up the server start."""
@@ -1476,6 +1496,7 @@ def run_from_cli(argv: List[str], prog: str = "voxa serve") -> int:
 
     WORKSPACE.mkdir(parents=True, exist_ok=True)
     earlier = load_history()
+    _exit_with_studio()
     detected = [k for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY") if os.environ.get(k)]
     # A wildcard bind is reachable on loopback; the browser can't open 0.0.0.0 itself.
     local = "127.0.0.1" if args.host in ("0.0.0.0", "::", "") else args.host

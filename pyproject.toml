@@ -76,6 +76,9 @@ url = ["yt-dlp"]
 diarize = ["pyannote.audio"]
 # `voxa serve` — the optional operator web server (see voxa_server.py).
 serve = ["fastapi", "uvicorn[standard]", "python-multipart"]
+# Voxa Studio in a window of its own (pywebview, BSD-3: Edge WebView2 on Windows, through
+# pythonnet, MIT; WebKit on macOS). Linux needs GTK or Qt besides, else it opens the browser.
+studio = ["voxa-dub[serve]", "pywebview>=6.2"]
 dev = ["pytest", "ruff"]
 
 [project.urls]
@@ -88,8 +91,12 @@ Changelog = "https://github.com/akshinmrv/Voxa/blob/main/CHANGELOG.md"
 [project.scripts]
 voxa = "voxa:cli"
 
+# The Voxa Studio launcher: on Windows a GUI executable, so no terminal opens with it.
+[project.gui-scripts]
+voxa-studio = "voxa_studio:main"
+
 [tool.setuptools]
-py-modules = ["voxa", "voxa_server"]
+py-modules = ["voxa", "voxa_server", "voxa_studio"]
 # The operator console, as a static build `voxa serve` serves. Its files are generated
 # (npm run build:console in web/) before the release builds the wheel — see voxa_ui/.
 # voxa_engines installs engines into environments of their own; its workers are scripts

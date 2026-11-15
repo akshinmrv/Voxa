@@ -114,17 +114,14 @@ def test_console_locale(cookie, accept, expected):
 
 
 # ── voxa studio ──────────────────────────────────────────
-def test_voxa_studio_is_voxa_serve_that_opens_the_browser(monkeypatch):
+def test_voxa_studio_opens_the_window_and_voxa_serve_the_server(monkeypatch):
+    import voxa_studio
     calls = []
-
-    def _run(argv, prog="voxa serve"):
-        calls.append((argv, prog))
-        return 0
-
-    monkeypatch.setattr(srv, "run_from_cli", _run)
-    for argv, expected in ((["voxa", "studio", "--port", "9000"],
-                            (["--port", "9000", "--open"], "voxa studio")),
-                           (["voxa", "serve"], ([], "voxa serve"))):
+    monkeypatch.setattr(srv, "run_from_cli",
+                        lambda argv, prog="voxa serve": calls.append(("serve", argv, prog)) or 0)
+    monkeypatch.setattr(voxa_studio, "run", lambda argv: calls.append(("studio", argv)) or 0)
+    for argv, expected in ((["voxa", "studio", "--port", "9000"], ("studio", ["--port", "9000"])),
+                           (["voxa", "serve"], ("serve", [], "voxa serve"))):
         monkeypatch.setattr(sys, "argv", argv)
         with pytest.raises(SystemExit) as done:
             voxa.cli()

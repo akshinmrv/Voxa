@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Voxa Studio opens in a window of its own.** `voxa studio` showed the console in a browser
+  tab beside the terminal running its server; with the new `[studio]` extra (pywebview: Edge
+  WebView2 on Windows, WebKit on macOS) it opens a window instead, and the `voxa-studio`
+  launcher opens no terminal at all. The one-line installer sets this up on Windows and macOS,
+  and the Windows shortcut now starts `voxa-studio.exe`. The window shows at once, while the
+  server starts (2.1 s against 31.5 s before, on a first launch), and keeps the console's
+  language and theme between launches. Closing it stops the server and every process it
+  started, a dub's included; a Windows job object does that even if the window crashes, and
+  with a dub running it asks first, in English, Azerbaijani or Turkish. A second launch opens a
+  window on the server already running. Without the extra, or on Linux without GTK or Qt, it
+  opens the browser as before (`--browser` asks for that). The server's output goes to
+  `.voxa_serve/studio.log`. Tested live on Windows 11, not yet on a Mac.
+
 - **The console keeps its list of dubs when Voxa Studio is closed.** Jobs lived only in the
   server's memory, so closing it emptied the Jobs page, though the dubs stayed on disk. Each
   job is now also a record in `.voxa_serve/history/`, written when it's created, starts and
