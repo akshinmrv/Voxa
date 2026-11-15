@@ -198,6 +198,12 @@ ve konuşma yeniden üretildi, bu yüzden zaman çizelgesi üçünde de aynı.
 
 ## Kurulum
 
+**Windows: [VoxaSetup.exe](https://github.com/akshinmrv/Voxa/releases/latest/download/VoxaSetup.exe).** Yalnızca sizin kullanıcınız için, yönetici hakkı
+gerektirmeyen bir kurulum aracı: Voxa'yı, çalıştığı Python'u ve **Voxa Studio**'yu tek bir
+klasöre koyar, Başlat menüsüne kısayol ekler, FFmpeg yoksa winget ile kurar ve kaldırmak için
+*Uygulamalar ve özellikler*'de görünür. Henüz kod imzası yok, bu yüzden Windows *Windows
+bilgisayarınızı korudu* diyebilir: *Ek bilgi*, ardından *Yine de çalıştır*'ı seçin.
+
 **Tek satırla.** Önceden Python gerekmez:
 
 ```powershell

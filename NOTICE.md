@@ -6,7 +6,8 @@ The Python package (`pip install voxa-dub`) contains only Voxa's own two modules
 weights and no third-party source code**. Voxa orchestrates tools and models that you install and
 run yourself. Their licences are their own, and some are **more restrictive than Voxa's MIT
 licence** — including several of the speech voices Voxa downloads for you. The container image is
-a different case: it bundles system packages (see §6).
+a different case: it bundles system packages (see §7); so, in a smaller way, does the Windows
+installer (§6).
 
 Read this file before using Voxa commercially.
 
@@ -284,7 +285,16 @@ voxa video.mp4 --translator ollama --tts piper
 
 ---
 
-## 6. Container image
+## 6. Windows installer
+
+`VoxaSetup.exe`, attached to each GitHub release, is made with [NSIS](https://nsis.sourceforge.io/)
+(zlib licence) and carries [uv](https://github.com/astral-sh/uv) (MIT or Apache-2.0) and Voxa's
+icon. Everything else it installs, it downloads from PyPI and python.org's builds as uv fetches
+them, under the licences in §2: Voxa with its `[serve]` and `[studio]` extras, and the Python it
+runs on. When FFmpeg is missing it asks winget for `Gyan.FFmpeg`, a GPL build, as the one-line
+installer does.
+
+## 7. Container image
 
 The image published at `ghcr.io/akshinmrv/voxa` is a redistribution of third-party software, not
 just of Voxa. It is built from `python:3.12-slim` (Debian) and contains, among other packages:

@@ -197,6 +197,12 @@ yenidən yaradıldı, ona görə timeline hər üçündə eynidir.
 
 ## Quraşdırma
 
+**Windows: [VoxaSetup.exe](https://github.com/akshinmrv/Voxa/releases/latest/download/VoxaSetup.exe).** Yalnız sizin istifadəçiniz üçün, administrator
+hüququ olmadan quraşdırıcı: Voxa-nı, işlədiyi Python-u və **Voxa Studio**-nu bir qovluğa qoyur,
+Start menyusuna qısayol əlavə edir, FFmpeg yoxdursa onu winget ilə qurur və silmək üçün
+*Apps & features*-də görünür. Hələ kod imzası yoxdur, ona görə Windows *Windows protected your
+PC* deyə bilər: *More info*, sonra *Run anyway* seçin.
+
 **Bir sətirlə.** Əvvəlcədən Python lazım deyil:
 
 ```powershell

@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **VoxaSetup.exe, an installer for Windows.** A wizard for the current user, with no
+  administrator rights, attached to each release (and at `releases/latest/download/VoxaSetup.exe`).
+  It puts uv, the Python uv downloads and Voxa with its console in one folder
+  (`%LOCALAPPDATA%\Programs\Voxa`), installs FFmpeg with winget when it's missing, adds a Voxa
+  Studio shortcut to the Start menu (and, by choice, the desktop), and registers itself in
+  Apps & features. Uninstalling removes that folder and the shortcuts and keeps the dubs,
+  settings and keys in `%USERPROFILE%\Voxa`. It's 12.5 MB: Python and PyTorch (the CUDA build
+  when uv finds an NVIDIA GPU) download during setup. English and Turkish; not code-signed
+  yet, so SmartScreen may warn. Each release builds it, installs that release from PyPI with
+  it on a clean Windows runner, checks it, uninstalls it, and only then attaches it; CI does
+  the same with every commit's wheel.
+
 - **Voxa's icon on Voxa Studio, its shortcuts and the site's tabs.** The window, its taskbar
   button and the Windows shortcut showed Python's icon; they now show Voxa's wave mark, the one
   the site and the console already used, drawn for each size from 16 to 256 px, with the bars on

@@ -143,3 +143,41 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # VoxaSetup.exe for this release, which installs it from PyPI: so it waits for PyPI, installs
+  # it on a clean Windows runner and uninstalls it before it is attached to the release. The
+  # unversioned copy is what releases/latest/download/VoxaSetup.exe points at.
+  windows-installer:
+    name: Publish the Windows installer
+    needs: pypi
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Get NSIS
+        shell: pwsh
+        run: installer/windows/get_nsis.ps1
+      - name: Build VoxaSetup.exe
+        shell: pwsh
+        run: |
+          $version = "$env:GITHUB_REF_NAME".TrimStart('v')
+          python scripts/build_windows_installer.py $version --out dist
+          "VERSION=$version" >> $env:GITHUB_ENV
+      - name: Install it from PyPI, check and uninstall it
+        shell: pwsh
+        run: |
+          # A release PyPI has just published can take a little while to be served.
+          foreach ($i in 1..20) {
+            try { Invoke-RestMethod "https://pypi.org/pypi/voxa-dub/$env:VERSION/json" | Out-Null; break }
+            catch { Start-Sleep -Seconds 15 }
+          }
+          installer/windows/test_install.ps1 -Installer "dist\VoxaSetup-$env:VERSION.exe" -Version $env:VERSION
+      - name: Attach it to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Copy-Item "dist\VoxaSetup-$env:VERSION.exe" dist\VoxaSetup.exe
+          gh release upload $env:GITHUB_REF_NAME "dist\VoxaSetup-$env:VERSION.exe" dist\VoxaSetup.exe --clobber

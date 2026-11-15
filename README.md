@@ -205,6 +205,12 @@ were regenerated — the timeline is identical across all three.
 
 ## Installation
 
+**Windows: [VoxaSetup.exe](https://github.com/akshinmrv/Voxa/releases/latest/download/VoxaSetup.exe).** An installer for your user alone, with no
+administrator rights: it puts Voxa, the Python it runs on and **Voxa Studio** in one folder,
+adds a Start menu shortcut, installs FFmpeg with winget if it's missing, and appears in
+*Apps & features* to uninstall. It isn't code-signed yet, so Windows may say *Windows
+protected your PC*: choose *More info*, then *Run anyway*.
+
 **One line.** No Python needed beforehand:
 
 ```powershell
