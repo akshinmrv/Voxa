@@ -370,7 +370,9 @@
         "qualityGateLabel": "Kalite denetimi (puanla ve konuşmayı yeniden dene)",
         "qualityGateHint": "Her sentezlenen satırı puanlar ve bozuk olanı nötr üslupla yeniden oluşturur. Daha yavaş, OpenAI TTS. Varsayılan kapalı.",
         "autoDownloadLabel": "Her dublajı otomatik kaydet",
-        "autoDownloadHint": "İş bittiğinde video, İndir düğmesine basmadan indirilenler klasörüne kaydedilir. Yalnızca konsol açıkken çalışır ve tarayıcı birkaç dosyayı aynı anda kaydetmeden önce izin isteyebilir."
+        "autoDownloadHint": "İş bittiğinde video, İndir düğmesine basmadan indirilenler klasörüne kaydedilir. Yalnızca konsol açıkken çalışır ve tarayıcı birkaç dosyayı aynı anda kaydetmeden önce izin isteyebilir.",
+        "checkUpdatesLabel": "Güncellemeleri denetle",
+        "checkUpdatesHint": "Voxa günde bir kez PyPI'a en yeni voxa-dub sürümünü sorar ve sizinkinden yenisi çıktığında burada haber verir. PyPI her indirmede gördüğünü (IP adresinizi) ve bu Voxa'nın sürümünü görür; videolarınız ve ayarlarınız hakkında hiçbir şey gönderilmez. VOXA_NO_UPDATE_CHECK=1 bunu komut satırı için de kapatır."
       },
       "appearance": {
         "title": "Görünüm",
@@ -413,6 +415,21 @@
         "Sentezleme",
         "Birleştirme"
       ]
+    },
+    "update": {
+      "title": "Voxa {latest} çıktı",
+      "current": "Sizdeki sürüm: {current}.",
+      "whatsNew": "Yenilikler",
+      "howTo": "Nasıl güncellenir",
+      "hide": "Sonra",
+      "download": "VoxaSetup.exe'yi indir",
+      "setupHint": "Voxa Studio'yu kapatın, sonra çalıştırın: bu kurulumu günceller, dublajlarınız ve ayarlarınız kalır.",
+      "commandHint": "Voxa'yı kapatın (Studio penceresini veya voxa serve'ü), bu komutu bir terminalde çalıştırın, sonra Voxa'yı yeniden açın:",
+      "containerHint": "Docker'ın çalıştığı bilgisayarda yeni imajı çekin, sonra kapsayıcıyı ondan yeniden oluşturun:",
+      "sourceHint": "Voxa'yı durdurun, checkout'u güncelleyin, sonra yeniden başlatın:",
+      "terminal": "terminal",
+      "version": "Voxa {version}",
+      "newer": "{latest} çıktı"
     },
     "localOnly": {
       "title": "Operatör konsolu kendi makinende çalışır",

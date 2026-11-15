@@ -126,6 +126,8 @@ export type VoxaSettings = {
     maxConcurrentJobs: number | null;
     /** Save each dub automatically as soon as it finishes. */
     autoDownload: boolean;
+    /** Ask PyPI once a day whether a newer Voxa is out. */
+    checkUpdates: boolean;
   };
 };
 
@@ -142,7 +144,25 @@ export type SettingsPatch = {
     ttsWorkers?: number | null;
     maxConcurrentJobs?: number | null;
     autoDownload?: boolean;
+    checkUpdates?: boolean;
   };
+};
+
+/** GET /api/update — this version, PyPI's newest, and how this install gets a newer one. */
+export type UpdateStatus = {
+  current: string;
+  latest: string | null;
+  newer: boolean;
+  /** Turned off in Settings, or with VOXA_NO_UPDATE_CHECK. */
+  disabled: boolean;
+  /** How Voxa was installed; set only when a newer version is out. */
+  kind: "setup" | "uv" | "pipx" | "pip" | "source" | "container" | null;
+  /** The command that upgrades this install… */
+  command: string | null;
+  /** …or the installer to download instead (VoxaSetup.exe installs). */
+  download: string | null;
+  /** The new release's notes on GitHub. */
+  notes: string | null;
 };
 
 /** Masked API-key status for one provider (the raw key never reaches the browser). */

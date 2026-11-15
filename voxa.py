@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+import threading
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -4993,7 +4994,7 @@ class DoctorCheck(NamedTuple):
     fix: str = ""
 
 
-DOCTOR_SECTIONS = ("Required", "Speed", "Translation", "Speech", "Extras", "Disk")
+DOCTOR_SECTIONS = ("Required", "Speed", "Translation", "Speech", "Extras", "Disk", "Updates")
 _DOCTOR_ICONS = {"ok": "✅", "warn": "⚠️ ", "fail": "❌", "off": "➖"}
 
 
@@ -5018,6 +5019,15 @@ def _in_container() -> bool:
     return Path("/.dockerenv").exists() or Path("/run/.containerenv").exists()
 
 
+def _uv_tool_command(extras: Sequence[str], flag: str = "--upgrade") -> str:
+    """uv's command that installs Voxa again as a tool, with these extras. uv replaces the
+    tool's environment, so the extras it already has are named again. So is the PyTorch
+    backend, as the one-line installers set it: uv doesn't keep it, and re-resolving without
+    it takes PyTorch from PyPI alone, which on Linux is the CUDA build (about 3 GB)."""
+    spec = f"voxa-dub[{','.join(sorted(set(extras)))}]" if extras else "voxa-dub"
+    return f'uv tool install {flag} --torch-backend auto "{spec}"'
+
+
 def _install_hint(extra: str) -> str:
     """The command that adds an extra to *this* install. uv and pipx keep Voxa in an
     environment of their own, where a plain `pip install` would land somewhere else; in a
@@ -5026,9 +5036,7 @@ def _install_hint(extra: str) -> str:
         return f'add it to the image:  RUN pip install "voxa-dub[{extra}]"'
     uv_extras = _uv_tool_extras()
     if uv_extras is not None:
-        # uv replaces the tool's environment, so the extras it already has are named again.
-        extras = ",".join(sorted(set(uv_extras) | {extra}))
-        return f'uv tool install --upgrade "voxa-dub[{extras}]"'
+        return _uv_tool_command([*uv_extras, extra])
     if _in_pipx():
         try:
             from importlib.metadata import requires
@@ -5044,8 +5052,7 @@ def _install_hint(extra: str) -> str:
 def _reinstall_hint() -> str:
     uv_extras = _uv_tool_extras()
     if uv_extras is not None:
-        extras = f"[{','.join(sorted(uv_extras))}]" if uv_extras else ""
-        return f'uv tool install --reinstall "voxa-dub{extras}"'
+        return _uv_tool_command(uv_extras, "--reinstall")
     if _in_pipx():
         return "pipx reinstall voxa-dub"
     return f'"{sys.executable}" -m pip install --force-reinstall voxa-dub'
@@ -5056,8 +5063,7 @@ def _upgrade_hint(requirement: str) -> str:
     tool's whole environment with --upgrade, so it is named by the tool, not the package."""
     uv_extras = _uv_tool_extras()
     if uv_extras is not None:
-        extras = f"[{','.join(sorted(uv_extras))}]" if uv_extras else ""
-        return f'uv tool install --upgrade "voxa-dub{extras}"'
+        return _uv_tool_command(uv_extras)
     if _in_pipx():
         return f'pipx runpip voxa-dub install --upgrade "{requirement}"'
     return f'"{sys.executable}" -m pip install --upgrade "{requirement}"'
@@ -5070,6 +5076,125 @@ def _ffmpeg_hint() -> str:
     if sys.platform == "darwin":
         return "brew install ffmpeg"
     return "sudo apt install ffmpeg   (Fedora/RHEL: sudo dnf install ffmpeg)"
+
+
+# ── Updates: is a newer Voxa out, and how does this install get it ──
+PYPI_JSON_URL = "https://pypi.org/pypi/voxa-dub/json"
+REPO_URL = "https://github.com/akshinmrv/Voxa"
+SETUP_EXE_URL = f"{REPO_URL}/releases/latest/download/VoxaSetup.exe"
+IMAGE = "ghcr.io/akshinmrv/voxa"
+UPDATE_CHECK_EVERY = 24 * 3600     # seconds between two questions to PyPI
+UPDATE_RETRY_AFTER = 3600          # after one that failed
+_UPDATE_LOCK = threading.Lock()
+
+
+def update_check_disabled() -> bool:
+    """VOXA_NO_UPDATE_CHECK=1 keeps Voxa from asking PyPI about new versions at all."""
+    value = os.environ.get("VOXA_NO_UPDATE_CHECK", "").strip().lower()
+    return value not in ("", "0", "false", "no", "off")
+
+
+def _update_cache() -> Path:
+    return Path.home() / ".voxa" / "update.json"
+
+
+def _release_number(version: Optional[str]) -> Optional[Tuple[int, int, int]]:
+    """(1, 16, 0) for "1.16.0". None for anything but a plain release (a pre-release, a dev
+    or local build, an unknown version): those are never offered, nor compared."""
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", (version or "").strip())
+    return (int(match[1]), int(match[2]), int(match[3])) if match else None
+
+
+def _ask_pypi(timeout: float) -> str:
+    request = urllib.request.Request(PYPI_JSON_URL, headers={
+        "Accept": "application/json", "User-Agent": f"voxa/{__version__}"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return str(json.load(response)["info"]["version"])
+
+
+def latest_version(timeout: float = 4.0, now: Optional[float] = None) -> Optional[str]:
+    """The newest Voxa on PyPI, or None when it isn't known. PyPI is asked at most once a day
+    (an hour after an attempt that failed) and the answer is kept in ~/.voxa/update.json. The
+    request is a plain GET of PyPI's public JSON for voxa-dub: nothing about the machine,
+    its user or their videos goes with it, only a User-Agent naming this version."""
+    now = time.time() if now is None else now
+    cache = _update_cache()
+    with _UPDATE_LOCK:
+        try:
+            kept = json.loads(cache.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            kept = {}
+        kept = kept if isinstance(kept, dict) else {}
+        latest = kept.get("latest") if isinstance(kept.get("latest"), str) else None
+        checked = kept.get("checked")
+        wait = UPDATE_RETRY_AFTER if kept.get("failed") else UPDATE_CHECK_EVERY
+        if isinstance(checked, (int, float)) and 0 <= now - checked < wait:
+            return latest
+        try:
+            latest, failed = _ask_pypi(timeout), False
+        except Exception:
+            failed = True       # offline, or PyPI didn't answer: the last answer stands
+        try:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            tmp = cache.with_name(f"{cache.name}.{os.getpid()}.tmp")
+            tmp.write_text(json.dumps({"checked": now, "latest": latest, "failed": failed}),
+                           encoding="utf-8")
+            tmp.replace(cache)
+        except OSError:
+            pass
+        return latest
+
+
+def _install_kind() -> str:
+    """How this copy of Voxa was installed: "container", "setup" (VoxaSetup.exe), "source"
+    (a git checkout), "uv" (uv tool: the one-line installers), "pipx" or "pip"."""
+    if _in_container():
+        return "container"
+    # VoxaSetup.exe keeps the tool environment in <install dir>\tools\voxa-dub.
+    if (Path(sys.prefix).parent.parent / "Uninstall Voxa.exe").exists():
+        return "setup"
+    if (Path(__file__).resolve().parent / ".git").exists():
+        return "source"
+    if _uv_tool_extras() is not None:
+        return "uv"
+    return "pipx" if _in_pipx() else "pip"
+
+
+def update_hint(kind: Optional[str] = None) -> Dict[str, Optional[str]]:
+    """How this install gets the newest Voxa: a command to run, or a file to download."""
+    kind = kind or _install_kind()
+    command: Optional[str] = None
+    download: Optional[str] = None
+    if kind == "container":
+        command = f"docker pull {IMAGE}:latest"
+    elif kind == "setup":
+        download = SETUP_EXE_URL      # it upgrades the install it finds, keeping ~/Voxa
+    elif kind == "source":
+        command = f'git -C "{Path(__file__).resolve().parent}" pull'
+    elif kind == "uv":
+        command = _uv_tool_command(_uv_tool_extras() or [])
+    elif kind == "pipx":
+        command = "pipx upgrade voxa-dub"
+    else:
+        command = f'"{sys.executable}" -m pip install --upgrade voxa-dub'
+    return {"kind": kind, "command": command, "download": download}
+
+
+def update_status(enabled: bool = True) -> dict:
+    """What the console and `voxa doctor` say about updates: this version, PyPI's newest,
+    whether that is newer, and if so how to get it and where its release notes are."""
+    status: dict = {"current": __version__, "latest": None, "newer": False,
+                    "disabled": False, "kind": None, "command": None, "download": None,
+                    "notes": None}
+    if not enabled or update_check_disabled():
+        status["disabled"] = True
+        return status
+    latest = latest_version()
+    status["latest"] = latest
+    mine, theirs = _release_number(__version__), _release_number(latest)
+    if mine and theirs and theirs > mine:
+        status.update(update_hint(), newer=True, notes=f"{REPO_URL}/releases/tag/v{latest}")
+    return status
 
 
 def _tool_version(cmd: str) -> str:
@@ -5298,6 +5423,20 @@ def doctor_checks(online: bool = False, deep: bool = False) -> List[DoctorCheck]
                 "local models take several GB each; free some space before downloading them")
     except OSError:
         pass
+
+    # ── Updates ──
+    status = update_status()
+    if status["disabled"]:
+        add("Updates", "Voxa", "off", "not checked (VOXA_NO_UPDATE_CHECK is set)")
+    elif status["newer"]:
+        add("Updates", "Voxa", "warn", f"{status['latest']} is out; this is {__version__}",
+            status["command"] or f"download and run {status['download']}")
+    elif status["latest"] == __version__:
+        add("Updates", "Voxa", "ok", f"{__version__}, the newest")
+    elif status["latest"]:
+        add("Updates", "Voxa", "ok", f"{__version__} (PyPI's newest is {status['latest']})")
+    else:
+        add("Updates", "Voxa", "off", "couldn't ask PyPI for the newest version")
 
     if online:
         checks.extend(_online_checks())

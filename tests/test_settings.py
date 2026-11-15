@@ -64,7 +64,8 @@ def test_missing_keys_backfilled_from_defaults(store):
     s = srv.read_settings()
     assert s["defaultTts"] == "edge"
     assert s["advanced"] == {"speechRate": None, "qualityGate": False, "ttsWorkers": None,
-                             "maxConcurrentJobs": None, "autoDownload": False}
+                             "maxConcurrentJobs": None, "autoDownload": False,
+                             "checkUpdates": True}
 
 
 def test_invalid_file_falls_back_to_defaults(store):

@@ -1,12 +1,13 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ArrowLeft, BookOpen } from "lucide-react";
+import { ArrowLeft, ArrowUpCircle, BookOpen } from "lucide-react";
 import { Link, usePathname } from "@/i18n/navigation";
 import { Waveform } from "@/components/waveform";
 import { APP_NAV } from "./nav-items";
 import { cn } from "@/lib/utils";
 import { IS_CONSOLE, SITE } from "@/lib/site";
+import { useUpdateStatus } from "@/lib/use-update";
 
 const DOCS_URL = "https://github.com/akshinmrv/Voxa#readme";
 
@@ -17,7 +18,9 @@ function isActive(pathname: string, href: string, exact?: boolean) {
 /** Vertical app navigation — desktop only (lg+). Mobile uses the topbar nav. */
 export function AppSidebar() {
   const t = useTranslations("App.nav");
+  const tu = useTranslations("App.update");
   const pathname = usePathname();
+  const update = useUpdateStatus().data;
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface-1 lg:flex">
@@ -79,6 +82,22 @@ export function AppSidebar() {
             <ArrowLeft className="size-4" />
             {t("backToSite")}
           </Link>
+        )}
+        {update && (
+          <p className="flex items-center gap-2 px-3 pt-2 text-xs text-muted-foreground">
+            <span className="tabular-nums">{tu("version", { version: update.current })}</span>
+            {update.newer && update.latest && update.notes && (
+              <a
+                href={update.notes}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-primary hover:underline"
+              >
+                <ArrowUpCircle className="size-3.5" />
+                {tu("newer", { latest: update.latest })}
+              </a>
+            )}
+          </p>
         )}
       </div>
     </aside>

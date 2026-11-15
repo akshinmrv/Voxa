@@ -5,6 +5,7 @@ import { AppSidebar } from "@/components/app/app-sidebar";
 import { AppTopbar } from "@/components/app/app-topbar";
 import { QueryProvider } from "@/components/query-provider";
 import { LocalOnlyNotice } from "@/components/app/local-only-notice";
+import { UpdateBanner } from "@/components/app/update-banner";
 
 // The operator console runs locally; keep it out of search indexes on any public deploy.
 export const metadata: Metadata = {
@@ -32,6 +33,7 @@ export default async function AppLayout({
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <AppTopbar />
+          <UpdateBanner />
           <main id="main-content" className="flex-1 px-5 py-8 md:px-8">
             {children}
           </main>

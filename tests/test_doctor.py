@@ -119,14 +119,21 @@ def test_install_hints_match_how_voxa_was_installed(monkeypatch):
 
 def test_a_uv_tool_install_keeps_its_extras(monkeypatch, tmp_path):
     # The one-line installers use `uv tool install`, whose environment has no pip. uv replaces
-    # that environment on a change, so the hint names the extras it already has as well.
+    # that environment on a change, so the hint names the extras it already has as well, and
+    # the PyTorch backend the installers chose: uv doesn't keep it, and on Linux PyPI's torch
+    # is the CUDA build.
     (tmp_path / "uv-receipt.toml").write_text(
         '[tool]\nrequirements = [{ name = "voxa-dub", extras = ["serve"], path = "x.whl" }]\n'
         'python = "3.12"\n', encoding="utf-8")
     monkeypatch.setattr(sys, "prefix", str(tmp_path))
-    assert voxa._install_hint("piper") == 'uv tool install --upgrade "voxa-dub[piper,serve]"'
-    assert voxa._install_hint("serve") == 'uv tool install --upgrade "voxa-dub[serve]"'
-    assert voxa._reinstall_hint() == 'uv tool install --reinstall "voxa-dub[serve]"'
+    assert voxa._install_hint("piper") == \
+        'uv tool install --upgrade --torch-backend auto "voxa-dub[piper,serve]"'
+    assert voxa._install_hint("serve") == \
+        'uv tool install --upgrade --torch-backend auto "voxa-dub[serve]"'
+    assert voxa._reinstall_hint() == \
+        'uv tool install --reinstall --torch-backend auto "voxa-dub[serve]"'
+    assert voxa._upgrade_hint("numpy<2") == \
+        'uv tool install --upgrade --torch-backend auto "voxa-dub[serve]"'
 
 
 def test_find_piper_next_to_python_when_it_isnt_on_path(monkeypatch, tmp_path):

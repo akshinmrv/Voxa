@@ -464,6 +464,13 @@ voxa video.mp4 --config examples/config.json
 **Logging.** `--log-format json` emits one JSON object per line. `--verbose` raises the level
 to DEBUG and also surfaces third-party libraries.
 
+**Updates.** Once a day the console, `voxa serve` and `voxa doctor` ask PyPI which voxa-dub is
+the newest. When it's newer than yours they say so, with the way your install gets it: the new
+VoxaSetup.exe for an install that VoxaSetup.exe made, otherwise the one command for how you
+installed Voxa. PyPI sees that request as it sees any download (your IP address, and this
+Voxa's version); nothing else goes with it. Turn it off in the console's Settings → Advanced, or
+everywhere with `VOXA_NO_UPDATE_CHECK=1`.
+
 **Cost estimates.** The per-job summary reports usage and — when a price is known — an estimated
 cost. For an LLM translator, a couple of low-cost defaults are built in; set prices for the models
 you use with `--llm-prices` (best kept in the config file), since list prices change. For OpenAI
@@ -691,7 +698,8 @@ server runs a permissive model such as Chatterbox (see [NOTICE](NOTICE.md#46-sel
 <summary><strong>Can it run entirely offline?</strong></summary>
 
 Yes: `--translator ollama --tts piper`. Nothing leaves your machine after the models are
-downloaded. Offline is not the same as commercially clean, though — check the voice for your
+downloaded (the console and `voxa doctor` also ask PyPI once a day whether a newer Voxa is out;
+`VOXA_NO_UPDATE_CHECK=1` stops that). Offline is not the same as commercially clean, though — check the voice for your
 language in [NOTICE.md](NOTICE.md#41-piper-voices).
 </details>
 

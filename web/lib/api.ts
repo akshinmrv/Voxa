@@ -6,6 +6,7 @@ import type {
   ProviderKeyStatus,
   ProviderTestResult,
   SettingsPatch,
+  UpdateStatus,
   VoxaOptions,
   VoxaSettings,
 } from "./types";
@@ -110,6 +111,10 @@ export async function testProvider(provider: string): Promise<ProviderTestResult
 }
 
 // ── Engines installed into environments of their own ──────────────────────────
+export async function getUpdate(): Promise<UpdateStatus> {
+  return asJson(await fetch(`${API_BASE}/api/update`));
+}
+
 export async function getEngines(): Promise<{ engines: InstallableEngine[]; dir: string }> {
   return asJson(await fetch(`${API_BASE}/api/engines`));
 }

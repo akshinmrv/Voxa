@@ -558,7 +558,9 @@ def default_settings() -> dict:
         "translation": {"prompt": None, "fallback": None},
         "speech": {"instructions": None, "presets": []},
         "advanced": {"speechRate": None, "qualityGate": False, "ttsWorkers": None,
-                     "maxConcurrentJobs": None, "autoDownload": False},
+                     "maxConcurrentJobs": None, "autoDownload": False,
+                     # Ask PyPI once a day whether a newer Voxa is out (voxa.latest_version).
+                     "checkUpdates": True},
     }
 
 
@@ -1010,6 +1012,26 @@ async def health() -> dict:
     return {"status": "ok", "version": app.version}
 
 
+def checks_updates() -> bool:
+    """Settings → Check for updates; VOXA_NO_UPDATE_CHECK turns it off as well."""
+    advanced = read_settings().get("advanced")
+    return not isinstance(advanced, dict) or advanced.get("checkUpdates", True) is not False
+
+
+@app.get("/api/update")
+async def update() -> dict:
+    """Is a newer Voxa out, and how does this install get it. PyPI is asked at most once a
+    day, in a worker thread, so a slow network never holds up the console."""
+    return await asyncio.to_thread(voxa.update_status, checks_updates())
+
+
+def _say_if_newer() -> None:
+    status = voxa.update_status(checks_updates())
+    if status["newer"]:
+        print(f"⬆️  Voxa {status['latest']} is out (this is {status['current']}): "
+              f"{status['command'] or status['download']}", flush=True)
+
+
 @app.get("/api/options")
 async def options() -> dict:
     return build_options()
@@ -1042,6 +1064,8 @@ async def put_settings(patch: SettingsPatch, _: None = Depends(require_local)) -
         if fb is not None and fb not in valid_translators():
             raise HTTPException(status_code=422, detail=f"Unknown fallback translator: {fb}")
     if "advanced" in data:
+        if not isinstance((data["advanced"] or {}).get("checkUpdates", True), bool):
+            raise HTTPException(status_code=422, detail="checkUpdates must be true or false.")
         rate = (data["advanced"] or {}).get("speechRate")
         if rate is not None:
             try:
@@ -1505,6 +1529,7 @@ def run_from_cli(argv: List[str], prog: str = "voxa serve") -> int:
     print(f"🔑 API keys detected: {', '.join(detected) if detected else 'none'}")
     if earlier:
         print(f"📜 {earlier} earlier dub{'s' if earlier != 1 else ''} in {_history_dir()}")
+    threading.Thread(target=_say_if_newer, name="voxa-update-check", daemon=True).start()
     if made_up:
         print("🔐 It listens beyond this machine, so the console and the API ask for this "
               f"access token (set your own with --token or VOXA_TOKEN):\n   {token}")

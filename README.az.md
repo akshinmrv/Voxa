@@ -442,6 +442,13 @@ adlarıdır (tirelər alt-xətt). Tam nümunə: [`examples/config.json`](example
 **Loglama.** `--log-format json` hər sətrə bir JSON obyekti verir. `--verbose` səviyyəni DEBUG
 edir.
 
+**Yeniləmələr.** Konsol, `voxa serve` və `voxa doctor` gündə bir dəfə PyPI-dan voxa-dub-ın ən
+yeni versiyasını soruşur. Sizinkindən yenisi çıxıbsa, bunu deyir və quraşdırmanızın onu necə
+alacağını göstərir: VoxaSetup.exe ilə qurulubsa yeni VoxaSetup.exe, yoxsa Voxa-nı necə
+qurmusunuzsa ona uyğun bir əmr. PyPI bu sorğunu istənilən yükləmə kimi görür (IP ünvanınız və
+bu Voxa-nın versiyası); başqa heç nə göndərilmir. Konsolda Ayarlar → Ətraflı bölməsindən, ya da
+hər yerdə `VOXA_NO_UPDATE_CHECK=1` ilə söndürülür.
+
 **Bütün parametrlər:** `voxa --help` — koddan generasiya olunur, ona görə heç vaxt köhnəlmir.
 
 ## Sürətli başlanğıc
@@ -640,7 +647,8 @@ kimi sərbəst lisenziyalı model işlətdikcə (bax: [NOTICE](NOTICE.md#46-self
 <summary><strong>Tam offline işləyə bilərmi?</strong></summary>
 
 Bəli: `--translator ollama --tts piper`. Modellər yükləndikdən sonra heç nə cihazınızdan
-çıxmır. Amma offline olmaq kommersiya üçün təmiz olmaq demək deyil: öz diliniz üçün səsin
+çıxmır (konsol və `voxa doctor` gündə bir dəfə PyPI-dan Voxa-nın yeni versiyasını da soruşur;
+`VOXA_NO_UPDATE_CHECK=1` bunu dayandırır). Amma offline olmaq kommersiya üçün təmiz olmaq demək deyil: öz diliniz üçün səsin
 lisenziyasını [NOTICE.md](NOTICE.md#41-piper-voices)-də yoxlayın.
 </details>
 

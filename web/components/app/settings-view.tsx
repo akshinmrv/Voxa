@@ -84,7 +84,11 @@ export function SettingsView() {
 
   const toggleQualityGate = useMutation({
     mutationFn: (patch: SettingsPatch) => updateSettings(patch),
-    onSuccess: (data) => qc.setQueryData(["settings"], data),
+    onSuccess: (data) => {
+      qc.setQueryData(["settings"], data);
+      // The update banner follows "Check for updates" at once, not hours later.
+      void qc.invalidateQueries({ queryKey: ["update"] });
+    },
   });
 
   const reset = useMutation({
@@ -148,6 +152,7 @@ export function SettingsView() {
       concurrentDraft !== (savedConcurrent != null ? String(savedConcurrent) : ""));
   const qualityGate = settings.advanced?.qualityGate ?? false;
   const autoDownload = settings.advanced?.autoDownload ?? false;
+  const checkUpdates = settings.advanced?.checkUpdates ?? true;
 
   return (
     <Shell>
@@ -486,6 +491,26 @@ export function SettingsView() {
               </span>
               <span className="block text-xs text-muted-foreground">
                 {t("advanced.autoDownloadHint")}
+              </span>
+            </span>
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-3 border-t border-border pt-4">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-primary"
+              checked={checkUpdates}
+              disabled={toggleQualityGate.isPending}
+              onChange={(e) =>
+                toggleQualityGate.mutate({ advanced: { checkUpdates: e.target.checked } })
+              }
+            />
+            <span>
+              <span className="block text-sm font-medium text-foreground">
+                {t("advanced.checkUpdatesLabel")}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {t("advanced.checkUpdatesHint")}
               </span>
             </span>
           </label>

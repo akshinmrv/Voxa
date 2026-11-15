@@ -370,7 +370,9 @@
         "qualityGateLabel": "Quality gate (score & retry speech)",
         "qualityGateHint": "Scores each synthesized line and re-renders a garbled one with neutral delivery. Slower, OpenAI TTS. Off by default.",
         "autoDownloadLabel": "Save each dub automatically",
-        "autoDownloadHint": "When a job finishes, its video is saved to your downloads folder without clicking Download. Only works while the console is open, and your browser may ask permission before saving several files at once."
+        "autoDownloadHint": "When a job finishes, its video is saved to your downloads folder without clicking Download. Only works while the console is open, and your browser may ask permission before saving several files at once.",
+        "checkUpdatesLabel": "Check for updates",
+        "checkUpdatesHint": "Once a day, Voxa asks PyPI which voxa-dub is the newest and tells you here when it's newer than yours. PyPI sees what any download shows it (your IP address) and this Voxa's version; nothing about your videos or settings is sent. VOXA_NO_UPDATE_CHECK=1 turns it off for the command line as well."
       },
       "appearance": {
         "title": "Appearance",
@@ -413,6 +415,21 @@
         "Synthesize",
         "Assemble"
       ]
+    },
+    "update": {
+      "title": "Voxa {latest} is out",
+      "current": "You have {current}.",
+      "whatsNew": "What's new",
+      "howTo": "How to update",
+      "hide": "Not now",
+      "download": "Download VoxaSetup.exe",
+      "setupHint": "Close Voxa Studio, then run it: it updates this install and keeps your dubs and settings.",
+      "commandHint": "Close Voxa (the Studio window, or voxa serve), run this in a terminal, then start it again:",
+      "containerHint": "On the machine that runs Docker, pull the new image, then create the container again from it:",
+      "sourceHint": "Stop Voxa, update your checkout, then start it again:",
+      "terminal": "terminal",
+      "version": "Voxa {version}",
+      "newer": "{latest} is out"
     },
     "localOnly": {
       "title": "The operator console runs on your machine",

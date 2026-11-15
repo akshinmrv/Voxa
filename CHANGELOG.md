@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Voxa says when a newer version is out.** Once a day the console, `voxa serve` and
+  `voxa doctor` ask PyPI for voxa-dub's newest version, a plain request for PyPI's public JSON
+  that carries nothing about the machine, its user or their videos, and keep the answer in
+  `~/.voxa/update.json` (after a failed attempt, they try again an hour later). When it's newer
+  than the one running: a bar in the console with the release notes and the way this install
+  gets it (the new VoxaSetup.exe for an install it made; otherwise the one command for a uv
+  tool, pipx, pip or git-checkout install, or `docker pull` for the image), a line when
+  `voxa serve` starts, and a row in `voxa doctor`. "Not now" hides the bar until the next
+  release. The console's sidebar shows the version it runs. Turn it off in Settings → Advanced,
+  or everywhere with `VOXA_NO_UPDATE_CHECK=1`. Pre-releases are never offered.
+
+### Fixed
+
+- **Install hints keep the CPU build of PyTorch.** The commands `voxa doctor` suggests for an
+  install the one-line installers made (adding an extra, reinstalling, upgrading a dependency)
+  now pass `--torch-backend auto`, as the installers do. uv doesn't keep the backend with the
+  tool, so the old commands took PyTorch from PyPI alone, which on Linux is the CUDA build
+  (about 3 GB) even on a machine without an NVIDIA GPU.
+
 ## [1.16.0] - 2026-11-15
 
 ### Added

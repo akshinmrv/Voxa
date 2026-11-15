@@ -443,6 +443,13 @@ doldurun. Voxa başlangıçta yükler; gerçek ortam değişkenleri her zaman ö
 **Günlükleme.** `--log-format json` her satır için bir JSON nesnesi üretir. `--verbose`
 seviyeyi DEBUG'a çıkarır.
 
+**Güncellemeler.** Konsol, `voxa serve` ve `voxa doctor` günde bir kez PyPI'a en yeni voxa-dub
+sürümünü sorar. Sizinkinden yenisi çıktıysa bunu söyler ve kurulumunuzun onu nasıl alacağını
+gösterir: VoxaSetup.exe ile kurulduysa yeni VoxaSetup.exe, değilse Voxa'yı nasıl kurduysanız ona
+uygun tek bir komut. PyPI bu isteği herhangi bir indirme gibi görür (IP adresiniz ve bu Voxa'nın
+sürümü); başka hiçbir şey gönderilmez. Konsolda Ayarlar → Gelişmiş bölümünden ya da her yerde
+`VOXA_NO_UPDATE_CHECK=1` ile kapatılır.
+
 **Tüm seçenekler:** `voxa --help` — koddan üretilir, dolayısıyla asla eskimez.
 
 ## Hızlı başlangıç
@@ -639,7 +646,8 @@ yoktur (bkz. [NOTICE](NOTICE.md#46-self-hosted-speech-servers)).
 <details>
 <summary><strong>Tamamen çevrimdışı çalışır mı?</strong></summary>
 
-Evet: `--translator ollama --tts piper`. Ancak çevrimdışı olmak ticari açıdan temiz olmak
+Evet: `--translator ollama --tts piper` (konsol ve `voxa doctor` günde bir kez PyPI'a Voxa'nın
+yeni sürümünü de sorar; `VOXA_NO_UPDATE_CHECK=1` bunu durdurur). Ancak çevrimdışı olmak ticari açıdan temiz olmak
 demek değildir: diliniz için sesin lisansını [NOTICE.md](NOTICE.md#41-piper-voices) içinde
 kontrol edin.
 </details>
