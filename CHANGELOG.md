@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The console keeps its list of dubs when Voxa Studio is closed.** Jobs lived only in the
+  server's memory, so closing it emptied the Jobs page, though the dubs stayed on disk. Each
+  job is now also a record in `.voxa_serve/history/`, written when it's created, starts and
+  ends, with the last 2,000 lines of its log, and the next start lists them again in the order
+  they were made, with their downloads and log. A dub that was still running when the server
+  stopped shows as failed and says to dub the same video again, which reuses the steps it had
+  finished. Paths are kept relative to the folder, so it can be moved with its jobs. In a live
+  test, a server killed mid-dub came back with all four of its jobs: the finished one
+  downloadable and its 35 log events replayed, the cut-off one marked as such.
+
 ## [1.14.2] - 2026-11-14
 
 ### Changed

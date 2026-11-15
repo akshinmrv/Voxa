@@ -227,6 +227,7 @@ class Job:
     result_video: Optional[Path] = None
     result_srt: Optional[Path] = None
     error: Optional[str] = None
+    created_at: float = field(default_factory=time.time)
 
     def summary(self) -> dict:
         return {
@@ -247,6 +248,102 @@ UPLOADS: Dict[str, Path] = {}
 # work dir and its cached transcription is reused instead of being redone.
 UPLOAD_HASHES: Dict[str, str] = {}
 JOBS: Dict[str, Job] = {}
+
+# --------------------------------------------------------------------------- #
+# Job history: each job is also a file, so the list outlives the server
+# --------------------------------------------------------------------------- #
+
+# A job's record keeps the end of its log, enough for its page to show what happened.
+HISTORY_EVENTS = 2000
+INTERRUPTED = ("Voxa Studio stopped before this dub finished. Dub the same video again with "
+               "the same settings: the steps it had finished are reused.")
+
+
+def _history_dir() -> Path:
+    # A function, not a constant, so it follows WORKSPACE when that is moved (as in tests).
+    return WORKSPACE / "history"
+
+
+def _stored_path(path: Optional[Path]) -> Optional[str]:
+    """Relative to the workspace when inside it, so the folder can be moved with its jobs."""
+    if path is None:
+        return None
+    try:
+        return Path(path).resolve().relative_to(WORKSPACE.resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _loaded_path(value: Optional[str]) -> Optional[Path]:
+    if not value:
+        return None
+    path = Path(value)
+    return path if path.is_absolute() else WORKSPACE / path
+
+
+def save_job(job: Job) -> None:
+    """Write the job's record (written whole, then swapped in, so a crash leaves the old
+    one). A disk error is logged, never raised: it mustn't fail the dub itself."""
+    record = {
+        "version": 1,
+        "id": job.id,
+        "fileName": job.file_name,
+        "sourceUrl": job.source_url,
+        "config": job.config.model_dump(),
+        "workDir": _stored_path(job.work_dir),
+        "status": job.status,
+        "step": job.step,
+        "error": job.error,
+        "resultVideo": _stored_path(job.result_video),
+        "resultSrt": _stored_path(job.result_srt),
+        "createdAt": job.created_at,
+        "events": job.events[-HISTORY_EVENTS:],
+    }
+    folder = _history_dir()
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        temp = folder / f"{job.id}.json.tmp"
+        temp.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+        os.replace(temp, folder / f"{job.id}.json")
+    except OSError as e:
+        print(f"⚠️  Couldn't save job {job.id} to the history: {e}", file=sys.stderr)
+
+
+def load_history() -> int:
+    """Put the jobs of earlier runs back in JOBS, oldest first, as the console lists them.
+    One that was queued or running when the server stopped shows as interrupted. A record
+    that can't be read is skipped. Returns how many came back."""
+    folder = _history_dir()
+    if not folder.is_dir():
+        return 0
+    records = []
+    for path in folder.glob("*.json"):
+        try:
+            records.append(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            continue
+    loaded = 0
+    for rec in sorted(records, key=lambda r: r.get("createdAt") or 0):
+        try:
+            job = Job(id=rec["id"], file_name=rec["fileName"],
+                      config=JobConfigModel(**rec["config"]),
+                      work_dir=_loaded_path(rec["workDir"]), source_url=rec.get("sourceUrl"),
+                      status=rec["status"], step=rec.get("step", 0),
+                      events=list(rec.get("events") or []),
+                      result_video=_loaded_path(rec.get("resultVideo")),
+                      result_srt=_loaded_path(rec.get("resultSrt")),
+                      error=rec.get("error"), created_at=rec.get("createdAt") or 0)
+        except (KeyError, TypeError, ValueError):
+            continue
+        if job.id in JOBS:
+            continue
+        if job.status in ("queued", "running"):
+            job.status, job.error = "failed", INTERRUPTED
+            job.events.append({"type": "status", "status": "failed", "error": INTERRUPTED})
+            save_job(job)
+        JOBS[job.id] = job
+        loaded += 1
+    return loaded
 
 
 def _video_work_dir(content_key: Optional[str]) -> Path:
@@ -334,6 +431,7 @@ async def _run_job(job: Job) -> None:
     async with _job_gate(job):
         job.status = "running"
         await _emit(job, {"type": "status", "status": "running"})
+        save_job(job)
 
         cfg = job.config
         # A URL is passed straight through: voxa downloads it into the run's cwd
@@ -380,6 +478,7 @@ async def _run_job(job: Job) -> None:
             job.status = "failed"
             job.error = f"Failed to launch voxa: {exc}"
             await _emit(job, {"type": "status", "status": "failed", "error": job.error})
+            save_job(job)
             return
 
         assert proc.stdout is not None
@@ -420,6 +519,7 @@ async def _run_job(job: Job) -> None:
             job.status = "failed"
             job.error = last_error or f"voxa exited with code {code}"
             await _emit(job, {"type": "status", "status": "failed", "error": job.error})
+        save_job(job)
 
 
 # --------------------------------------------------------------------------- #
@@ -1094,6 +1194,7 @@ async def create_job(body: CreateJobModel) -> dict:
         raise HTTPException(status_code=400, detail="Provide either fileId or sourceUrl")
 
     JOBS[job_id] = job
+    save_job(job)
     asyncio.create_task(_run_job(job))
     return {"jobId": job_id}
 
@@ -1374,12 +1475,15 @@ def run_from_cli(argv: List[str], prog: str = "voxa serve") -> int:
     ACCESS = Access(token=token, cookie=f"voxa_token_{args.port}")
 
     WORKSPACE.mkdir(parents=True, exist_ok=True)
+    earlier = load_history()
     detected = [k for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY") if os.environ.get(k)]
     # A wildcard bind is reachable on loopback; the browser can't open 0.0.0.0 itself.
     local = "127.0.0.1" if args.host in ("0.0.0.0", "::", "") else args.host
     url = f"http://{local}:{args.port}"
     print(f"🌐 Voxa operator server → http://{args.host}:{args.port}")
     print(f"🔑 API keys detected: {', '.join(detected) if detected else 'none'}")
+    if earlier:
+        print(f"📜 {earlier} earlier dub{'s' if earlier != 1 else ''} in {_history_dir()}")
     if made_up:
         print("🔐 It listens beyond this machine, so the console and the API ask for this "
               f"access token (set your own with --token or VOXA_TOKEN):\n   {token}")
