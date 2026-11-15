@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-11-15
+
 ### Added
 
 - **VoxaSetup.exe, an installer for Windows.** A wizard for the current user, with no
@@ -680,7 +682,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.16.0...HEAD
+[1.16.0]: https://github.com/akshinmrv/Voxa/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/akshinmrv/Voxa/compare/v1.14.2...v1.15.0
 [1.14.2]: https://github.com/akshinmrv/Voxa/compare/v1.14.1...v1.14.2
 [1.14.1]: https://github.com/akshinmrv/Voxa/compare/v1.14.0...v1.14.1
