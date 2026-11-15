@@ -474,6 +474,14 @@ voxa video.mp4 --target_lang fr --translator ollama --tts piper
 # Yalnız altyazı
 voxa video.mp4 --target_lang es --subtitles-only
 
+# Tərcüməni səsləndirmədən əvvəl yoxlayın: sətirlər tərcümə olunanda dayanır; istənilənini
+# video_work/translated.json-da dəyişin, sonra --review olmadan yenidən işə salın. Sonradan bir
+# sətri dəyişib yenidən işə salsanız, yalnız o sətir yenidən səsləndirilir.
+voxa video.mp4 --target_lang de --review
+
+# Başqa yerdə tərcümə olunmuş sətirləri səsləndirin (.srt, ya da translated.json formatında JSON)
+voxa video.mp4 --target_lang de --translation lines.de.srt
+
 # Hazır SRT-dən dublyaj — Whisper-i atla (düzəldilmiş altyazı, ya da onsuz da mövcud olan)
 voxa video.mp4 --target_lang de --subtitles captions.srt
 
@@ -536,6 +544,11 @@ Extra olmadan, ya da GTK və Qt olmayan Linux-da brauzeri açır.
 
 Konsol paketin içindədir: Node da, ikinci terminal da lazım deyil. Konsolun özü üzərində
 işləyirsinizsə, `voxa serve` ilə yanaşı [`web/`](web/)-də `npm run dev` işlədin.
+
+**Tərcüməni səsləndirmədən əvvəl yoxlayın.** Yeni işdə *Yoxlama*-nı seçsəniz, sətirlər tərcümə
+olunanda dayanır: hər biri tərcümə olunduğu sətrin altında, vaxtına təxminən neçə simvolun
+sığdığı ilə. İstənilənini dəyişin, sonra *Səsləndir*. Bitmiş iş də dəyişdirilə bilər
+(*Tərcüməni dəyiş*), və yalnız dəyişdiyiniz sətirlər yenidən səsləndirilir.
 
 Server yalnız `localhost` və `127.0.0.1` adlarına cavab verir, ona görə başqa sayt onu
 brauzerinizdən idarə edə bilməz. Başqa maşından çatmaq üçün `--host 0.0.0.0` ilə başladanda

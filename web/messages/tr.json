@@ -254,6 +254,9 @@
       "separateHint": "Orijinaldeki konuşmayı çıkar, müzik ve efektleri dublajın altında tam seviyede tut; aksi halde orijinalin tamamı hafif bir fon olarak kalır. CPU'da 10 dakikalık bir video yaklaşık 6 dakika daha sürer.",
       "separateToggle": "Müzik ve efektleri koru",
       "separateInstall": "Orijinalin müzik ve efektlerini korumak için Modeller sayfasından Demucs'u kur.",
+      "review": "İnceleme",
+      "reviewHint": "Satırlar çevrildiğinde durur; böylece hiçbiri seslendirilmeden önce onları kontrol edip değiştirebilirsiniz.",
+      "reviewToggle": "Seslendirmeden önce çeviriyi kontrol et",
       "offlineBadge": "Çevrimdışı",
       "notInstalled": "kurulu değil — Modeller sayfasına bakın",
       "keyBadge": "API anahtarı gerekir",
@@ -389,6 +392,7 @@
     "status": {
       "queued": "Sırada",
       "running": "Çalışıyor",
+      "review": "İnceleme",
       "done": "Bitti",
       "failed": "Başarısız"
     },
@@ -404,6 +408,7 @@
       "result": "Sonuç",
       "download": "Videoyu indir",
       "downloadSrt": "Altyazıları indir",
+      "editTranslation": "Çeviriyi değiştir",
       "failed": "Bu iş başarısız oldu. Aşağıdaki günlüklere bak.",
       "connecting": "İşe bağlanılıyor…",
       "steps": [
@@ -430,6 +435,22 @@
       "terminal": "terminal",
       "version": "Voxa {version}",
       "newer": "{latest} çıktı"
+    },
+    "review": {
+      "title": "Çeviriyi kontrol edin",
+      "desc": "Henüz hiçbir şey seslendirilmedi. İstediğiniz satırı değiştirin, sonra seslendirin. Her satır kendi zamanında kalır; boş bırakılan satır sessiz kalır.",
+      "editTitle": "Çeviriyi değiştir",
+      "editDesc": "İstediğiniz satırı değiştirip dublajı yeniden seslendirin: yalnızca değiştirdiğiniz satırlar yeniden seslendirilir.",
+      "lineLabel": "Satır {n}",
+      "fits": "{length} / yaklaşık {max} karakter",
+      "long": "{length} / yaklaşık {max} karakter: sığması için daha hızlı söylenecek",
+      "silent": "Boş: bu satır sessiz kalır",
+      "voice": "Seslendir",
+      "voiceAgain": "Yeniden seslendir",
+      "save": "Kaydet",
+      "saved": "Kaydedildi",
+      "unsaved": "{count} satır değişti, henüz kaydedilmedi",
+      "nothingToSay": "En az bir satırda söylenecek bir şey olmalı."
     },
     "localOnly": {
       "title": "Operatör konsolu kendi makinende çalışır",

@@ -4,8 +4,12 @@ import { cn } from "@/lib/utils";
 
 type StepState = "done" | "active" | "pending" | "failed";
 
+/** A job waiting for its lines to be reviewed has translated (step 5) and voiced nothing. */
+const TRANSLATED = 5;
+
 function stepState(n: number, current: number, status: JobStatus): StepState {
   if (status === "done") return "done";
+  if (status === "review") return n <= TRANSLATED ? "done" : "pending";
   if (status === "failed") {
     if (n < current) return "done";
     if (n === current) return "failed";
@@ -41,7 +45,11 @@ export function PipelineProgress({
   status: JobStatus;
 }) {
   const percent =
-    status === "done" ? 100 : Math.round((Math.max(current - 1, 0) / steps.length) * 100);
+    status === "done"
+      ? 100
+      : status === "review"
+        ? Math.round((TRANSLATED / steps.length) * 100)
+        : Math.round((Math.max(current - 1, 0) / steps.length) * 100);
 
   return (
     <div className="space-y-6">

@@ -1125,6 +1125,12 @@ class StateManager:
             self._signatures()[step] = signature
         self.save_state()
 
+    def mark_incomplete(self, step: str):
+        """The step has to run again, though with the same parameters (its input changed)."""
+        if step in self.state['steps_completed']:
+            self.state['steps_completed'].remove(step)
+            self.save_state()
+
     def set_signature(self, step: str, signature: str):
         """Record the parameters a step is being run with, before it completes, so an
         interrupted run can tell a same-parameter resume from a changed-parameter rerun."""
@@ -1227,7 +1233,7 @@ def stage_signature(stage: str, args) -> str:
 # by engine prefix and index, not by language) would reuse the previous run's clips.
 _SYNTHESIS_ARTIFACT_GLOBS = ["edge_*", "otts_*", "xtts_*", "piper_*", "fill_*"]
 _SYNTHESIS_ARTIFACT_FILES = ["voiceover.wav", "voiceover_normalized.wav",
-                             "deliveries.json", "concat_list.txt"]
+                             "deliveries.json", "concat_list.txt", "synthesized_lines.json"]
 
 
 def _purge_synthesis_artifacts(work_dir: Path) -> int:
@@ -1348,6 +1354,14 @@ def plan_blockers(args) -> List[str]:
     srt = getattr(args, "subtitles", None)
     if srt and not Path(srt).exists():
         problems.append(f"subtitles file not found: {srt}")
+    given = getattr(args, "translation", None)
+    if given:
+        try:
+            load_translation(given)
+        except OSError:
+            problems.append(f"translation file not found: {given}")
+        except ValueError as e:
+            problems.append(f"can't use the translation in {given}: {e}")
     if getattr(args, "diarize", False):
         if srt:
             problems.append("--diarize is not usable with --subtitles yet (it needs the audio)")
@@ -1727,6 +1741,86 @@ def _segments_from_srt(path: str) -> List[Dict]:
                          "end": _sub_end_ms(s) / 1000.0,
                          "text": text})
     return segments
+
+
+def load_translation(path) -> List[Dict]:
+    """The translated lines given with --translation, in place of translating: an .srt, or a
+    JSON list of {start, end, text[, speaker]} with times in seconds, the way
+    <video>_work/translated.json holds them. A line with no text stays silent. Raises
+    ValueError saying what is wrong with the file."""
+    path = Path(path)
+    if path.suffix.lower() == ".srt":
+        lines = [{"text": " ".join(s.text.split()), "start": _sub_start_ms(s) / 1000.0,
+                  "end": _sub_end_ms(s) / 1000.0} for s in read_srt(path)]
+    else:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
+        except ValueError as e:
+            raise ValueError(f"it isn't JSON ({e})") from None
+        if not isinstance(data, list):
+            raise ValueError("it should be a JSON list of lines")
+        lines = []
+        for n, item in enumerate(data, 1):
+            if not isinstance(item, dict):
+                raise ValueError(f"line {n} isn't an object")
+            try:
+                start, end = float(item["start"]), float(item["end"])
+            except (KeyError, TypeError, ValueError):
+                raise ValueError(f"line {n} needs a start and an end, in seconds") from None
+            if not 0 <= start <= end:
+                raise ValueError(f"line {n} ends before it starts")
+            text = item.get("text") or ""
+            if not isinstance(text, str):
+                raise ValueError(f"line {n}: its text should be a string")
+            line = {"text": " ".join(text.split()), "start": start, "end": end}
+            if item.get("speaker") is not None:
+                line["speaker"] = str(item["speaker"])
+            lines.append(line)
+    if not any(line["text"] for line in lines):
+        raise ValueError("it has no line to speak")
+    return lines
+
+
+def _read_json_list(path: Path) -> Optional[list]:
+    """A JSON list kept in the work dir, or None when it is missing or unreadable."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, list) else None
+
+
+def _spoken_line(sub) -> list:
+    """What a line's speech was made from: its timing, text and speaker. A clip is made again
+    when any of them changes."""
+    return [_sub_start_ms(sub), _sub_end_ms(sub), " ".join(str(sub.text).split()),
+            getattr(sub, "speaker", None)]
+
+
+def _line_files(work_dir: Path, i: int) -> List[Path]:
+    """Every file an engine keeps for line i: the placed clip (<engine>_fin_<i>.wav) and what
+    it was made from, which the engines reuse when present (Edge's edge_raw_<i>.mp3 and
+    edge_cnv_<i>.wav, Piper's, OpenAI's, Chatterbox's and VoxCPM2's <engine>_raw_<i>.wav,
+    XTTS's chunks and the quality gate's retakes)."""
+    name = re.compile(rf"[a-z]+_(?:raw|cnv|fin|rawcand|fincand)_{i}(?:_\d+)?\.(?:wav|mp3)")
+    return [p for p in work_dir.glob(f"*_{i}*") if name.fullmatch(p.name)]
+
+
+def _drop_changed_clips(work_dir: Path, voiced: list, spoken: list) -> int:
+    """Delete what each line whose text, timing or speaker differs from what it was voiced
+    from was made of, so the engine speaks it again, and keep the other lines' clips.
+    Returns how many lines with something to say changed."""
+    changed = 0
+    for i, line in enumerate(spoken):
+        if i < len(voiced) and voiced[i] == line:
+            continue
+        for path in _line_files(work_dir, i):
+            _safe_unlink(path)
+        changed += 1 if line[2] else 0
+    if changed:
+        # OpenAI speech keeps a delivery hint per line, inferred from the old text.
+        _safe_unlink(work_dir / "deliveries.json")
+    return changed
 
 
 def _seconds_to_subtime(sec: float) -> SubTime:
@@ -4344,9 +4438,28 @@ async def process_video(video_path: str, args, logger: Logger):
         state.mark_completed('merge_sentences', merge_sig)
 
     # Step 5: Translation
+    # The lines as they stood before this run, which a dub voiced before the lines it was made
+    # from were recorded (synthesized_lines.json) was made from, unless they were changed
+    # after it was voiced.
+    previous_translation = _read_json_list(translated_json)
+    try:
+        edited_since_voiced = translated_json.stat().st_mtime > voiceover_norm.stat().st_mtime
+    except OSError:
+        edited_since_voiced = False
     translated_segments = []
     translation_sig = stage_signature('translation', args)
-    if state.is_valid('translation', translation_sig) and translated_json.exists():
+    given = getattr(args, "translation", None)
+    if given:
+        try:
+            translated_segments = load_translation(given)
+        except (OSError, ValueError) as e:
+            logger.error(f"❌ Can't use the translation in {given}: {e}")
+            return 1
+        logger.info(f"[5/7] ✓ Translation given: {len(translated_segments)} lines from {given}")
+        with open(translated_json, 'w', encoding='utf-8') as f:
+            json.dump(translated_segments, f, ensure_ascii=False, indent=2)
+        state.mark_completed('translation', translation_sig)
+    elif state.is_valid('translation', translation_sig) and translated_json.exists():
         logger.info("[5/7] ✓ Translation already completed")
         with open(translated_json, 'r', encoding='utf-8') as f:
             translated_segments = json.load(f)
@@ -4432,30 +4545,57 @@ async def process_video(video_path: str, args, logger: Logger):
         logger.info(f"📝 Subtitles: {final_srt}")
         return 0
 
+    # Review: stop with the lines translated and nothing voiced, so they can be checked first.
+    if getattr(args, "review", False):
+        logger.info(f"📝 {len(translated_segments)} lines translated; nothing is voiced yet. "
+                    f"Check them, and change any, in {translated_json} (or in the console), "
+                    f"then run again without --review to voice them.")
+        return 0
+
     # Step 6: Speech synthesis
+    if getattr(args, "diarize", False):
+        # Build subs straight from the translated segments so the speaker tag survives to
+        # synthesis (the SRT has no speaker field). Same content the SRT was written from.
+        subs = [Subtitle(i + 1, _seconds_to_subtime(s['start']),
+                         _seconds_to_subtime(s['end']), s['text'], s.get('speaker'))
+                for i, s in enumerate(translated_segments) if s.get('text', '').strip()]
+    else:
+        subs = read_srt(srt_file)
+    # Each line's clip is kept until what it was made from changes: synthesized_lines.json
+    # records that for the last voicing. A dub voiced before it existed was made from the
+    # translation as it stood when this run began, unless that was changed after the voicing;
+    # if it changed either way, every line is voiced again.
+    spoken = [_spoken_line(s) for s in subs]
+    lines_file = work_dir / "synthesized_lines.json"
+    voiced = _read_json_list(lines_file)
+    if voiced is None:
+        unchanged = previous_translation == translated_segments and not edited_since_voiced
+        voiced = spoken if unchanged else []
     synthesis_sig = stage_signature('synthesis', args)
-    if state.is_valid('synthesis', synthesis_sig) and voiceover_norm.exists():
+    if (state.is_valid('synthesis', synthesis_sig) and voiceover_norm.exists()
+            and voiced == spoken):
         logger.info("[6/7] ✓ Speech synthesis already completed")
     else:
         # If the last synthesis ran with different parameters (a new language, a different
         # engine, an old pre-signature checkpoint), its per-segment clips are stale and the
         # engine loop would reuse them by filename. Clear them before regenerating. A
-        # same-parameter resume keeps its partial clips (the signatures match).
+        # same-parameter resume keeps its partial clips (the signatures match), apart from
+        # those of lines changed since they were voiced.
         if state.signature_of('synthesis') != synthesis_sig:
             cleared = _purge_synthesis_artifacts(work_dir)
             if cleared:
                 logger.info(f"🧹 Run parameters changed — cleared {cleared} stale speech "
                             f"file(s) before re-synthesizing")
-        state.set_signature('synthesis', synthesis_sig)
-        logger.info(f"[6/7] ({_elapsed()}) Synthesizing speech...")
-        if getattr(args, "diarize", False):
-            # Build subs straight from the translated segments so the speaker tag survives to
-            # synthesis (the SRT has no speaker field). Same content the SRT was written from.
-            subs = [Subtitle(i + 1, _seconds_to_subtime(s['start']),
-                             _seconds_to_subtime(s['end']), s['text'], s.get('speaker'))
-                    for i, s in enumerate(translated_segments) if s.get('text', '').strip()]
         else:
-            subs = read_srt(srt_file)
+            changed = _drop_changed_clips(work_dir, voiced, spoken)
+            if changed:
+                logger.info(f"✏️  {changed} line(s) changed since they were voiced; voicing "
+                            f"those again and keeping the rest")
+        state.mark_incomplete('synthesis')
+        state.set_signature('synthesis', synthesis_sig)
+        # Recorded once the stale clips are gone, so an interrupted run keeps what it made.
+        lines_file.write_text(json.dumps(spoken, ensure_ascii=False), encoding="utf-8")
+        logger.info(f"[6/7] ({_elapsed()}) Synthesizing speech...")
         gate_asr = _get_gate_asr(args.gate_model) if args.quality_gate else None
 
         spec = TTS_PROVIDERS.get(args.tts)
@@ -4764,6 +4904,16 @@ Examples:
                              "(skips Whisper). Handy for re-dubbing with hand-corrected "
                              "captions, or when accurate subtitles already exist. The lines "
                              "are still translated and spoken.")
+    parser.add_argument("--review", action="store_true",
+                        help="Stop once the lines are translated, before any speech is made, so "
+                             "they can be checked and changed first (in <video>_work/"
+                             "translated.json, or in the console). Running again without "
+                             "--review voices them; after that, a changed line is voiced again "
+                             "on its own.")
+    parser.add_argument("--translation", default=None, metavar="FILE",
+                        help="Speak these translated lines instead of translating: an .srt, or "
+                             "a JSON list of {start, end, text} in seconds, as <video>_work/"
+                             "translated.json holds them. A line left empty stays silent.")
     parser.add_argument("--diarize", action="store_true",
                         help="Detect who speaks when (pyannote) and give each speaker their own "
                              "voice on Edge and OpenAI TTS. Needs the 'diarize' extra and a "
@@ -4882,6 +5032,18 @@ Examples:
     if args.subtitles and not args.dry_run and not Path(args.subtitles).exists():
         print(f"❌ Subtitles file not found: {args.subtitles}")
         return 1
+    if args.translation and not args.dry_run:
+        if len(args.videos) > 1:
+            print("❌ --translation holds the lines of one video; give it one video at a time.")
+            return 1
+        try:
+            load_translation(args.translation)
+        except OSError:
+            print(f"❌ Translation file not found: {args.translation}")
+            return 1
+        except ValueError as e:
+            print(f"❌ Can't use the translation in {args.translation}: {e}")
+            return 1
     if not args.dry_run:
         silent = [problem for video in args.videos
                   for problem in _silent_video_problems(Path(video).name, args,

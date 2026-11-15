@@ -475,6 +475,14 @@ voxa video.mp4 --target_lang fr --translator ollama --tts piper
 # Yalnızca altyazı
 voxa video.mp4 --target_lang es --subtitles-only
 
+# Çeviriyi seslendirilmeden önce kontrol edin: satırlar çevrildiğinde durur; istediğinizi
+# video_work/translated.json içinde değiştirin, sonra --review olmadan yeniden çalıştırın.
+# Sonradan bir satırı değiştirip yeniden çalıştırırsanız yalnızca o satır yeniden seslendirilir.
+voxa video.mp4 --target_lang de --review
+
+# Başka yerde çevrilmiş satırları seslendirin (.srt ya da translated.json biçiminde JSON)
+voxa video.mp4 --target_lang de --translation lines.de.srt
+
 # Mevcut SRT'den dublaj — Whisper'ı atla (elle düzeltilmiş altyazı veya zaten var olan)
 voxa video.mp4 --target_lang de --subtitles captions.srt
 
@@ -537,6 +545,11 @@ GTK ve Qt bulunmayan Linux'ta tarayıcıyı açar.
 
 Konsol paketin içinde gelir: Node da ikinci bir terminal da gerekmez. Konsolun kendisi
 üzerinde çalışıyorsanız `voxa serve` ile birlikte [`web/`](web/) içinde `npm run dev` çalıştırın.
+
+**Çeviriyi seslendirilmeden önce kontrol edin.** Yeni bir işte *İnceleme*'yi işaretlerseniz
+satırlar çevrildiğinde durur: her biri çevrildiği satırın altında, zamanına yaklaşık kaç karakter
+sığdığıyla. İstediğinizi değiştirin, sonra *Seslendir*. Biten bir iş de değiştirilebilir
+(*Çeviriyi değiştir*) ve yalnızca değiştirdiğiniz satırlar yeniden seslendirilir.
 
 Sunucu yalnızca `localhost` ve `127.0.0.1` adlarına yanıt verir, bu yüzden başka bir site onu
 tarayıcınızdan yönetemez. Başka bir makineden ulaşmak için `--host 0.0.0.0` ile başlatıldığında

@@ -254,6 +254,9 @@
       "separateHint": "Orijinalın danışığını çıxar, musiqi və effektlərini isə dublyajın altında tam səslə saxla. Əks halda bütün orijinal zəif fon kimi qalır. CPU-da 10 dəqiqəlik video təxminən 6 dəqiqə əlavə vaxt aparır.",
       "separateToggle": "Musiqi və effektləri saxla",
       "separateInstall": "Orijinalın musiqi və effektlərini saxlamaq üçün Modellər bölməsində Demucs-u quraşdırın.",
+      "review": "Yoxlama",
+      "reviewHint": "Sətirlər tərcümə olunanda dayanır ki, heç biri səsləndirilmədən əvvəl onları yoxlayıb dəyişə biləsiniz.",
+      "reviewToggle": "Səsləndirmədən əvvəl tərcüməni yoxla",
       "offlineBadge": "Offline",
       "notInstalled": "quraşdırılmayıb — Modellər bölməsinə baxın",
       "keyBadge": "API açarı lazımdır",
@@ -389,6 +392,7 @@
     "status": {
       "queued": "Növbədə",
       "running": "İşləyir",
+      "review": "Yoxlama",
       "done": "Hazır",
       "failed": "Uğursuz"
     },
@@ -404,6 +408,7 @@
       "result": "Nəticə",
       "download": "Videonu yüklə",
       "downloadSrt": "Altyazıları yüklə",
+      "editTranslation": "Tərcüməni dəyiş",
       "failed": "Bu iş uğursuz oldu. Aşağıdakı loqlara baxın.",
       "connecting": "İşə qoşulur…",
       "steps": [
@@ -430,6 +435,22 @@
       "terminal": "terminal",
       "version": "Voxa {version}",
       "newer": "{latest} çıxıb"
+    },
+    "review": {
+      "title": "Tərcüməni yoxlayın",
+      "desc": "Hələ heç nə səsləndirilməyib. İstənilən sətri dəyişin, sonra səsləndirin. Hər sətir öz vaxtında qalır; boş qalan sətir səssiz olur.",
+      "editTitle": "Tərcüməni dəyiş",
+      "editDesc": "İstənilən sətri dəyişib dublyajı yenidən səsləndirin: yalnız dəyişdiyiniz sətirlər yenidən səsləndirilir.",
+      "lineLabel": "Sətir {n}",
+      "fits": "{length} / təxminən {max} simvol",
+      "long": "{length} / təxminən {max} simvol: sığması üçün daha sürətli deyiləcək",
+      "silent": "Boş: bu sətir səssiz qalır",
+      "voice": "Səsləndir",
+      "voiceAgain": "Yenidən səsləndir",
+      "save": "Saxla",
+      "saved": "Saxlanıldı",
+      "unsaved": "{count} sətir dəyişib, hələ saxlanılmayıb",
+      "nothingToSay": "Ən azı bir sətirdə deyiləcək söz olmalıdır."
     },
     "localOnly": {
       "title": "Operator konsolu öz maşınında işləyir",

@@ -81,9 +81,12 @@ export type JobConfig = {
   maxSpeakers?: number;
   /** Keep the original's music and effects, its speech taken out (Demucs). */
   separate?: boolean;
+  /** Stop once the lines are translated, so they can be checked before any is voiced. */
+  review?: boolean;
 };
 
-export type JobStatus = "queued" | "running" | "done" | "failed";
+/** "review": translated, nothing voiced yet; waiting for the lines to be checked. */
+export type JobStatus = "queued" | "running" | "review" | "done" | "failed";
 
 /** Mirrors voxa_server.Job.summary(). */
 export type JobSummary = {
@@ -95,8 +98,25 @@ export type JobSummary = {
   totalSteps: number;
   hasVideo: boolean;
   hasSrt: boolean;
+  /** The job keeps its translated lines, which can be changed and voiced (again). */
+  hasTranslation?: boolean;
   error: string | null;
 };
+
+/** One translated line of a job (GET /api/jobs/{id}/translation). */
+export type TranslationLine = {
+  /** Seconds into the video. */
+  start: number;
+  end: number;
+  text: string;
+  /** The line it was translated from. */
+  source: string;
+  speaker: string | null;
+  /** About as many characters as fit its time; a longer line is spoken faster. */
+  maxChars: number;
+};
+
+export type JobTranslation = { editable: boolean; lines: TranslationLine[] };
 
 /** A single Server-Sent Event from GET /api/jobs/{id}/events. */
 export type JobEvent =

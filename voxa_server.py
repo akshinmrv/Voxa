@@ -203,6 +203,9 @@ class JobConfigModel(BaseModel):
     maxSpeakers: Optional[int] = None
     # Keep the original's music and effects, its speech taken out (Demucs).
     separate: bool = False
+    # Stop once the lines are translated, so they can be checked and changed before any is
+    # voiced (status "review"); POST /api/jobs/{id}/voice then voices them.
+    review: bool = False
 
 
 class CreateJobModel(BaseModel):
@@ -221,7 +224,7 @@ class Job:
     # Set for a URL job: passed to voxa as the positional input, which downloads it
     # (via yt-dlp) into work_dir. None for an uploaded-file job.
     source_url: Optional[str] = None
-    status: str = "queued"  # queued | running | done | failed
+    status: str = "queued"  # queued | running | review | done | failed
     step: int = 0
     events: List[dict] = field(default_factory=list)
     subscribers: Set["asyncio.Queue[dict]"] = field(default_factory=set)
@@ -229,6 +232,8 @@ class Job:
     result_srt: Optional[Path] = None
     error: Optional[str] = None
     created_at: float = field(default_factory=time.time)
+    # The lines this job translated (or was given), kept with the job: see keep_translation.
+    translation_file: Optional[Path] = None
 
     def summary(self) -> dict:
         return {
@@ -240,6 +245,7 @@ class Job:
             "totalSteps": TOTAL_STEPS,
             "hasVideo": bool(self.result_video and self.result_video.exists()),
             "hasSrt": bool(self.result_srt and self.result_srt.exists()),
+            "hasTranslation": bool(self.translation_file and self.translation_file.exists()),
             "error": self.error,
         }
 
@@ -297,6 +303,7 @@ def save_job(job: Job) -> None:
         "error": job.error,
         "resultVideo": _stored_path(job.result_video),
         "resultSrt": _stored_path(job.result_srt),
+        "translationFile": _stored_path(job.translation_file),
         "createdAt": job.created_at,
         "events": job.events[-HISTORY_EVENTS:],
     }
@@ -333,7 +340,8 @@ def load_history() -> int:
                       events=list(rec.get("events") or []),
                       result_video=_loaded_path(rec.get("resultVideo")),
                       result_srt=_loaded_path(rec.get("resultSrt")),
-                      error=rec.get("error"), created_at=rec.get("createdAt") or 0)
+                      error=rec.get("error"), created_at=rec.get("createdAt") or 0,
+                      translation_file=_loaded_path(rec.get("translationFile")))
         except (KeyError, TypeError, ValueError):
             continue
         if job.id in JOBS:
@@ -345,6 +353,52 @@ def load_history() -> int:
         JOBS[job.id] = job
         loaded += 1
     return loaded
+
+
+def _translation_path(job: Job) -> Path:
+    return job.work_dir / "translations" / f"{job.id}.json"
+
+
+def keep_translation(job: Job) -> Optional[Path]:
+    """Copy the lines the job's run translated (or was given) out of the video's work dir and
+    keep them with the job, each with the source line it came from. Every dub of the same video
+    shares that work dir and its translated.json, so a dub to another language replaces it;
+    the job's own copy is what it is reviewed, changed and voiced from. Returns its path, or
+    None when the run left no translation."""
+    found = sorted(job.work_dir.glob("*_work/translated.json"), key=lambda p: p.stat().st_mtime)
+    lines = voxa._read_json_list(found[-1]) if found else None
+    if not lines:
+        return None
+    merged = voxa._read_json_list(found[-1].with_name("merged_sentences.json")) or []
+    source = {}
+    for seg in merged:
+        try:
+            source[(round(float(seg["start"]), 3), round(float(seg["end"]), 3))] = \
+                " ".join(str(seg.get("text", "")).split())
+        except (KeyError, TypeError, ValueError):
+            continue
+    kept = []
+    for line in lines:
+        try:
+            start, end = float(line["start"]), float(line["end"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        entry = {"start": start, "end": end, "text": str(line.get("text") or ""),
+                 "source": source.get((round(start, 3), round(end, 3)), "")}
+        if line.get("speaker") is not None:
+            entry["speaker"] = line["speaker"]
+        kept.append(entry)
+    path = _translation_path(job)
+    _write_lines(path, kept)
+    job.translation_file = path
+    return path
+
+
+def _write_lines(path: Path, lines: list) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(path.name + ".tmp")
+    temp.write_text(json.dumps(lines, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(temp, path)
 
 
 def _video_work_dir(content_key: Optional[str]) -> Path:
@@ -463,6 +517,15 @@ async def _run_job(job: Job) -> None:
         cmd += diarize_args(cfg)
         if cfg.separate:
             cmd += ["--separate"]
+        # Lines the job kept (reviewed, changed, or from an earlier run) are voiced as they
+        # are; a job asked to be reviewed stops after translating the first time.
+        given = job.translation_file if job.translation_file and \
+            job.translation_file.exists() else None
+        reviewing = cfg.review and given is None
+        if given:
+            cmd += ["--translation", str(given)]
+        elif reviewing:
+            cmd += ["--review"]
 
         # Force UTF-8 in the child so its emoji log lines encode to the pipe on any
         # console codepage (Windows defaults to a legacy ANSI codepage otherwise).
@@ -502,7 +565,17 @@ async def _run_job(job: Job) -> None:
                                   "status": "done" if done else "running"})
 
         code = await proc.wait()
-        if code == 0:
+        if code == 0 and reviewing:
+            if keep_translation(job):
+                job.status = "review"
+                await _emit(job, {"type": "status", "status": "review"})
+            else:
+                job.status = "failed"
+                job.error = "The translation finished, but it left no lines to review."
+                await _emit(job, {"type": "status", "status": "failed", "error": job.error})
+        elif code == 0:
+            # Kept, so the lines can be changed and voiced again after the dub is done.
+            keep_translation(job)
             # Locate outputs by glob, not by name: a URL download lands under a
             # yt-dlp-chosen filename the server can't predict. The content-keyed work dir
             # holds one source video and outputs are language-suffixed, so each pattern
@@ -1247,15 +1320,20 @@ async def job_events(job_id: str) -> StreamingResponse:
         queue: "asyncio.Queue[dict]" = asyncio.Queue()
         job.subscribers.add(queue)
         try:
-            # Replay history so a late subscriber catches up, then stream live.
-            for event in list(job.events):
+            # Replay history so a late subscriber catches up, then stream live. A job voiced
+            # again starts a new run with "queued": only that run is replayed, or the end of
+            # the last one would close the stream before the new one is heard.
+            events = list(job.events)
+            starts = [i for i, e in enumerate(events)
+                      if e.get("type") == "status" and e.get("status") == "queued"]
+            for event in events[starts[-1] if starts else 0:]:
                 yield f"data: {json.dumps(event)}\n\n"
-            if job.status in ("done", "failed"):
+            if job.status in JOB_AT_REST:
                 return
             while True:
                 event = await queue.get()
                 yield f"data: {json.dumps(event)}\n\n"
-                if event.get("type") == "status" and event.get("status") in ("done", "failed"):
+                if event.get("type") == "status" and event.get("status") in JOB_AT_REST:
                     return
         finally:
             job.subscribers.discard(queue)
@@ -1265,6 +1343,88 @@ async def job_events(job_id: str) -> StreamingResponse:
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# A job in one of these isn't running: its lines can be read, changed and voiced again.
+JOB_AT_REST = ("review", "done", "failed")
+LINE_MAX_CHARS = 2000
+
+
+class TranslationEdit(BaseModel):
+    # One text per line, in order; only the words change, never the timing.
+    texts: List[str]
+
+
+def _job_or_404(job_id: str) -> Job:
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+def _kept_lines(job: Job) -> list:
+    lines = voxa._read_json_list(job.translation_file) if job.translation_file else None
+    if not lines:
+        raise HTTPException(status_code=404, detail="This job has no translated lines yet.")
+    return lines
+
+
+def _translation_view(job: Job, lines: list) -> dict:
+    """The lines with the length each can take: about what the speaking rate fits into its
+    time (Settings → Advanced). A longer line is sped up, then trimmed, to fit."""
+    rate = (read_settings().get("advanced") or {}).get("speechRate") or \
+        voxa.DEFAULT_SPEECH_RATE_CPS
+    return {
+        "editable": job.status in JOB_AT_REST,
+        "lines": [{"start": line["start"], "end": line["end"], "text": line.get("text", ""),
+                   "source": line.get("source", ""), "speaker": line.get("speaker"),
+                   "maxChars": voxa._duration_to_max_chars(
+                       max(0.0, float(line["end"]) - float(line["start"])), float(rate))}
+                  for line in lines],
+    }
+
+
+@app.get("/api/jobs/{job_id}/translation")
+async def get_translation(job_id: str) -> dict:
+    job = _job_or_404(job_id)
+    return _translation_view(job, _kept_lines(job))
+
+
+@app.put("/api/jobs/{job_id}/translation")
+async def put_translation(job_id: str, body: TranslationEdit) -> dict:
+    job = _job_or_404(job_id)
+    if job.status not in JOB_AT_REST:
+        raise HTTPException(status_code=409,
+                            detail="The lines can be changed once this run of the job ends.")
+    lines = _kept_lines(job)
+    if len(body.texts) != len(lines):
+        raise HTTPException(status_code=422,
+                            detail=f"Send one text for each of the {len(lines)} lines.")
+    if any(len(text) > LINE_MAX_CHARS for text in body.texts):
+        raise HTTPException(status_code=422,
+                            detail=f"A line can hold at most {LINE_MAX_CHARS} characters.")
+    texts = [" ".join(text.split()) for text in body.texts]
+    if not any(texts):
+        raise HTTPException(status_code=422, detail="At least one line needs something to say.")
+    for line, text in zip(lines, texts):
+        line["text"] = text
+    _write_lines(job.translation_file, lines)
+    return _translation_view(job, lines)
+
+
+@app.post("/api/jobs/{job_id}/voice")
+async def voice_job(job_id: str) -> dict:
+    """Voice the job's lines as they are now: after a review, or again after changing some
+    (only the changed lines are voiced again)."""
+    job = _job_or_404(job_id)
+    if job.status not in JOB_AT_REST:
+        raise HTTPException(status_code=409, detail="This job is already running.")
+    _kept_lines(job)
+    job.status, job.error, job.step = "queued", None, 0
+    await _emit(job, {"type": "status", "status": "queued"})
+    save_job(job)
+    asyncio.create_task(_run_job(job))
+    return job.summary()
 
 
 def _result(job_id: str, kind: str) -> FileResponse:

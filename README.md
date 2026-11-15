@@ -509,6 +509,14 @@ voxa video.mp4 --target_lang ru --dry-run
 # Subtitles only, no synthesis
 voxa video.mp4 --target_lang es --subtitles-only
 
+# Check the translation before it's voiced: it stops once the lines are translated; change
+# any in video_work/translated.json, then run again without --review. Change a line later
+# and run again: only that line is voiced again.
+voxa video.mp4 --target_lang de --review
+
+# Voice lines translated elsewhere (an .srt, or JSON the way translated.json holds them)
+voxa video.mp4 --target_lang de --translation lines.de.srt
+
 # Dub from an existing SRT — skip Whisper (hand-corrected captions, or subtitles you already have)
 voxa video.mp4 --target_lang de --subtitles captions.srt
 
@@ -577,6 +585,11 @@ running. Without the extra, or on Linux without GTK or Qt, it opens your browser
 
 The console comes inside the package: no Node, no second terminal. Working on the console
 itself? Run `npm run dev` in [`web/`](web/) next to `voxa serve`.
+
+**Check the translation before it's voiced.** Tick *Review* on a new job and it stops once the
+lines are translated, each under the line it came from, with about how many characters fit its
+time. Change any, then *Voice it*. A finished job can be changed too (*Change the
+translation*), and only the lines you change are voiced again.
 
 It also carries the settings the CLI reads: API keys (kept in your local `.env`, never echoed
 back), per-provider models with a connection test, translation style, and speech style presets.

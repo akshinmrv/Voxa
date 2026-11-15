@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { ArrowLeft, Download, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Download, AlertTriangle, PencilLine } from "lucide-react";
 import type { JobEvent, JobStatus } from "@/lib/types";
 import { getJob, getSettings, jobEventsUrl, resultVideoUrl, resultSrtUrl } from "@/lib/api";
 import { useAutoDownload } from "@/lib/use-auto-download";
@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "./status-badge";
 import { PipelineProgress } from "./pipeline-progress";
+import { TranslationEditor } from "./translation-editor";
 import { Loading, BackendError } from "./query-states";
 
 const MAX_LOGS = 500;
@@ -42,6 +43,9 @@ export function JobDetail({ jobId }: { jobId: string }) {
   const [sseError, setSseError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const logRef = useRef<HTMLPreElement>(null);
+  // Bumped when the job is voiced (again), to follow that run's stream.
+  const [run, setRun] = useState(0);
+  const [editing, setEditing] = useState(false);
 
   // Live pipeline stream. setState happens only inside the event callback.
   useEffect(() => {
@@ -55,7 +59,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
       } else if (data.type === "status") {
         setSseStatus(data.status);
         if (data.error) setSseError(data.error);
-        if (data.status === "done" || data.status === "failed") {
+        if (data.status === "done" || data.status === "failed" || data.status === "review") {
           es.close();
           meta.refetch();
         }
@@ -64,7 +68,17 @@ export function JobDetail({ jobId }: { jobId: string }) {
     es.onerror = () => es.close();
     return () => es.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId]);
+  }, [jobId, run]);
+
+  // The job was queued to be voiced: start its page over on the new run's stream.
+  function followVoicing() {
+    setLogs([]);
+    setSseStatus("queued");
+    setSseStep(0);
+    setSseError(null);
+    setEditing(false);
+    setRun((n) => n + 1);
+  }
 
   // Keep the log view pinned to the latest line.
   useEffect(() => {
@@ -88,6 +102,8 @@ export function JobDetail({ jobId }: { jobId: string }) {
   const hasSrt = status === "done" && (meta.data?.hasSrt ?? false);
   // The server reports the last error line, so the reason is visible without reading logs.
   const failureReason = sseError ?? meta.data?.error ?? null;
+  const reviewing = status === "review";
+  const canEdit = (status === "done" || status === "failed") && !!meta.data?.hasTranslation;
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -134,6 +150,8 @@ export function JobDetail({ jobId }: { jobId: string }) {
         </Card>
       )}
 
+      {reviewing && <TranslationEditor jobId={jobId} status={status} onVoice={followVoicing} />}
+
       {status === "failed" && (
         <div className="flex gap-3 rounded-md border border-danger/25 bg-danger/10 p-4">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" />
@@ -145,6 +163,15 @@ export function JobDetail({ jobId }: { jobId: string }) {
           </div>
         </div>
       )}
+
+      {canEdit &&
+        (editing ? (
+          <TranslationEditor jobId={jobId} status={status} onVoice={followVoicing} />
+        ) : (
+          <Button variant="secondary" onClick={() => setEditing(true)}>
+            <PencilLine /> {t("editTranslation")}
+          </Button>
+        ))}
 
       <Card>
         <CardHeader>

@@ -91,6 +91,7 @@ export function NewJobFlow() {
     diarize: sel.diarize ?? false,
     numSpeakers: sel.numSpeakers,
     separate: !!options.separateAvailable && (sel.separate ?? false),
+    review: sel.review ?? false,
   };
 
   const selectedTts = options.ttsEngines.find((e) => e.id === config.tts);
@@ -317,6 +318,18 @@ export function NewJobFlow() {
                 className="h-4 w-4 rounded-sm border-input accent-primary disabled:opacity-50"
               />
               {t("separateToggle")}
+            </label>
+          </Field>
+
+          <Field id="review" label={t("review")} hint={t("reviewHint")}>
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={!!config.review}
+                onChange={(e) => set("review", e.target.checked)}
+                className="h-4 w-4 rounded-sm border-input accent-primary"
+              />
+              {t("reviewToggle")}
             </label>
           </Field>
 

@@ -69,7 +69,9 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       # These run the real ffmpeg assembly the other jobs skip — the final mix in particular,
-      # where the "closing line truncated" bug hid. ffmpeg only; no torch, models, or network.
+      # where the "closing line truncated" bug hid — and the pipeline from given lines to a
+      # dub, voicing again only the lines that change (test_review.py). ffmpeg only; no torch,
+      # models, or network.
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
@@ -77,7 +79,7 @@ jobs:
         run: pip install pytest numpy soundfile openai
 
       - name: Run smoke tests
-        run: pytest tests/test_smoke.py -v
+        run: pytest tests/test_smoke.py tests/test_review.py -v
 
   package:
     name: package (wheel with console)

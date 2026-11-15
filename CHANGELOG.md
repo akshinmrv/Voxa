@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Check the translation before it's voiced, and change it after.** `--review` stops once the
+  lines are translated, with nothing voiced, so they can be checked and changed (in
+  `<video>_work/translated.json`); running again without it voices them. `--translation FILE`
+  voices given lines instead of translating: an .srt, or JSON the way translated.json holds
+  them. In the console, *Review* on a new job does the same: the job waits in a new "review"
+  status, its lines shown each under the line it came from, with about how many characters fit
+  its time, to change and then voice. A finished job's lines can be changed too, and voiced
+  again. Each job keeps its own copy of its lines, since dubs of one video to other languages
+  share its translated.json; a job waiting for review comes back after a restart.
+- **Only the lines that change are voiced again.** A dub records what each line was voiced from
+  (`synthesized_lines.json`: its timing, words and speaker). Running it again after some lines
+  changed voices just those, and keeps the others' speech, including what the engines reuse
+  (Edge's mp3s, the WAVs of Piper, OpenAI, XTTS, Chatterbox and VoxCPM2), which would otherwise
+  have kept speaking the old words. A dub made before this release is voiced again whole the
+  first time its lines change.
 - **Voxa says when a newer version is out.** Once a day the console, `voxa serve` and
   `voxa doctor` ask PyPI for voxa-dub's newest version, a plain request for PyPI's public JSON
   that carries nothing about the machine, its user or their videos, and keep the answer in

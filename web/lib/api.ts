@@ -3,6 +3,7 @@ import type {
   InstallableEngine,
   JobConfig,
   JobSummary,
+  JobTranslation,
   ProviderKeyStatus,
   ProviderTestResult,
   SettingsPatch,
@@ -64,6 +65,26 @@ export async function listJobs(): Promise<{ jobs: JobSummary[] }> {
 }
 
 // ── Settings & API keys (P0) ────────────────────────────────────────────────
+
+export async function getTranslation(id: string): Promise<JobTranslation> {
+  return asJson(await fetch(`${API_BASE}/api/jobs/${id}/translation`));
+}
+
+/** One text per line, in order: only the words change, never the timing. */
+export async function putTranslation(id: string, texts: string[]): Promise<JobTranslation> {
+  return asJson(
+    await fetch(`${API_BASE}/api/jobs/${id}/translation`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texts }),
+    }),
+  );
+}
+
+/** Voice the job's lines as they are: after a review, or again after changing some. */
+export async function voiceJob(id: string): Promise<JobSummary> {
+  return asJson(await fetch(`${API_BASE}/api/jobs/${id}/voice`, { method: "POST" }));
+}
 
 export async function getSettings(): Promise<VoxaSettings> {
   return asJson(await fetch(`${API_BASE}/api/settings`));
