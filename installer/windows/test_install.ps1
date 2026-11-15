@@ -10,7 +10,16 @@ $dir = Join-Path $env:RUNNER_TEMP 'VoxaInstall'
 
 $start = Get-Date
 $setup = Start-Process -FilePath $Installer -ArgumentList '/S', "/D=$dir" -Wait -PassThru
-if ($setup.ExitCode -ne 0) { throw "Setup exited with $($setup.ExitCode)" }
+if ($setup.ExitCode -ne 0) {
+    # A silent Setup shows nothing; run its uv step again, as it does, to show why.
+    $env:UV_TOOL_DIR = "$dir\tools"; $env:UV_TOOL_BIN_DIR = "$dir\bin"
+    $env:UV_PYTHON_INSTALL_DIR = "$dir\python"; $env:UV_PYTHON_PREFERENCE = 'only-managed'
+    $env:UV_NO_CACHE = '1'; $env:UV_NO_CONFIG = '1'; $env:UV_TORCH_BACKEND = 'auto'
+    $wheel = Get-ChildItem $dir -Filter *.whl -ErrorAction SilentlyContinue | Select-Object -First 1
+    $spec = if ($wheel) { "voxa-dub[serve,studio] @ $($wheel.FullName)" } else { "voxa-dub[serve,studio]==$Version" }
+    if (Test-Path "$dir\uv.exe") { & "$dir\uv.exe" tool install --upgrade --python 3.12 $spec 2>&1 | Out-Host }
+    throw "Setup exited with $($setup.ExitCode)"
+}
 'installed in {0:N0} s' -f ((Get-Date) - $start).TotalSeconds
 
 foreach ($file in 'bin\voxa.exe', 'bin\voxa-studio.exe', 'uv.exe', 'voxa.ico', 'Uninstall Voxa.exe') {

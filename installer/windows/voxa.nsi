@@ -8,7 +8,8 @@
 ;   VERSION   the Voxa release it installs, x.y.z
 ;   UV        uv.exe for Windows
 ;   OUTFILE   where the installer goes
-;   WHEEL     (optional) a wheel to install instead of the release from PyPI, for testing
+;   WHEEL     (optional) a wheel to install instead of the release from PyPI, for testing,
+;             with WHEEL_NAME, its file name, which uv needs as it is (name-version-tags.whl)
 
 Unicode true
 !include "MUI2.nsh"
@@ -126,8 +127,8 @@ Section "$(SecVoxa)" SecVoxa
   !insertmacro UvEnvironment
 
   !ifdef WHEEL
-    File "/oname=voxa-dub.whl" "${WHEEL}"
-    StrCpy $1 "voxa-dub[serve,studio] @ file:///$INSTDIR\voxa-dub.whl"
+    File "${WHEEL}"
+    StrCpy $1 "voxa-dub[serve,studio] @ $INSTDIR\${WHEEL_NAME}"
   !else
     StrCpy $1 "${SPEC_RELEASE}"
   !endif
@@ -140,7 +141,7 @@ Section "$(SecVoxa)" SecVoxa
     Abort
   ${EndIf}
   !ifdef WHEEL
-    Delete "$INSTDIR\voxa-dub.whl"
+    Delete "$INSTDIR\${WHEEL_NAME}"
   !endif
 
   ; FFmpeg, as the one-line installer does: winget when it's missing.

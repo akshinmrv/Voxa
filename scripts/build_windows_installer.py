@@ -66,7 +66,9 @@ def main() -> int:
     defines = [f"-DVERSION={args.version}", f"-DUV={fetch_uv(out / '.uv')}",
                f"-DOUTFILE={installer}"]
     if args.wheel:
-        defines.append(f"-DWHEEL={Path(args.wheel).resolve()}")
+        wheel = Path(args.wheel).resolve()
+        # uv reads the name, so the wheel keeps it inside the installer too.
+        defines += [f"-DWHEEL={wheel}", f"-DWHEEL_NAME={wheel.name}"]
     subprocess.run([args.makensis, "-V2", "-INPUTCHARSET", "UTF8", *defines, str(SCRIPT)],
                    check=True)
     print(f"{installer} ({installer.stat().st_size / 1e6:.1f} MB)")
