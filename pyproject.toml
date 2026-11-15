@@ -104,7 +104,7 @@ py-modules = ["voxa", "voxa_server", "voxa_studio"]
 packages = ["voxa_ui", "voxa_engines"]
 
 [tool.setuptools.package-data]
-voxa_ui = ["static/**/*"]
+voxa_ui = ["static/**/*", "icons/*"]
 voxa_engines = ["workers/*.py"]
 
 [tool.pytest.ini_options]

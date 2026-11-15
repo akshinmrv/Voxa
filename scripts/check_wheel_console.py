@@ -15,6 +15,9 @@ REQUIRED = (
     # The engines package and the worker scripts it runs in the engines' environments.
     "voxa_engines/__init__.py",
     "voxa_engines/workers/chatterbox_worker.py",
+    # Voxa Studio's window and shortcut icons.
+    "voxa_ui/icons/voxa.ico",
+    "voxa_ui/icons/voxa.png",
 )
 # The landing page's media, which build-console.mjs leaves out of the package.
 EXCLUDED = ("voxa_ui/static/demo/", "voxa_ui/static/tts-samples/")

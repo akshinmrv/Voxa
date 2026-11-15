@@ -76,6 +76,26 @@ def test_installs_the_console_and_adds_a_launcher(run):
     assert f"Path={home}" in launcher and "Terminal=true" in launcher
 
 
+def test_the_linux_launcher_has_voxas_icon(run):
+    # The tool environment's Python says where the package keeps it.
+    png = run.tmp / "voxa.png"
+    png.write_bytes(b"png")
+    python = run.tool_bin / "voxa-dub" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    _stub(python, f'echo "{png}"\n')
+    result, calls = run()
+    assert result.returncode == 0, result.stderr
+    launcher = (run.tmp / "launchers" / "voxa-studio.desktop").read_text(encoding="utf-8")
+    assert f"Icon={png}" in launcher
+
+
+def test_a_release_without_an_icon_leaves_it_out(run):
+    result, calls = run()
+    assert result.returncode == 0, result.stderr
+    launcher = run.tmp / "launchers" / "voxa-studio.desktop"
+    assert "Icon=" not in launcher.read_text(encoding="utf-8")
+
+
 def test_macos_gets_the_console_in_a_window(run):
     # pywebview runs on macOS's own WebKit; on Linux a window would need GTK or Qt besides.
     _stub(run.stubs / "uname", 'echo "Darwin"\n')

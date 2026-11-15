@@ -98,6 +98,8 @@ if (-not $env:VOXA_NO_SHORTCUT) {
     # voxa-studio.exe (the [studio] extra) opens the console in a window and no terminal;
     # without it, `voxa studio` opens it in the browser, beside a terminal running the server.
     $studio = Join-Path $bin "voxa-studio.exe"
+    # Voxa's icon, from the package itself, when the release has one.
+    $icon = Join-Path (& $uv tool dir).Trim() "voxa-dub\Lib\site-packages\voxa_ui\icons\voxa.ico"
     foreach ($folder in $folders) {
         New-Item -ItemType Directory -Force -Path $folder | Out-Null
         $link = $shell.CreateShortcut((Join-Path $folder "Voxa Studio.lnk"))
@@ -111,6 +113,7 @@ if (-not $env:VOXA_NO_SHORTCUT) {
         # The console keeps its jobs, uploads and saved API keys (.env) in this folder.
         $link.WorkingDirectory = $voxaHome
         $link.Description = "Voxa Studio - dub videos"
+        if (Test-Path $icon) { $link.IconLocation = "$icon,0" }
         $link.Save()
     }
     Say "Added a 'Voxa Studio' shortcut ($($folders -join ', '))"

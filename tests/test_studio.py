@@ -264,3 +264,41 @@ def test_the_launcher_writes_to_a_log_not_to_a_missing_console(tmp_path, monkeyp
     log = Path(tmp_path / ".voxa_serve" / "studio-window.log")
     sys.stdout.flush()
     assert log.read_text(encoding="utf-8") == "hello\n"
+
+
+# ── Voxa's icon ──────────────────────────────────────────
+def test_the_package_carries_voxas_icon():
+    import struct
+
+    import voxa_ui
+    ico = voxa_ui.icon_path("ico").read_bytes()
+    reserved, kind, count = struct.unpack("<HHH", ico[:6])
+    sizes = sorted((ico[6 + 16 * i] or 256) for i in range(count))
+    assert (reserved, kind) == (0, 1) and sizes == [16, 20, 24, 32, 40, 48, 64, 256]
+    assert voxa_ui.icon_path("png").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+@pytest.mark.parametrize("windows, suffix", [(True, ".ico"), (False, ".png")])
+def test_each_system_gets_the_icon_it_reads(windows, suffix):
+    icon = studio.window_icon(windows)
+    assert icon.endswith("voxa" + suffix) and Path(icon).is_file()
+
+
+def test_the_window_gets_voxas_icon(monkeypatch, tmp_path):
+    started = {}
+
+    class Window:
+        def __init__(self):
+            self.events = type("E", (), {"closing": self})()
+
+        def __iadd__(self, handler):
+            return self
+
+    fake = type(sys)("webview")
+    fake.settings = {}
+    fake.create_window = lambda *a, **kw: Window()
+    fake.start = lambda *a, **kw: started.update(kw)
+    monkeypatch.setitem(sys.modules, "webview", fake)
+    assert studio.open_window("http://127.0.0.1:1", tmp_path, lambda w: True) is True
+    assert started["icon"] == studio.window_icon() and Path(started["icon"]).is_file()
+    assert started["private_mode"] is False

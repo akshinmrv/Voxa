@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Voxa's icon on Voxa Studio, its shortcuts and the site's tabs.** The window, its taskbar
+  button and the Windows shortcut showed Python's icon; they now show Voxa's wave mark, the one
+  the site and the console already used, drawn for each size from 16 to 256 px, with the bars on
+  whole pixels up to 32 px so they stay apart. The Linux launcher has it too. The site's and the
+  console's `favicon.ico` was still Next.js's default triangle, which browsers often take over
+  the PNG icon; it is Voxa's mark now. `scripts/make_icons.py` draws them all.
+
 ## [1.15.0] - 2026-11-15
 
 ### Added

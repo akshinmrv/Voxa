@@ -267,6 +267,18 @@ h1{{color:#e7e7ea;font-size:20px;margin:0 0 8px}}
 </style></head><body><div><h1>{TITLE}</h1><p>{escape(text)}</p></div></body></html>"""
 
 
+def window_icon(windows: Optional[bool] = None) -> Optional[str]:
+    """Voxa's icon for the window and its taskbar button: .ico on Windows (pywebview's WinForms
+    window takes it there too, whatever its docs say), .png for GTK and Qt."""
+    try:
+        from voxa_ui import icon_path
+    except ImportError:
+        return None
+    windows = os.name == "nt" if windows is None else windows
+    path = icon_path("ico" if windows else "png")
+    return str(path) if path.is_file() else None
+
+
 def open_window(url: Optional[str], storage: Path, may_close_now: Callable[["object"], bool],
                 when_shown: Optional[Callable[["object"], None]] = None,
                 waiting: str = "") -> bool:
@@ -291,7 +303,7 @@ def open_window(url: Optional[str], storage: Path, may_close_now: Callable[["obj
         # Not private: the console keeps its language, theme and settings between launches,
         # here in the Voxa folder rather than pywebview's.
         webview.start(when_shown, (window,) if when_shown else None,
-                      private_mode=False, storage_path=str(storage))
+                      private_mode=False, storage_path=str(storage), icon=window_icon())
         return True
     except Exception as e:                  # e.g. Linux without GTK or Qt
         print(f"⚠️  Couldn't open a window ({e}); opening the browser instead", file=sys.stderr)

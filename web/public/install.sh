@@ -107,6 +107,12 @@ if [ -z "${VOXA_NO_SHORTCUT:-}" ]; then
         dir="${VOXA_SHORTCUT_DIR:-$HOME/.local/share/applications}"
         mkdir -p "$dir"
         launcher="$dir/voxa-studio.desktop"
+        # Voxa's icon, from the package itself, when the release has one.
+        tool_python="$("$uv" tool dir)/voxa-dub/bin/python"
+        icon="$("$tool_python" -c 'import voxa_ui; print(voxa_ui.icon_path("png"))' 2>/dev/null)" \
+            || icon=""
+        icon_line=""
+        [ -n "$icon" ] && [ -f "$icon" ] && icon_line="Icon=$icon"
         cat > "$launcher" <<EOF
 [Desktop Entry]
 Type=Application
@@ -116,6 +122,7 @@ Exec="$voxa" studio
 Path=$voxa_home
 Terminal=true
 Categories=AudioVideo;
+$icon_line
 EOF
     fi
     say "Added a 'Voxa Studio' launcher: $launcher"
