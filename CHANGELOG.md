@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A preview: hear the first 20 seconds before dubbing it all.** `--preview [SECONDS]` (20 by
+  default, 5 to 120) dubs only the start of a video: the start is copied, not re-encoded, into
+  `<video>.preview20s<ext>`, which has a work dir, a log and an output of its own
+  (`<video>.preview20s_dubbed_<lang>.mp4`) and is kept, so trying other voices on it reuses its
+  transcription. Given subtitles and lines are cut to it. In the console, *Preview the first
+  20 s* does the same; its job is marked a preview, and *Dub the whole video* starts a job for
+  all of it with the same settings (POST /api/jobs/{id}/full). A preview's and the whole
+  video's results sit in one work dir, and each job finds its own.
 - **Check the translation before it's voiced, and change it after.** `--review` stops once the
   lines are translated, with nothing voiced, so they can be checked and changed (in
   `<video>_work/translated.json`); running again without it voices them. `--translation FILE`

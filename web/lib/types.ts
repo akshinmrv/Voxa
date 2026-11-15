@@ -83,6 +83,8 @@ export type JobConfig = {
   separate?: boolean;
   /** Stop once the lines are translated, so they can be checked before any is voiced. */
   review?: boolean;
+  /** Dub only the first this many seconds, to hear it before dubbing it all. */
+  preview?: number | null;
 };
 
 /** "review": translated, nothing voiced yet; waiting for the lines to be checked. */

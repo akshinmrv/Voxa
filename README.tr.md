@@ -472,6 +472,9 @@ voxa video.mp4 --target_lang tr --tts xtts
 # Tamamen çevrimdışı
 voxa video.mp4 --target_lang fr --translator ollama --tts piper
 
+# Tamamını dublajlamadan önce ilk 20 saniyeyi dinleyin (veya --preview 45): video.preview20s_dubbed_ru.mp4
+voxa video.mp4 --target_lang ru --preview
+
 # Yalnızca altyazı
 voxa video.mp4 --target_lang es --subtitles-only
 
@@ -545,6 +548,10 @@ GTK ve Qt bulunmayan Linux'ta tarayıcıyı açar.
 
 Konsol paketin içinde gelir: Node da ikinci bir terminal da gerekmez. Konsolun kendisi
 üzerinde çalışıyorsanız `voxa serve` ile birlikte [`web/`](web/) içinde `npm run dev` çalıştırın.
+
+**Tamamını dublajlamadan önce dinleyin.** *İlk 20 sn'yi önizle*, seçtiğiniz ayarlarla yalnızca
+videonun başını bir iki dakikada dublajlar; beğenirseniz *Videonun tamamını dublajla* aynı
+ayarlarla tamamı için bir iş başlatır, önizleme de yerinde kalır.
 
 **Çeviriyi seslendirilmeden önce kontrol edin.** Yeni bir işte *İnceleme*'yi işaretlerseniz
 satırlar çevrildiğinde durur: her biri çevrildiği satırın altında, zamanına yaklaşık kaç karakter

@@ -506,6 +506,9 @@ voxa video.mp4 --target_lang fr --translator ollama --tts piper
 # See what a run would do — engines, output path, cached steps — without running it
 voxa video.mp4 --target_lang ru --dry-run
 
+# Hear the first 20 seconds before dubbing it all (or --preview 45): video.preview20s_dubbed_ru.mp4
+voxa video.mp4 --target_lang ru --preview
+
 # Subtitles only, no synthesis
 voxa video.mp4 --target_lang es --subtitles-only
 
@@ -585,6 +588,10 @@ running. Without the extra, or on Linux without GTK or Qt, it opens your browser
 
 The console comes inside the package: no Node, no second terminal. Working on the console
 itself? Run `npm run dev` in [`web/`](web/) next to `voxa serve`.
+
+**Hear it before dubbing it all.** *Preview the first 20 s* dubs just the start of the video,
+in a minute or two, with the settings you picked; if you like it, *Dub the whole video* starts
+a job for all of it with the same settings, and the preview stays.
 
 **Check the translation before it's voiced.** Tick *Review* on a new job and it stops once the
 lines are translated, each under the line it came from, with about how many characters fit its

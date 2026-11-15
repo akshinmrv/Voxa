@@ -471,6 +471,9 @@ voxa video.mp4 --target_lang tr --tts xtts
 # Tam offline: lokal LLM tərcümə + offline nitq
 voxa video.mp4 --target_lang fr --translator ollama --tts piper
 
+# Hamısını dublyaj etməzdən əvvəl ilk 20 saniyəni eşidin (və ya --preview 45): video.preview20s_dubbed_ru.mp4
+voxa video.mp4 --target_lang ru --preview
+
 # Yalnız altyazı
 voxa video.mp4 --target_lang es --subtitles-only
 
@@ -544,6 +547,10 @@ Extra olmadan, ya da GTK və Qt olmayan Linux-da brauzeri açır.
 
 Konsol paketin içindədir: Node da, ikinci terminal da lazım deyil. Konsolun özü üzərində
 işləyirsinizsə, `voxa serve` ilə yanaşı [`web/`](web/)-də `npm run dev` işlədin.
+
+**Hamısını dublyaj etməzdən əvvəl eşidin.** *İlk 20 s-ə önizləmə* seçdiyiniz ayarlarla yalnız
+videonun əvvəlini bir-iki dəqiqəyə dublyaj edir; bəyənsəniz, *Bütün videonu dublyaj et* eyni
+ayarlarla hamısı üçün iş başladır, önizləmə də yerində qalır.
 
 **Tərcüməni səsləndirmədən əvvəl yoxlayın.** Yeni işdə *Yoxlama*-nı seçsəniz, sətirlər tərcümə
 olunanda dayanır: hər biri tərcümə olunduğu sətrin altında, vaxtına təxminən neçə simvolun

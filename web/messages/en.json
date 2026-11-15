@@ -261,6 +261,8 @@
       "notInstalled": "not installed — see Models",
       "keyBadge": "Needs API key",
       "run": "Start dubbing",
+      "preview": "Preview the first {seconds} s",
+      "previewHint": "Dubs only the first {seconds} seconds, so you hear the voice and the translation in a minute or two.",
       "runHint": "Select a video to enable.",
       "runHintUrl": "Paste a video URL to enable.",
       "sourceFile": "Upload file",
@@ -273,6 +275,7 @@
       "reset": "Start another"
     },
     "jobs": {
+      "preview": "Preview · {seconds} s",
       "title": "Jobs",
       "subtitle": "Your dubbing history.",
       "emptyTitle": "No jobs yet",
@@ -408,6 +411,9 @@
       "result": "Result",
       "download": "Download video",
       "downloadSrt": "Download subtitles",
+      "previewBadge": "Preview · {seconds} s",
+      "previewDone": "This is the first {seconds} seconds. Happy with it? Dub the whole video with the same settings; the preview stays.",
+      "wholeVideo": "Dub the whole video",
       "editTranslation": "Change the translation",
       "failed": "This job failed. Check the logs below.",
       "connecting": "Connecting to the job…",

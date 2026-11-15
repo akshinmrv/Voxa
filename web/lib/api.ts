@@ -81,6 +81,11 @@ export async function putTranslation(id: string, texts: string[]): Promise<JobTr
   );
 }
 
+/** A new job that dubs the whole video a preview job was cut from, with its settings. */
+export async function dubWholeVideo(id: string): Promise<{ jobId: string }> {
+  return asJson(await fetch(`${API_BASE}/api/jobs/${id}/full`, { method: "POST" }));
+}
+
 /** Voice the job's lines as they are: after a review, or again after changing some. */
 export async function voiceJob(id: string): Promise<JobSummary> {
   return asJson(await fetch(`${API_BASE}/api/jobs/${id}/voice`, { method: "POST" }));

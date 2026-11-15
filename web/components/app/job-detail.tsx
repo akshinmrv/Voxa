@@ -2,15 +2,23 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { ArrowLeft, Download, AlertTriangle, PencilLine } from "lucide-react";
+import { ArrowLeft, Download, AlertTriangle, PencilLine, Film, Loader2 } from "lucide-react";
 import type { JobEvent, JobStatus } from "@/lib/types";
-import { getJob, getSettings, jobEventsUrl, resultVideoUrl, resultSrtUrl } from "@/lib/api";
+import {
+  dubWholeVideo,
+  getJob,
+  getSettings,
+  jobEventsUrl,
+  resultVideoUrl,
+  resultSrtUrl,
+} from "@/lib/api";
 import { useAutoDownload } from "@/lib/use-auto-download";
 import { Link, useRouter } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "./status-badge";
 import { PipelineProgress } from "./pipeline-progress";
 import { TranslationEditor } from "./translation-editor";
@@ -28,12 +36,13 @@ export function JobDetailFromQuery() {
   useEffect(() => {
     if (!id) router.replace("/app/jobs");
   }, [id, router]);
-  return id ? <JobDetail jobId={id} /> : <Loading />;
+  return id ? <JobDetail key={id} jobId={id} /> : <Loading />;
 }
 
 export function JobDetail({ jobId }: { jobId: string }) {
   const t = useTranslations("App.job");
   const steps = t.raw("steps") as string[];
+  const router = useRouter();
 
   const meta = useQuery({ queryKey: ["job", jobId], queryFn: () => getJob(jobId) });
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings });
@@ -70,6 +79,13 @@ export function JobDetail({ jobId }: { jobId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, run]);
 
+  // A preview leads to the whole video: a job of its own, with the same settings.
+  const whole = useMutation({
+    mutationFn: () => dubWholeVideo(jobId),
+    onSuccess: ({ jobId: next }) =>
+      router.push({ pathname: "/app/jobs/view", query: { id: next } }),
+  });
+
   // The job was queued to be voiced: start its page over on the new run's stream.
   function followVoicing() {
     setLogs([]);
@@ -103,6 +119,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
   // The server reports the last error line, so the reason is visible without reading logs.
   const failureReason = sseError ?? meta.data?.error ?? null;
   const reviewing = status === "review";
+  const preview = meta.data?.config.preview ?? null;
   const canEdit = (status === "done" || status === "failed") && !!meta.data?.hasTranslation;
 
   return (
@@ -117,7 +134,14 @@ export function JobDetail({ jobId }: { jobId: string }) {
       </div>
 
       <div className="flex items-center justify-between gap-4">
-        <h1 className="type-h2 min-w-0 truncate">{fileName}</h1>
+        <div className="flex min-w-0 items-center gap-3">
+          <h1 className="type-h2 min-w-0 truncate">{fileName}</h1>
+          {preview ? (
+            <Badge variant="brand" className="shrink-0">
+              {t("previewBadge", { seconds: preview })}
+            </Badge>
+          ) : null}
+        </div>
         <StatusBadge status={status} />
       </div>
 
@@ -146,6 +170,22 @@ export function JobDetail({ jobId }: { jobId: string }) {
                 </Button>
               )}
             </div>
+            {preview ? (
+              <div className="space-y-2 border-t border-border pt-4">
+                <p className="text-sm text-muted-foreground">
+                  {t("previewDone", { seconds: preview })}
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button onClick={() => whole.mutate()} disabled={whole.isPending}>
+                    {whole.isPending ? <Loader2 className="animate-spin" /> : <Film />}
+                    {t("wholeVideo")}
+                  </Button>
+                  {whole.isError && (
+                    <span className="text-sm text-danger">{(whole.error as Error).message}</span>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       )}

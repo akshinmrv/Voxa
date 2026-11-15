@@ -1743,6 +1743,38 @@ def _segments_from_srt(path: str) -> List[Dict]:
     return segments
 
 
+PREVIEW_SECONDS = 20          # --preview without a length
+PREVIEW_RANGE = (5, 120)
+
+
+def preview_clip(video_path: Path, seconds: int) -> Path:
+    """The first `seconds` of the video as a clip of its own, <stem>.preview<N>s<ext> in the
+    working directory, which then has a work dir and an output of its own. Copied, not
+    re-encoded, so it takes a moment and keeps the source's container. Kept between runs (cut
+    again only when the source is newer), so trying other voices on it reuses its
+    transcription."""
+    clip = Path.cwd() / f"{video_path.stem}.preview{seconds}s{video_path.suffix}"
+    if not clip.exists() or clip.stat().st_mtime < video_path.stat().st_mtime:
+        subprocess.run(["ffmpeg", "-y", "-i", str(video_path), "-t", str(seconds),
+                        "-map", "0:v:0?", "-map", "0:a:0?", "-c", "copy",
+                        "-avoid_negative_ts", "make_zero", str(clip)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    return clip
+
+
+def _within(segments: List[Dict], seconds: Optional[float]) -> List[Dict]:
+    """The lines that start inside the first `seconds` (a preview), cut to end there too."""
+    if not seconds:
+        return segments
+    return [{**s, "end": min(float(s["end"]), float(seconds))}
+            for s in segments if float(s["start"]) < seconds]
+
+
+def _within_length(duration: Optional[float], seconds: Optional[int]) -> Optional[float]:
+    """How much of a video a run dubs: all of it, or the first `seconds` of a preview."""
+    return min(duration, float(seconds)) if duration and seconds else duration
+
+
 def load_translation(path) -> List[Dict]:
     """The translated lines given with --translation, in place of translating: an .srt, or a
     JSON list of {start, end, text[, speaker]} with times in seconds, the way
@@ -4259,6 +4291,17 @@ def _assemble_final_video(video_path, voiceover_path, output_file,
 async def process_video(video_path: str, args, logger: Logger):
     """Main video processing pipeline"""
     video_path = Path(video_path)
+    preview = getattr(args, "preview", None)
+    if preview:
+        try:
+            clip = preview_clip(video_path, preview)
+        except (OSError, subprocess.CalledProcessError) as e:
+            detail = getattr(e, "stderr", b"") or b""
+            logger.error(f"❌ Couldn't cut a {preview} s preview of {video_path.name}: "
+                         f"{detail.decode('utf-8', 'replace').strip()[-300:] or e}")
+            return 1
+        logger.info(f"🎬 Preview: the first {preview} s of {video_path.name} ({clip.name})")
+        video_path = clip
     video_basename = video_path.stem
     work_dir = Path.cwd() / f"{video_basename}_work"
     work_dir.mkdir(exist_ok=True)
@@ -4374,7 +4417,7 @@ async def process_video(video_path: str, args, logger: Logger):
     elif using_subtitles:
         logger.info(f"[3/7] Using provided subtitles: {args.subtitles}")
         try:
-            segments = _segments_from_srt(args.subtitles)
+            segments = _within(_segments_from_srt(args.subtitles), preview)
         except Exception as e:
             logger.error(f"Could not read --subtitles {args.subtitles}: {e}")
             return 1
@@ -4451,7 +4494,7 @@ async def process_video(video_path: str, args, logger: Logger):
     given = getattr(args, "translation", None)
     if given:
         try:
-            translated_segments = load_translation(given)
+            translated_segments = _within(load_translation(given), preview)
         except (OSError, ValueError) as e:
             logger.error(f"❌ Can't use the translation in {given}: {e}")
             return 1
@@ -4914,6 +4957,12 @@ Examples:
                         help="Speak these translated lines instead of translating: an .srt, or "
                              "a JSON list of {start, end, text} in seconds, as <video>_work/"
                              "translated.json holds them. A line left empty stays silent.")
+    parser.add_argument("--preview", nargs="?", type=int, const=PREVIEW_SECONDS, default=None,
+                        metavar="SECONDS",
+                        help=f"Dub only the first {PREVIEW_SECONDS} seconds (or SECONDS, "
+                             f"{PREVIEW_RANGE[0]}-{PREVIEW_RANGE[1]}), to hear the voice and "
+                             "the translation before dubbing it all. It has a work dir and an "
+                             "output of its own: <video>.preview20s_dubbed_<lang>.mp4.")
     parser.add_argument("--diarize", action="store_true",
                         help="Detect who speaks when (pyannote) and give each speaker their own "
                              "voice on Edge and OpenAI TTS. Needs the 'diarize' extra and a "
@@ -5032,6 +5081,9 @@ Examples:
     if args.subtitles and not args.dry_run and not Path(args.subtitles).exists():
         print(f"❌ Subtitles file not found: {args.subtitles}")
         return 1
+    if args.preview is not None and not PREVIEW_RANGE[0] <= args.preview <= PREVIEW_RANGE[1]:
+        print(f"❌ --preview takes {PREVIEW_RANGE[0]} to {PREVIEW_RANGE[1]} seconds.")
+        return 1
     if args.translation and not args.dry_run:
         if len(args.videos) > 1:
             print("❌ --translation holds the lines of one video; give it one video at a time.")
@@ -5076,12 +5128,13 @@ Examples:
                       "the download)")
                 continue
             source = Path(video)
-            plan_dir = Path.cwd() / f"{source.stem}_work"
+            stem = f"{source.stem}.preview{args.preview}s" if args.preview else source.stem
+            plan_dir = Path.cwd() / f"{stem}_work"
             plan = build_run_plan(
                 source.name, args,
                 work_dir=plan_dir,
-                output_file=out_dir / f"{source.stem}_dubbed_{args.target_lang}.mp4",
-                duration=probe_duration(source),
+                output_file=out_dir / f"{stem}_dubbed_{args.target_lang}.mp4",
+                duration=_within_length(probe_duration(source), args.preview),
                 reusable=reusable_stages(StateManager(plan_dir), args),
                 blockers=blockers,
             )
@@ -5089,7 +5142,9 @@ Examples:
         return 1 if blockers else 0
 
     first_video = Path(args.videos[0])
-    work_dir = Path.cwd() / f"{first_video.stem}_work"
+    # A preview has a work dir of its own (see preview_clip), and its log goes there too.
+    stem = f"{first_video.stem}.preview{args.preview}s" if args.preview else first_video.stem
+    work_dir = Path.cwd() / f"{stem}_work"
     work_dir.mkdir(exist_ok=True)
     logger = Logger(work_dir,
                     level=logging.DEBUG if args.verbose else logging.INFO,

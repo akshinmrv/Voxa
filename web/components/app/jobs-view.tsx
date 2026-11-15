@@ -8,6 +8,7 @@ import { useAutoDownload } from "@/lib/use-auto-download";
 import { Link } from "@/i18n/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "./empty-state";
 import { StatusBadge } from "./status-badge";
 import { BackendError, Loading } from "./query-states";
@@ -58,7 +59,14 @@ export function JobsView() {
               <FileVideo className="size-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{job.fileName}</p>
+              <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                <span className="truncate">{job.fileName}</span>
+                {job.config.preview ? (
+                  <Badge variant="brand" className="shrink-0">
+                    {t("preview", { seconds: job.config.preview })}
+                  </Badge>
+                ) : null}
+              </p>
               <p className="type-code text-xs text-muted-foreground">
                 {job.config.targetLang} · {job.config.translator} · {job.config.tts}
               </p>

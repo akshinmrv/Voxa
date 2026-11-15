@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Play, WifiOff, KeyRound, Loader2 } from "lucide-react";
+import { Play, WifiOff, KeyRound, Loader2, Headphones } from "lucide-react";
 import type { JobConfig } from "@/lib/types";
 import { getOptions, getSettings, uploadVideo, createJob } from "@/lib/api";
 import { useRouter } from "@/i18n/navigation";
@@ -16,6 +16,8 @@ import { UploadDropzone } from "./upload-dropzone";
 import { BackendError, Loading } from "./query-states";
 
 const KEY_TRANSLATORS = new Set(["openai", "anthropic"]);
+/** How much of the video a preview dubs, from its start. */
+const PREVIEW_SECONDS = 20;
 
 export function NewJobFlow() {
   const t = useTranslations("App.newJob");
@@ -333,17 +335,41 @@ export function NewJobFlow() {
             </label>
           </Field>
 
-          <div className="pt-1">
+          <div className="space-y-2 pt-1">
             <Button
               className="w-full"
               disabled={!hasSource || submit.isPending}
-              onClick={() => submit.mutate(config)}
+              onClick={() => submit.mutate({ ...config, preview: null })}
             >
-              {submit.isPending ? <Loader2 className="animate-spin" /> : <Play />}
-              {submit.isPending && !urlMode && files.length > 1
+              {submit.isPending && !submit.variables?.preview ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Play />
+              )}
+              {submit.isPending && !submit.variables?.preview && !urlMode && files.length > 1
                 ? t("uploading", { done: uploaded, total: files.length })
                 : t("run")}
             </Button>
+            <Button
+              variant="secondary"
+              className="w-full"
+              disabled={!hasSource || submit.isPending}
+              onClick={() => submit.mutate({ ...config, preview: PREVIEW_SECONDS })}
+            >
+              {submit.isPending && submit.variables?.preview ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Headphones />
+              )}
+              {submit.isPending && submit.variables?.preview && !urlMode && files.length > 1
+                ? t("uploading", { done: uploaded, total: files.length })
+                : t("preview", { seconds: PREVIEW_SECONDS })}
+            </Button>
+            {hasSource && (
+              <p className="text-center text-xs text-muted-foreground">
+                {t("previewHint", { seconds: PREVIEW_SECONDS })}
+              </p>
+            )}
             {!hasSource && (
               <p className="mt-2 text-center text-xs text-muted-foreground">
                 {urlMode ? t("runHintUrl") : t("runHint")}

@@ -261,6 +261,8 @@
       "notInstalled": "quraşdırılmayıb — Modellər bölməsinə baxın",
       "keyBadge": "API açarı lazımdır",
       "run": "Dublyaja başla",
+      "preview": "İlk {seconds} s-ə önizləmə",
+      "previewHint": "Yalnız ilk {seconds} saniyəni dublyaj edir ki, səsi və tərcüməni bir-iki dəqiqəyə eşidəsiniz.",
       "runHint": "Aktivləşdirmək üçün video seçin.",
       "runHintUrl": "Aktivləşdirmək üçün video URL-i yapışdırın.",
       "sourceFile": "Fayl yüklə",
@@ -273,6 +275,7 @@
       "reset": "Başqasını başlat"
     },
     "jobs": {
+      "preview": "Önizləmə · {seconds} s",
       "title": "İşlər",
       "subtitle": "Dublyaj tarixçəniz.",
       "emptyTitle": "Hələ iş yoxdur",
@@ -408,6 +411,9 @@
       "result": "Nəticə",
       "download": "Videonu yüklə",
       "downloadSrt": "Altyazıları yüklə",
+      "previewBadge": "Önizləmə · {seconds} s",
+      "previewDone": "Bu, ilk {seconds} saniyədir. Bəyəndiniz? Bütün videonu eyni ayarlarla dublyaj edin; önizləmə yerində qalır.",
+      "wholeVideo": "Bütün videonu dublyaj et",
       "editTranslation": "Tərcüməni dəyiş",
       "failed": "Bu iş uğursuz oldu. Aşağıdakı loqlara baxın.",
       "connecting": "İşə qoşulur…",

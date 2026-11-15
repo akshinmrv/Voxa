@@ -206,6 +206,9 @@ class JobConfigModel(BaseModel):
     # Stop once the lines are translated, so they can be checked and changed before any is
     # voiced (status "review"); POST /api/jobs/{id}/voice then voices them.
     review: bool = False
+    # Dub only the first this many seconds (voxa --preview), to hear it before dubbing it all;
+    # POST /api/jobs/{id}/full then dubs the whole video.
+    preview: Optional[int] = None
 
 
 class CreateJobModel(BaseModel):
@@ -355,6 +358,18 @@ def load_history() -> int:
     return loaded
 
 
+_PREVIEW_FILE = re.compile(r"\.preview\d+s_")
+
+
+def _of_run(paths, preview: Optional[int]) -> list:
+    """The files of one kind of run, in a work dir that can hold both: a preview's (voxa
+    --preview) carry .preview<N>s in their name or their work dir's, the whole video's don't."""
+    if preview:
+        tag = f".preview{preview}s_"
+        return [p for p in paths if tag in Path(p).as_posix()]
+    return [p for p in paths if not _PREVIEW_FILE.search(Path(p).as_posix())]
+
+
 def _translation_path(job: Job) -> Path:
     return job.work_dir / "translations" / f"{job.id}.json"
 
@@ -365,7 +380,8 @@ def keep_translation(job: Job) -> Optional[Path]:
     shares that work dir and its translated.json, so a dub to another language replaces it;
     the job's own copy is what it is reviewed, changed and voiced from. Returns its path, or
     None when the run left no translation."""
-    found = sorted(job.work_dir.glob("*_work/translated.json"), key=lambda p: p.stat().st_mtime)
+    found = sorted(_of_run(job.work_dir.glob("*_work/translated.json"), job.config.preview),
+                   key=lambda p: p.stat().st_mtime)
     lines = voxa._read_json_list(found[-1]) if found else None
     if not lines:
         return None
@@ -517,6 +533,8 @@ async def _run_job(job: Job) -> None:
         cmd += diarize_args(cfg)
         if cfg.separate:
             cmd += ["--separate"]
+        if cfg.preview:
+            cmd += ["--preview", str(cfg.preview)]
         # Lines the job kept (reviewed, changed, or from an earlier run) are voiced as they
         # are; a job asked to be reviewed stops after translating the first time.
         given = job.translation_file if job.translation_file and \
@@ -581,9 +599,9 @@ async def _run_job(job: Job) -> None:
             # holds one source video and outputs are language-suffixed, so each pattern
             # matches exactly one file for this target language.
             lang = cfg.targetLang
-            videos = sorted(job.work_dir.glob(f"*_dubbed_{lang}.mp4"),
+            videos = sorted(_of_run(job.work_dir.glob(f"*_dubbed_{lang}.mp4"), cfg.preview),
                             key=lambda p: p.stat().st_mtime)
-            srts = sorted(job.work_dir.glob(f"*_work/subtitles_{lang}.srt"),
+            srts = sorted(_of_run(job.work_dir.glob(f"*_work/subtitles_{lang}.srt"), cfg.preview),
                           key=lambda p: p.stat().st_mtime)
             job.result_video = videos[-1] if videos else None
             job.result_srt = srts[-1] if srts else None
@@ -1256,11 +1274,19 @@ def engine_problem(cfg: JobConfigModel) -> Optional[str]:
     return None
 
 
+def _check_preview(config: JobConfigModel) -> None:
+    low, high = voxa.PREVIEW_RANGE
+    if config.preview is not None and not low <= config.preview <= high:
+        raise HTTPException(status_code=422,
+                            detail=f"A preview is {low} to {high} seconds long.")
+
+
 @app.post("/api/jobs")
 async def create_job(body: CreateJobModel) -> dict:
     problem = engine_problem(body.config)
     if problem:
         raise HTTPException(status_code=400, detail=problem)
+    _check_preview(body.config)
     job_id = uuid.uuid4().hex[:12]
     # Content-keyed work dir: a second dub of the same source reuses its cached transcription.
     # The single job lock serialises runs and outputs are language-suffixed, so jobs sharing
@@ -1410,6 +1436,27 @@ async def put_translation(job_id: str, body: TranslationEdit) -> dict:
         line["text"] = text
     _write_lines(job.translation_file, lines)
     return _translation_view(job, lines)
+
+
+@app.post("/api/jobs/{job_id}/full")
+async def dub_whole_video(job_id: str) -> dict:
+    """A new job that dubs the whole video a preview was cut from, with the preview's
+    settings. Its own transcription runs on the whole video; the preview's files stay."""
+    job = _job_or_404(job_id)
+    if not job.config.preview:
+        raise HTTPException(status_code=409, detail="This job already dubs the whole video.")
+    if not job.source_url and not (job.work_dir / job.file_name).exists():
+        raise HTTPException(status_code=404, detail="The video isn't in its folder any more.")
+    config = job.config.model_copy(update={"preview": None})
+    problem = engine_problem(config)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
+    whole = Job(id=uuid.uuid4().hex[:12], file_name=job.file_name, config=config,
+                work_dir=job.work_dir, source_url=job.source_url)
+    JOBS[whole.id] = whole
+    save_job(whole)
+    asyncio.create_task(_run_job(whole))
+    return {"jobId": whole.id}
 
 
 @app.post("/api/jobs/{job_id}/voice")
