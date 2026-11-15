@@ -81,7 +81,8 @@ def test_macos_gets_the_console_in_a_window(run):
     _stub(run.stubs / "uname", 'echo "Darwin"\n')
     result, calls = run()
     assert result.returncode == 0, result.stderr
-    assert "uv tool install --upgrade --python 3.12 voxa-dub[studio]" in calls
+    # serve named too: a release from before studio existed drops the name it doesn't know.
+    assert "uv tool install --upgrade --python 3.12 voxa-dub[serve,studio]" in calls
 
 
 def test_uv_picks_the_pytorch_build_that_fits(run):

@@ -8,7 +8,7 @@
 # again upgrades Voxa. Uninstall with:  uv tool uninstall voxa-dub
 #
 # Optional settings, as environment variables:
-#   VOXA_EXTRAS=studio,piper  extras to install (default: studio, the console in a window)
+#   VOXA_EXTRAS=serve,piper   extras to install (default: serve,studio, the console in a window)
 #   VOXA_VERSION=1.11.0       install this version instead of the latest
 #   VOXA_WHEEL=C:\...\x.whl   install from this wheel instead of PyPI
 #   VOXA_HOME=C:\...          the folder the console keeps its jobs and .env in (default: ~\Voxa)
@@ -24,7 +24,9 @@ $ErrorActionPreference = "Stop"
 function Say($message) { Write-Host "==> $message" -ForegroundColor Cyan }
 function Warn($message) { Write-Host "!!  $message" -ForegroundColor Yellow }
 
-$extras = if ($env:VOXA_EXTRAS) { $env:VOXA_EXTRAS } else { "studio" }
+# serve as well as studio, which includes it: a release from before studio existed ignores
+# the name it doesn't know, and would otherwise come without its console.
+$extras = if ($env:VOXA_EXTRAS) { $env:VOXA_EXTRAS } else { "serve,studio" }
 $voxaHome = if ($env:VOXA_HOME) { $env:VOXA_HOME } else { Join-Path $HOME "Voxa" }
 
 # --- uv ------------------------------------------------------------------------------
