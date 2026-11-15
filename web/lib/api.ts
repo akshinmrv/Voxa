@@ -4,6 +4,8 @@ import type {
   JobConfig,
   JobSummary,
   JobTranslation,
+  LibraryVoice,
+  VoiceList,
   ProviderKeyStatus,
   ProviderTestResult,
   SettingsPatch,
@@ -89,6 +91,58 @@ export async function dubWholeVideo(id: string): Promise<{ jobId: string }> {
 /** Voice the job's lines as they are: after a review, or again after changing some. */
 export async function voiceJob(id: string): Promise<JobSummary> {
   return asJson(await fetch(`${API_BASE}/api/jobs/${id}/voice`, { method: "POST" }));
+}
+
+export async function getVoices(engine: string, lang: string): Promise<VoiceList> {
+  const query = new URLSearchParams({ engine, lang });
+  return asJson(await fetch(`${API_BASE}/api/voices?${query}`));
+}
+
+export async function getVoiceLibrary(): Promise<{ voices: LibraryVoice[] }> {
+  return asJson(await fetch(`${API_BASE}/api/voices/library`));
+}
+
+export async function addVoice(file: File, name: string): Promise<LibraryVoice> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("name", name);
+  return asJson(await fetch(`${API_BASE}/api/voices/library`, { method: "POST", body: form }));
+}
+
+export async function deleteVoice(id: string): Promise<{ voices: LibraryVoice[] }> {
+  return asJson(await fetch(`${API_BASE}/api/voices/library/${id}`, { method: "DELETE" }));
+}
+
+export const voiceAudioUrl = (id: string) => `${API_BASE}/api/voices/library/${id}/audio`;
+
+/** One voice saying a short line (Edge, Piper), to hear it before choosing it. */
+export async function listenToVoice(body: {
+  engine: string;
+  voice: string;
+  lang: string;
+  text?: string;
+}): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/voices/listen`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) await asJson(res);
+  return res.blob();
+}
+
+/** The voices a job speaks with: its own (null: Voxa's choice) and each speaker's. */
+export async function putJobVoices(
+  id: string,
+  body: { voice: string | null; speakers: Record<string, string> },
+): Promise<JobSummary> {
+  return asJson(
+    await fetch(`${API_BASE}/api/jobs/${id}/voices`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
 }
 
 export async function getSettings(): Promise<VoxaSettings> {

@@ -1216,6 +1216,8 @@ def _stage_own_params(stage: str, args) -> Dict:
         # Only recorded when set, so a run without it keeps its exact previous signature.
         if getattr(args, "speaker_voices", None):
             params["speaker_voices"] = args.speaker_voices
+        if getattr(args, "edge_voice", None):
+            params["edge_voice"] = args.edge_voice
         return params
     return {}
 
@@ -1658,6 +1660,88 @@ async def get_edge_voices(lang_code: str) -> List[str]:
     except Exception as e:
         _LOG.warning(f"Edge voice pool lookup failed: {e}")
     return ["en-US-ChristopherNeural"]
+
+
+# ── Voices to choose from ─────────────────────────────────────────────────────
+_EDGE_VOICES: Optional[List[Dict]] = None
+
+# A line to hear a voice say, in its own language (English for the others).
+SAMPLE_LINES = {
+    "en": "Hello! This is how my voice sounds.",
+    "az": "Salam! Mənim səsim belə səslənir.",
+    "tr": "Merhaba! Sesim böyle duyuluyor.",
+    "ru": "Здравствуйте! Вот так звучит мой голос.",
+    "de": "Hallo! So klingt meine Stimme.",
+    "fr": "Bonjour ! Voici comment sonne ma voix.",
+    "es": "¡Hola! Así suena mi voz.",
+    "it": "Ciao! Ecco come suona la mia voce.",
+    "pt": "Olá! É assim que a minha voz soa.",
+    "ar": "مرحبًا! هكذا يبدو صوتي.",
+    "zh": "你好！这就是我的声音。",
+    "ja": "こんにちは！これが私の声です。",
+}
+
+
+async def edge_voice_list() -> List[Dict]:
+    """Edge's voices, as Microsoft lists them (about 300), asked once per process."""
+    global _EDGE_VOICES
+    if _EDGE_VOICES is None:
+        if edge_tts is None:
+            raise RuntimeError("edge-tts isn't installed")
+        _EDGE_VOICES = list((await edge_tts.VoicesManager.create()).voices)
+    return _EDGE_VOICES
+
+
+def _piper_installed() -> List[str]:
+    base = Path.home() / ".piper_models"
+    return sorted(p.stem for p in base.glob("*.onnx")) if base.is_dir() else []
+
+
+async def voice_catalogue(engine: str, lang: str) -> List[Dict]:
+    """The voices `engine` offers for `lang`, to choose from: each with the id --edge-voice and
+    --speaker-voices take, a label and what is known of it. Edge's come from Microsoft's list;
+    Piper's are the voice Voxa maps to the language and the models in ~/.piper_models for it.
+    Other engines have no list (OpenAI's voices are fixed; the cloning engines copy a voice)."""
+    base = lang.lower().split("-")[0]
+    if engine == "edge":
+        voices = [{"id": v["ShortName"],
+                   "label": v["ShortName"].split("-", 2)[-1].replace("Neural", ""),
+                   "gender": (v.get("Gender") or "").lower() or None,
+                   "locale": v["Locale"], "styles": bool(v.get("StyleList"))}
+                  for v in await edge_voice_list()
+                  if v["Locale"].lower().split("-")[0] == base]
+        return sorted(voices, key=lambda v: (v["locale"], v["label"]))
+    if engine == "piper":
+        installed = _piper_installed()
+        ids = []
+        if base in PIPER_VOICES:
+            locale, name, quality, _ = PIPER_VOICES[base]
+            ids.append(f"{locale}-{name}-{quality}")
+        ids += [m for m in installed if m.split("_")[0].lower() == base and m not in ids]
+        return [{"id": m, "label": m.split("-")[1] if m.count("-") >= 2 else m,
+                 "locale": m.split("-")[0].replace("_", "-"), "installed": m in installed}
+                for m in ids]
+    return []
+
+
+async def speak_sample(engine: str, voice: str, text: str, out: Path) -> None:
+    """`text` spoken by one voice into `out`, to hear it before choosing it: Edge (online,
+    an .mp3) or an installed Piper model (a .wav). Not the cloning engines, which load a model
+    of several GB first, nor OpenAI, which bills each line. Raises ValueError when it can't."""
+    if engine == "edge":
+        if edge_tts is None:
+            raise ValueError("edge-tts isn't installed")
+        await edge_tts.Communicate(text, voice).save(str(out))
+    elif engine == "piper":
+        model, piper = _resolve_piper_model(voice), _find_piper()
+        if not model or not piper:
+            raise ValueError(f"Piper or its {voice} model isn't installed")
+        subprocess.run([piper, "--model", model, "--output_file", str(out)],
+                       input=text.encode("utf-8"), capture_output=True, check=True)
+    else:
+        raise ValueError(f"{engine} voices can't be listened to before a dub")
+    if not _has_content(out, 100):
+        raise ValueError(f"{engine} said nothing in {voice}")
 
 
 def format_timestamp(seconds: float) -> str:
@@ -3709,9 +3793,22 @@ def log_quality_report(scores: List[Dict], engine: str):
 # async so the dispatch is uniform (edge is natively async; the others simply
 # don't await — identical to the previous inline calls).
 async def _tts_edge(subs, args, work_dir, video_path, gate_asr, logger):
-    logger.info(f"🔎 Finding voice for: {args.target_lang}")
-    voice, has_emotions = await get_edge_voice(args.target_lang)
-    logger.info(f"🎙️  Selected: {voice} (Emotions: {'Yes' if has_emotions else 'No'})")
+    chosen = getattr(args, "edge_voice", None)
+    if chosen:
+        voice, has_emotions = chosen, False
+        try:
+            known = {v["ShortName"]: v for v in await edge_voice_list()}
+        except Exception:
+            known = {}          # the list couldn't be had: Edge itself will say if it's wrong
+        if known and chosen not in known:
+            raise TTSError(f"❌ Edge has no voice called {chosen}. The ones for "
+                           f"{args.target_lang}: voxa voices --lang {args.target_lang}")
+        has_emotions = bool(known.get(chosen, {}).get("StyleList"))
+        logger.info(f"🎙️  Chosen: {voice} (Emotions: {'Yes' if has_emotions else 'No'})")
+    else:
+        logger.info(f"🔎 Finding voice for: {args.target_lang}")
+        voice, has_emotions = await get_edge_voice(args.target_lang)
+        logger.info(f"🎙️  Selected: {voice} (Emotions: {'Yes' if has_emotions else 'No'})")
     speaker_voices = None
     if getattr(args, "diarize", False):
         pool = await get_edge_voices(args.target_lang)
@@ -4977,6 +5074,10 @@ Examples:
                         help="Upper bound on the speaker count for --diarize — curbs "
                              "over-splitting when the exact count is unknown (ignored when "
                              "--num-speakers is set).")
+    parser.add_argument("--edge-voice", default=None, metavar="NAME",
+                        help="The Edge voice to speak with, e.g. az-AZ-BanuNeural, instead of "
+                             "the one Voxa picks for the language. List them with: voxa voices "
+                             "--lang az")
     parser.add_argument("--speaker-voices", default=None, metavar="SPEC",
                         help="Pin a voice per speaker for --diarize, e.g. "
                              "'SPEAKER_00=en-US-GuyNeural,SPEAKER_01=en-US-JennyNeural'. Values "
@@ -5715,6 +5816,41 @@ _COMMERCIAL_NOTE = {"yes": "commercial use allowed",
                     "no": "not for commercial use", "unknown": "licence unclear"}
 
 
+def voices_cli(argv: Sequence[str]) -> int:
+    """`voxa voices --lang az`: the voices to choose from for a language."""
+    parser = argparse.ArgumentParser(
+        prog="voxa voices",
+        description="The voices to choose from for a language: Edge's (--edge-voice, "
+                    "--speaker-voices) and Piper's (--speaker-voices).")
+    parser.add_argument("--lang", required=True, help="Target language, e.g. az or en")
+    parser.add_argument("--engine", choices=["edge", "piper"], action="append",
+                        help="Only this engine's (default: both)")
+    parser.add_argument("--json", action="store_true", help="Print them as JSON")
+    args = parser.parse_args(argv)
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+        except (AttributeError, ValueError):
+            pass
+    found, failed = {}, False
+    for engine in args.engine or ["edge", "piper"]:
+        try:
+            found[engine] = asyncio.run(voice_catalogue(engine, args.lang))
+        except Exception as e:
+            print(f"❌ Couldn't list {engine}'s voices: {e}", file=sys.stderr)
+            failed = True
+    if args.json:
+        print(json.dumps(found, ensure_ascii=False, indent=2))
+        return 1 if failed else 0
+    for engine, voices in found.items():
+        print(f"{engine.capitalize()} ({args.lang}): " + ("" if voices else "none"))
+        for v in voices:
+            notes = [v.get("gender") or "", "styles" if v.get("styles") else "",
+                     "" if v.get("installed", True) else "downloads on first use"]
+            print(f"  {v['id']:<34}{', '.join(n for n in notes if n)}")
+    return 1 if failed else 0
+
+
 def engines_cli(argv: Sequence[str]) -> int:
     """`voxa engines`: the engines Voxa installs into environments of their own."""
     import voxa_engines
@@ -5779,6 +5915,9 @@ def cli():
     # `voxa engines` installs and removes the engines that live in environments of their own.
     if sys.argv[1:2] == ["engines"]:
         sys.exit(engines_cli(sys.argv[2:]))
+    # `voxa voices --lang az` lists the voices to choose from.
+    if sys.argv[1:2] == ["voices"]:
+        sys.exit(voices_cli(sys.argv[2:]))
     # `voxa serve` launches the optional operator web server (see voxa_server.py), and
     # `voxa studio` runs it and shows its console in a window of its own (voxa_studio.py),
     # or the browser. Both live behind the [serve] extra so the default install stays lean.

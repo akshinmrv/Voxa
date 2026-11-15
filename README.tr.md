@@ -495,6 +495,10 @@ voxa screencast.mp4 --target_lang de --subtitles script.srt
 # Her konuşmacıya kendi sesi (röportaj, podcast) — Hugging Face token gerekir
 voxa video.mp4 --target_lang de --diarize --num-speakers 2 --hf-token hf_...
 
+# Sesi seçin: bir dilin seslerine bakın, sonra birini adlandırın
+voxa voices --lang az
+voxa video.mp4 --target_lang az --edge-voice az-AZ-BanuNeural
+
 # Tek komutta birden çok video
 voxa a.mp4 b.mp4 c.mp4 --target_lang tr
 
@@ -548,6 +552,12 @@ GTK ve Qt bulunmayan Linux'ta tarayıcıyı açar.
 
 Konsol paketin içinde gelir: Node da ikinci bir terminal da gerekmez. Konsolun kendisi
 üzerinde çalışıyorsanız `voxa serve` ile birlikte [`web/`](web/) içinde `npm run dev` çalıştırın.
+
+**Sesleri seçin.** *Sesler* bir dilin seslerini listeler (Edge ve Piper seslerini önce
+dinleyebilirsiniz) ve XTTS, Chatterbox ve VoxCPM2 ile ses klonlamak için kendi kliplerinizi (bir
+kişinin 3-30 saniyelik konuşması) saklar. Yeni bir iş bunlardan birini kendi sesi olarak alır;
+incelenen ya da biten bir iş başka birini, konuşanlar algılandıysa her konuşana birini
+alabilir, her biri kendi ilk satırını söylerken dinlenerek.
 
 **Tamamını dublajlamadan önce dinleyin.** *İlk 20 sn'yi önizle*, seçtiğiniz ayarlarla yalnızca
 videonun başını bir iki dakikada dublajlar; beğenirseniz *Videonun tamamını dublajla* aynı

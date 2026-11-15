@@ -85,7 +85,36 @@ export type JobConfig = {
   review?: boolean;
   /** Dub only the first this many seconds, to hear it before dubbing it all. */
   preview?: number | null;
+  /** The Edge voice to speak with; null lets Voxa pick one. */
+  edgeVoice?: string | null;
+  /** A voice per speaker of a diarized job (an engine voice, or a library clip's id). */
+  speakerVoices?: Record<string, string> | null;
 };
+
+/** A voice to choose from (GET /api/voices). */
+export type VoiceOption = {
+  id: string;
+  label: string;
+  gender?: string | null;
+  locale?: string;
+  /** Edge: it can speak in styles (cheerful, sad…). */
+  styles?: boolean;
+  /** Piper: the model is on this machine (otherwise it downloads on first use). */
+  installed?: boolean;
+  /** A library clip's length. */
+  seconds?: number | null;
+};
+
+export type VoiceList = {
+  voices: VoiceOption[];
+  /** The voices can be heard before a dub (Edge, Piper). */
+  listen: boolean;
+  /** The engine clones a voice: its choices are the clips of the voice library. */
+  library?: boolean;
+};
+
+/** A clip kept to clone a voice from. */
+export type LibraryVoice = { id: string; name: string; seconds: number; createdAt: number };
 
 /** "review": translated, nothing voiced yet; waiting for the lines to be checked. */
 export type JobStatus = "queued" | "running" | "review" | "done" | "failed";

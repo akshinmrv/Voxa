@@ -4,17 +4,29 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { AudioLines, Check, Loader2 } from "lucide-react";
-import { getTranslation, putTranslation, voiceJob } from "@/lib/api";
-import type { JobStatus, TranslationLine } from "@/lib/types";
+import { getTranslation, putJobVoices, putTranslation, voiceJob } from "@/lib/api";
+import type { JobConfig, JobStatus, TranslationLine } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Loading } from "./query-states";
+import { VoicePicker, useVoices } from "./voice-picker";
+import { Field } from "@/components/ui/field";
 
 /** As the server keeps a line: its words with the spacing evened out. */
 const tidy = (text: string) => text.split(/\s+/).filter(Boolean).join(" ");
+
+/** The voice a job speaks with for its engine, as its settings hold it. */
+function ownVoice(config: JobConfig, library: boolean): string | null {
+  if (config.tts === "edge") return config.edgeVoice ?? null;
+  if (config.tts === "openai") return config.openaiVoice ?? null;
+  return library ? (config.voiceSample ?? null) : null;
+}
+
+const sameVoices = (a: Record<string, string>, b: Record<string, string>) =>
+  Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((k) => a[k] === b[k]);
 
 function clock(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -30,10 +42,13 @@ function clock(seconds: number) {
 export function TranslationEditor({
   jobId,
   status,
+  config,
   onVoice,
 }: {
   jobId: string;
   status: JobStatus;
+  /** The job's settings: its engine, language and voices. */
+  config: JobConfig;
   /** Called once the job is queued to be voiced. */
   onVoice: () => void;
 }) {
@@ -45,12 +60,32 @@ export function TranslationEditor({
   });
   // Only the lines typed into are held here; the rest show what the server keeps.
   const [drafts, setDrafts] = useState<Record<number, string>>({});
+  // Voices chosen here and not saved yet (undefined: as the job has them).
+  const [voiceDraft, setVoiceDraft] = useState<string | null | undefined>(undefined);
+  const [speakerDraft, setSpeakerDraft] = useState<Record<string, string> | undefined>();
+  const library = !!useVoices(config.tts, config.targetLang).data?.library;
 
   const lines: TranslationLine[] = query.data?.lines ?? [];
   const texts = lines.map((line, i) => drafts[i] ?? line.text);
   const unsaved = lines.filter((line, i) => drafts[i] !== undefined && tidy(drafts[i]) !== line.text)
     .length;
   const nothingToSay = texts.every((text) => !tidy(text));
+
+  // Each speaker once, in the order they first speak, with the first thing they say.
+  const speakers: [string, string][] = [];
+  lines.forEach((line, i) => {
+    if (line.speaker && !speakers.some(([s]) => s === line.speaker))
+      speakers.push([line.speaker, tidy(texts[i])]);
+  });
+  const savedVoice = ownVoice(config, library);
+  const savedSpeakers = config.speakerVoices ?? {};
+  const chosenVoice = voiceDraft === undefined ? savedVoice : voiceDraft;
+  const speakerVoices = speakerDraft ?? savedSpeakers;
+  const voicesChanged =
+    (voiceDraft !== undefined && voiceDraft !== savedVoice) ||
+    (speakerDraft !== undefined && !sameVoices(speakerDraft, savedSpeakers));
+  const pickable = config.tts === "edge" || config.tts === "openai" || library;
+  const autoLabel = library ? t("fromVideo") : config.tts === "piper" ? t("languageVoice") : t("voxaVoice");
 
   const save = useMutation({
     mutationFn: () => putTranslation(jobId, texts),
@@ -61,11 +96,16 @@ export function TranslationEditor({
   });
   const voice = useMutation({
     mutationFn: async () => {
+      if (voicesChanged) {
+        await putJobVoices(jobId, { voice: chosenVoice, speakers: speakerVoices });
+      }
       if (unsaved) qc.setQueryData(["translation", jobId], await putTranslation(jobId, texts));
       return voiceJob(jobId);
     },
     onSuccess: (summary) => {
       setDrafts({});
+      setVoiceDraft(undefined);
+      setSpeakerDraft(undefined);
       qc.setQueryData(["job", jobId], summary);
       onVoice();
     },
@@ -86,6 +126,49 @@ export function TranslationEditor({
         <CardDescription>{reviewing ? t("desc") : t("editDesc")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {(speakers.length > 0 || pickable) && (
+          <div className="space-y-3 rounded-md border border-border bg-surface-1 p-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">{t("voices")}</p>
+              <p className="text-xs text-muted-foreground">{t("voicesHint")}</p>
+            </div>
+            {speakers.length > 0
+              ? speakers.map(([speaker, line], n) => (
+                  <Field key={speaker} id={`voice-${speaker}`} label={t("speaker", { n: n + 1 })}>
+                    <VoicePicker
+                      id={`voice-${speaker}`}
+                      engine={config.tts}
+                      lang={config.targetLang}
+                      value={speakerVoices[speaker] ?? null}
+                      onChange={(v) => {
+                        const next = { ...speakerVoices };
+                        if (v) next[speaker] = v;
+                        else delete next[speaker];
+                        setSpeakerDraft(next);
+                      }}
+                      autoLabel={autoLabel}
+                      text={line || undefined}
+                      disabled={!editable}
+                    />
+                  </Field>
+                ))
+              : pickable && (
+                  <Field id="jobVoice" label={t("voice")}>
+                    <VoicePicker
+                      id="jobVoice"
+                      engine={config.tts}
+                      lang={config.targetLang}
+                      value={chosenVoice}
+                      onChange={(v) => setVoiceDraft(v)}
+                      autoLabel={autoLabel}
+                      text={tidy(texts.find((x) => tidy(x)) ?? "") || undefined}
+                      disabled={!editable}
+                    />
+                  </Field>
+                )}
+          </div>
+        )}
+
         <ol className="divide-y divide-border">
           {lines.map((line, i) => {
             const text = texts[i];

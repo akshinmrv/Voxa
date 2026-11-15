@@ -13,6 +13,8 @@ import { Field } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { UploadDropzone } from "./upload-dropzone";
+import { VoicePicker } from "./voice-picker";
+import { Link } from "@/i18n/navigation";
 import { BackendError, Loading } from "./query-states";
 
 const KEY_TRANSLATORS = new Set(["openai", "anthropic"]);
@@ -87,6 +89,7 @@ export function NewJobFlow() {
       options.ttsEngines.find((e) => e.available !== false)?.id ??
       "edge",
     whisperModel: sel.whisperModel ?? "base",
+    edgeVoice: sel.edgeVoice ?? null,
     voiceSample: sel.voiceSample,
     openaiTtsModel: sel.openaiTtsModel ?? options.openaiTtsModels[0]?.id ?? "gpt-4o-mini-tts",
     openaiVoice: sel.openaiVoice ?? options.openaiVoices[0]?.id ?? "alloy",
@@ -163,7 +166,8 @@ export function NewJobFlow() {
             <Select
               id="targetLang"
               value={config.targetLang}
-              onChange={(e) => set("targetLang", e.target.value)}
+              // A voice chosen for the old language can't speak the new one.
+              onChange={(e) => setSel((s) => ({ ...s, targetLang: e.target.value, edgeVoice: null }))}
             >
               {options.languages.map((l) => (
                 <option key={l.code} value={l.code}>
@@ -220,6 +224,19 @@ export function NewJobFlow() {
             )}
           </Field>
 
+          {config.tts === "edge" && (
+            <Field id="edgeVoice" label={t("voice")} hint={t("voiceHint")}>
+              <VoicePicker
+                id="edgeVoice"
+                engine="edge"
+                lang={config.targetLang}
+                value={config.edgeVoice}
+                onChange={(v) => set("edgeVoice", v)}
+                autoLabel={t("voiceAuto")}
+              />
+            </Field>
+          )}
+
           {config.tts === "openai" && (
             <>
               <Field id="openaiTtsModel" label={t("openaiModel")}>
@@ -253,15 +270,24 @@ export function NewJobFlow() {
           )}
 
           {needsVoiceSample && (
-            <Field id="voiceSample" label={t("voiceSample")} hint={t("voiceSampleHint")}>
-              <input
+            <Field id="voiceSample" label={t("voiceSample")}>
+              <VoicePicker
                 id="voiceSample"
-                type="text"
-                placeholder="me.wav"
-                value={config.voiceSample ?? ""}
-                onChange={(e) => set("voiceSample", e.target.value)}
-                className="h-10 w-full rounded-sm border border-input bg-surface-1 px-3 text-sm text-foreground transition-colors hover:border-primary/40 placeholder:text-fg-subtle"
+                engine={config.tts}
+                lang={config.targetLang}
+                value={config.voiceSample}
+                onChange={(v) => set("voiceSample", v ?? undefined)}
+                autoLabel={t("voiceFromVideo")}
               />
+              <p className="text-xs text-muted-foreground">
+                {t.rich("voiceSampleHint", {
+                  voices: (chunks) => (
+                    <Link href="/app/voices" className="text-primary hover:underline">
+                      {chunks}
+                    </Link>
+                  ),
+                })}
+              </p>
             </Field>
           )}
 

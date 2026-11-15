@@ -529,6 +529,10 @@ voxa screencast.mp4 --target_lang de --subtitles script.srt
 # Give every speaker their own voice (interviews, podcasts) — needs a Hugging Face token
 voxa video.mp4 --target_lang de --diarize --num-speakers 2 --hf-token hf_...
 
+# Choose the voice: list a language's voices, then name one
+voxa voices --lang az
+voxa video.mp4 --target_lang az --edge-voice az-AZ-BanuNeural
+
 # Several videos in one command
 voxa a.mp4 b.mp4 c.mp4 --target_lang ru
 
@@ -588,6 +592,12 @@ running. Without the extra, or on Linux without GTK or Qt, it opens your browser
 
 The console comes inside the package: no Node, no second terminal. Working on the console
 itself? Run `npm run dev` in [`web/`](web/) next to `voxa serve`.
+
+**Choose the voices.** *Voices* lists the voices for a language, to hear Edge's and Piper's
+first, and keeps your own clips (3 to 30 seconds of one person) to clone voices from with
+XTTS, Chatterbox and VoxCPM2. A new job takes one of them as its voice; a job being reviewed,
+or a finished one, can take another, and with speakers detected, one for each speaker, heard
+saying their own first line.
 
 **Hear it before dubbing it all.** *Preview the first 20 s* dubs just the start of the video,
 in a minute or two, with the settings you picked; if you like it, *Dub the whole video* starts

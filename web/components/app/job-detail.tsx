@@ -190,7 +190,14 @@ export function JobDetail({ jobId }: { jobId: string }) {
         </Card>
       )}
 
-      {reviewing && <TranslationEditor jobId={jobId} status={status} onVoice={followVoicing} />}
+      {reviewing && meta.data && (
+        <TranslationEditor
+          jobId={jobId}
+          status={status}
+          config={meta.data.config}
+          onVoice={followVoicing}
+        />
+      )}
 
       {status === "failed" && (
         <div className="flex gap-3 rounded-md border border-danger/25 bg-danger/10 p-4">
@@ -205,8 +212,14 @@ export function JobDetail({ jobId }: { jobId: string }) {
       )}
 
       {canEdit &&
+        meta.data &&
         (editing ? (
-          <TranslationEditor jobId={jobId} status={status} onVoice={followVoicing} />
+          <TranslationEditor
+            jobId={jobId}
+            status={status}
+            config={meta.data.config}
+            onVoice={followVoicing}
+          />
         ) : (
           <Button variant="secondary" onClick={() => setEditing(true)}>
             <PencilLine /> {t("editTranslation")}

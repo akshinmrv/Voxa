@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Choose the voices, and keep your own to clone.** `voxa voices --lang az` lists the
+  voices to choose from: Edge's (Microsoft's list) and Piper's (the language's voice, and the
+  models in ~/.piper_models). `--edge-voice NAME` speaks with one of Edge's instead of the one
+  Voxa picks, and a name Edge doesn't have is refused with where to find them. The console
+  has a *Voices* page: a language's voices, Edge's and Piper's to hear first, and a library of
+  your own clips (any audio or video, kept as 3 to 30 seconds of mono WAV) to clone voices
+  from. A new job takes its voice from there: an Edge voice, or for XTTS, Chatterbox and
+  VoxCPM2 a library clip (the field took a file path before). A job being reviewed, or done,
+  can change its voice and, with speakers detected, give each speaker one, heard saying their
+  first line; voicing it again keeps its lines (PUT /api/jobs/{id}/voices, GET /api/voices,
+  /api/voices/library, POST /api/voices/listen).
 - **A preview: hear the first 20 seconds before dubbing it all.** `--preview [SECONDS]` (20 by
   default, 5 to 120) dubs only the start of a video: the start is copied, not re-encoded, into
   `<video>.preview20s<ext>`, which has a work dir, a log and an output of its own

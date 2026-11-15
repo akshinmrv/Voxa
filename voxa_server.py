@@ -30,6 +30,7 @@ import re
 import secrets
 import shutil
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -43,7 +44,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     FileResponse,
@@ -209,6 +210,11 @@ class JobConfigModel(BaseModel):
     # Dub only the first this many seconds (voxa --preview), to hear it before dubbing it all;
     # POST /api/jobs/{id}/full then dubs the whole video.
     preview: Optional[int] = None
+    # The Edge voice to speak with (voxa --edge-voice); None lets Voxa pick one.
+    edgeVoice: Optional[str] = None
+    # A voice per speaker of a diarized job (voxa --speaker-voices): an engine voice, or for a
+    # cloning engine a clip of the voice library. Set once the speakers are known.
+    speakerVoices: Optional[Dict[str, str]] = None
 
 
 class CreateJobModel(BaseModel):
@@ -524,13 +530,20 @@ async def _run_job(job: Job) -> None:
         cmd += translation_fallback_args(current_settings)
         cmd += advanced_timing_args(current_settings)
         if cfg.tts in voxa.CLONING_TTS and cfg.voiceSample:
-            cmd += ["--voice-sample", cfg.voiceSample]
+            cmd += ["--voice-sample", _voice_path(cfg.voiceSample)]
+        if cfg.tts == "edge" and cfg.edgeVoice:
+            cmd += ["--edge-voice", cfg.edgeVoice]
         if cfg.tts == "openai":
             if cfg.openaiTtsModel:
                 cmd += ["--openai-tts-model", cfg.openaiTtsModel]
             if cfg.openaiVoice:
                 cmd += ["--openai-voice", cfg.openaiVoice]
         cmd += diarize_args(cfg)
+        if cfg.diarize and cfg.speakerVoices:
+            cloning = cfg.tts in voxa.CLONING_TTS
+            cmd += ["--speaker-voices", ",".join(
+                f"{speaker}={_voice_path(voice) if cloning else voice}"
+                for speaker, voice in sorted(cfg.speakerVoices.items()))]
         if cfg.separate:
             cmd += ["--separate"]
         if cfg.preview:
@@ -1274,6 +1287,150 @@ def engine_problem(cfg: JobConfigModel) -> Optional[str]:
     return None
 
 
+# --------------------------------------------------------------------------- #
+# Voices: what each engine offers, and the library of clips voices are cloned from
+# --------------------------------------------------------------------------- #
+
+VOICE_CLIP_SECONDS = (3.0, 30.0)     # shorter can't be cloned well; longer is cut
+_LIBRARY_ID = re.compile(r"[0-9a-f]{12}")
+
+
+def _voices_dir() -> Path:
+    # A function, not a constant, so it follows WORKSPACE when that is moved (as in tests).
+    return WORKSPACE / "voices"
+
+
+def voice_library() -> list:
+    """The clips kept to clone voices from, newest first."""
+    entries = voxa._read_json_list(_voices_dir() / "library.json") or []
+    return sorted((e for e in entries if isinstance(e, dict) and _library_clip(e.get("id"))),
+                  key=lambda e: e.get("createdAt") or 0, reverse=True)
+
+
+def _save_library(entries: list) -> None:
+    _voices_dir().mkdir(parents=True, exist_ok=True)
+    temp = _voices_dir() / "library.json.tmp"
+    temp.write_text(json.dumps(entries, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(temp, _voices_dir() / "library.json")
+
+
+def _library_clip(voice_id) -> Optional[Path]:
+    if not isinstance(voice_id, str) or not _LIBRARY_ID.fullmatch(voice_id):
+        return None
+    clip = _voices_dir() / f"{voice_id}.wav"
+    return clip if clip.exists() else None
+
+
+def _voice_path(value: Optional[str]) -> Optional[str]:
+    """A voice a job names for a cloning engine: a clip of the library, by its id, becomes its
+    file; anything else (a path, as the console took before the library) passes as it is."""
+    clip = _library_clip(value)
+    return str(clip) if clip else value
+
+
+@app.get("/api/voices")
+async def list_voices(engine: str, lang: str = "en") -> dict:
+    """The voices to choose from for one engine and language, and whether they can be heard
+    first (POST /api/voices/listen)."""
+    if engine == "openai":
+        return {"voices": [{"id": v, "label": v} for v in OPENAI_VOICES], "listen": False}
+    if engine in voxa.CLONING_TTS:
+        return {"voices": [{"id": e["id"], "label": e["name"], "seconds": e.get("seconds")}
+                           for e in voice_library()], "listen": False, "library": True}
+    try:
+        found = await voxa.voice_catalogue(engine, lang)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Couldn't get {engine}'s voices: {e}")
+    return {"voices": found, "listen": engine in ("edge", "piper")}
+
+
+@app.get("/api/voices/library")
+async def get_voice_library() -> dict:
+    return {"voices": voice_library()}
+
+
+@app.post("/api/voices/library")
+async def add_voice(file: UploadFile = File(...), name: str = Form("")) -> dict:
+    """Keep a clip to clone a voice from: any audio or video, made mono 24 kHz WAV and cut to
+    its first 30 seconds."""
+    voice_id = uuid.uuid4().hex[:12]
+    folder = _voices_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    upload, clip = folder / f"{voice_id}.upload", folder / f"{voice_id}.wav"
+    with upload.open("wb") as out:
+        while chunk := await file.read(1024 * 1024):
+            out.write(chunk)
+    low, high = VOICE_CLIP_SECONDS
+    try:
+        made = await asyncio.to_thread(
+            subprocess.run, ["ffmpeg", "-y", "-i", str(upload), "-t", str(high), "-vn",
+                             "-ac", "1", "-ar", "24000", str(clip)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    finally:
+        upload.unlink(missing_ok=True)
+    seconds = voxa.probe_duration(clip) if made.returncode == 0 and clip.exists() else None
+    if not seconds or seconds < low:
+        clip.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail=(
+            f"A voice to clone needs at least {low:g} seconds of speech." if seconds
+            else "That file has no audio Voxa can read."))
+    entry = {"id": voice_id,
+             "name": " ".join(name.split())[:60] or Path(file.filename or "voice").stem[:60],
+             "seconds": round(seconds, 1), "createdAt": time.time()}
+    _save_library(voice_library() + [entry])
+    return entry
+
+
+@app.delete("/api/voices/library/{voice_id}")
+async def delete_voice(voice_id: str) -> dict:
+    clip = _library_clip(voice_id)
+    if not clip:
+        raise HTTPException(status_code=404, detail="No such voice.")
+    _save_library([e for e in voice_library() if e.get("id") != voice_id])
+    clip.unlink(missing_ok=True)
+    return {"voices": voice_library()}
+
+
+@app.get("/api/voices/library/{voice_id}/audio")
+async def voice_audio(voice_id: str) -> FileResponse:
+    clip = _library_clip(voice_id)
+    if not clip:
+        raise HTTPException(status_code=404, detail="No such voice.")
+    return FileResponse(str(clip), media_type="audio/wav")
+
+
+class ListenBody(BaseModel):
+    engine: str
+    voice: str
+    lang: str = "en"
+    # What to say: a line of the dub, say; a short greeting in the language otherwise.
+    text: Optional[str] = None
+
+
+@app.post("/api/voices/listen")
+async def listen(body: ListenBody) -> FileResponse:
+    """One voice saying a short line, to hear it before choosing it (Edge and Piper). Kept,
+    so hearing it again is instant."""
+    if body.engine not in ("edge", "piper"):
+        raise HTTPException(status_code=422,
+                            detail=f"{body.engine} voices can't be heard before a dub.")
+    line = body.text or voxa.SAMPLE_LINES.get(body.lang[:2].lower(), voxa.SAMPLE_LINES["en"])
+    text = " ".join(line.split())[:300]
+    if not text:
+        raise HTTPException(status_code=422, detail="Nothing to say.")
+    key = hashlib.sha256(f"{body.engine}|{body.voice}|{text}".encode("utf-8")).hexdigest()[:24]
+    out = _voices_dir() / "samples" / f"{key}{'.mp3' if body.engine == 'edge' else '.wav'}"
+    if not out.exists():
+        out.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            await voxa.speak_sample(body.engine, body.voice, text, out)
+        except Exception as e:
+            out.unlink(missing_ok=True)
+            raise HTTPException(status_code=502, detail=f"{body.voice} couldn't be heard: {e}")
+    return FileResponse(str(out), media_type="audio/mpeg" if out.suffix == ".mp3"
+                        else "audio/wav")
+
+
 def _check_preview(config: JobConfigModel) -> None:
     low, high = voxa.PREVIEW_RANGE
     if config.preview is not None and not low <= config.preview <= high:
@@ -1436,6 +1593,37 @@ async def put_translation(job_id: str, body: TranslationEdit) -> dict:
         line["text"] = text
     _write_lines(job.translation_file, lines)
     return _translation_view(job, lines)
+
+
+class JobVoices(BaseModel):
+    # The job's own voice for its engine: an Edge or OpenAI voice, or a library clip for a
+    # cloning engine; None lets Voxa choose (or cut one from the video).
+    voice: Optional[str] = None
+    # A voice per speaker, for a diarized job.
+    speakers: Dict[str, str] = {}
+
+
+@app.put("/api/jobs/{job_id}/voices")
+async def put_job_voices(job_id: str, body: JobVoices) -> dict:
+    """Choose the voices a job speaks with, before it is voiced (after a review) or to voice it
+    again: its lines are kept, so only the speech is made again."""
+    job = _job_or_404(job_id)
+    if job.status not in JOB_AT_REST:
+        raise HTTPException(status_code=409,
+                            detail="The voices can be changed once this run of the job ends.")
+    voice = (body.voice or "").strip() or None
+    speakers = {k.strip(): v.strip() for k, v in body.speakers.items() if k.strip() and v.strip()}
+    named = [voice or ""] + list(speakers) + list(speakers.values())
+    if any(len(x) > 300 or "," in x or "=" in x for x in named):
+        raise HTTPException(status_code=422, detail="A voice's name can't hold , or =.")
+    field = {"edge": "edgeVoice", "openai": "openaiVoice"}.get(
+        job.config.tts, "voiceSample" if job.config.tts in voxa.CLONING_TTS else None)
+    update = {"speakerVoices": speakers or None}
+    if field:
+        update[field] = voice
+    job.config = job.config.model_copy(update=update)
+    save_job(job)
+    return job.summary()
 
 
 @app.post("/api/jobs/{job_id}/full")
