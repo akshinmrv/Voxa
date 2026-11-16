@@ -20,6 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   off by default; `voxa doctor` says when it's there, and the console's Settings → Advanced
   offers it.
 
+### Fixed
+
+- **A dub spoken in English when Edge's list of voices didn't come.** Microsoft's list now and
+  then answers 503 for a moment, and Voxa then spoke the dub with `en-US-ChristopherNeural`:
+  Turkish, or any language, read by an English voice, and the run still ended "done", the
+  reason printed but not in the log. The list is now asked up to three times. If it still
+  doesn't come, a dub into a language other than English stops and says why (running it again
+  keeps what's done, and `--edge-voice` needs no list); an English one speaks with that voice
+  as before. A language Edge has no voice for is said in the log too.
+
 ## [1.17.0] - 2026-11-16
 
 ### Added

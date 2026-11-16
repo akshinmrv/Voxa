@@ -109,6 +109,96 @@ def test_an_edge_voice_by_name(edge_list, monkeypatch):
         asyncio.run(voxa._tts_edge([], args, None, "v.mp4", None, _Log()))
 
 
+# ── Edge's voice, when its list doesn't come ─────────────
+LISTED = [
+    {"Name": "Microsoft Server Speech Text to Speech Voice (tr-TR, EmelNeural)",
+     "ShortName": "tr-TR-EmelNeural", "Locale": "tr-TR"},
+    {"Name": "Microsoft Server Speech Text to Speech Voice (tr-TR, AhmetNeural)",
+     "ShortName": "tr-TR-AhmetNeural", "Locale": "tr-TR"},
+    {"Name": "Microsoft Server Speech Text to Speech Voice (en-US, JennyNeural)",
+     "ShortName": "en-US-JennyNeural", "Locale": "en-US", "StyleList": ["cheerful"]},
+]
+
+
+@pytest.fixture
+def microsoft(monkeypatch):
+    """Edge's list of voices, from a Microsoft that fails the first `fails` times it's asked."""
+    state = SimpleNamespace(fails=0, asked=0)
+
+    class VoicesManager:
+        @classmethod
+        async def create(cls):
+            state.asked += 1
+            if state.asked <= state.fails:
+                raise OSError("503, message='Service Unavailable'")
+            return SimpleNamespace(voices=[dict(v) for v in LISTED])
+
+    monkeypatch.setattr(voxa, "edge_tts", SimpleNamespace(VoicesManager=VoicesManager))
+    monkeypatch.setattr(voxa, "_EDGE_VOICES", None)
+    monkeypatch.setattr(voxa, "EDGE_LIST_WAIT", 0)
+    return state
+
+
+def test_edges_list_is_asked_again_when_it_doesnt_come(microsoft, caplog):
+    microsoft.fails = voxa.EDGE_LIST_TRIES - 1
+    with caplog.at_level("WARNING", logger=voxa._LOG.name):
+        voice = asyncio.run(voxa.get_edge_voice("tr"))
+    assert voice == ("Microsoft Server Speech Text to Speech Voice (tr-TR, EmelNeural)", False)
+    assert microsoft.asked == voxa.EDGE_LIST_TRIES
+    assert caplog.text.count("didn't come (503") == voxa.EDGE_LIST_TRIES - 1
+    asyncio.run(voxa.get_edge_voice("tr"))
+    assert microsoft.asked == voxa.EDGE_LIST_TRIES      # kept for the rest of the run
+
+
+def test_without_the_list_a_dub_stops_rather_than_be_read_in_english(microsoft):
+    # It used to say "done" with en-US-ChristopherNeural reading the Turkish.
+    microsoft.fails = 99
+    with pytest.raises(voxa.TTSError, match=r"no 'tr' voice to speak with.*--edge-voice"):
+        asyncio.run(voxa.get_edge_voice("tr"))
+    assert microsoft.asked == voxa.EDGE_LIST_TRIES
+    with pytest.raises(voxa.TTSError, match="Service Unavailable"):
+        asyncio.run(voxa.get_edge_voices("tr"))         # the voices for --diarize, too
+
+
+def test_without_the_list_an_english_dub_speaks_with_the_fallback(microsoft, caplog):
+    microsoft.fails = 99
+    with caplog.at_level("WARNING", logger=voxa._LOG.name):
+        assert asyncio.run(voxa.get_edge_voice("en")) == (voxa.EDGE_FALLBACK_VOICE, False)
+        assert asyncio.run(voxa.get_edge_voices("en-GB")) == [voxa.EDGE_FALLBACK_VOICE]
+    assert f"speaking with {voxa.EDGE_FALLBACK_VOICE}" in caplog.text
+
+
+def test_a_language_edge_has_no_voice_for_is_said(microsoft, caplog):
+    with caplog.at_level("WARNING", logger=voxa._LOG.name):
+        assert asyncio.run(voxa.get_edge_voice("xx")) == (voxa.EDGE_FALLBACK_VOICE, False)
+    assert "Edge has no voice for 'xx'" in caplog.text
+    assert asyncio.run(voxa.get_edge_voice("en")) == (
+        "Microsoft Server Speech Text to Speech Voice (en-US, JennyNeural)", True)
+    assert asyncio.run(voxa.get_edge_voices("tr")) == [
+        "Microsoft Server Speech Text to Speech Voice (tr-TR, EmelNeural)",
+        "Microsoft Server Speech Text to Speech Voice (tr-TR, AhmetNeural)"]
+
+
+def test_the_dub_fails_with_why_when_edges_list_doesnt_come(microsoft, monkeypatch):
+    spoken = []
+
+    async def batch(subs, voice, work_dir, **kw):
+        spoken.append(voice)
+        return [], []
+
+    monkeypatch.setattr(voxa, "synthesize_speech_batch", batch)
+    monkeypatch.setattr(voxa, "_media_ms", lambda path: None)
+    microsoft.fails = 99
+    args = _edge_args()
+    args.target_lang = "tr"
+    with pytest.raises(voxa.TTSError, match="Edge's list of voices couldn't be had"):
+        asyncio.run(voxa._tts_edge([], args, None, "v.mp4", None, _Log()))
+    assert spoken == []
+    args.edge_voice = "tr-TR-AhmetNeural"       # a voice by name needs no list
+    asyncio.run(voxa._tts_edge([], args, None, "v.mp4", None, _Log()))
+    assert spoken == ["tr-TR-AhmetNeural"]
+
+
 def test_choosing_an_edge_voice_makes_the_speech_again():
     # Only when one is chosen, so the dubs made before keep their signature.
     base = dict(target_lang="az", tts="edge", no_stretch=False, detect_emotion=False,

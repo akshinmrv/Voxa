@@ -1678,37 +1678,63 @@ async def generate_piper(subs, model_path: Path, concat_list: list, temp_files: 
         desc="Piper Synthesis", unit="phrase",
         quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code or None,
         media_ms=media_ms)
-async def get_edge_voice(lang_code: str, emotion: Optional[str] = None) -> Tuple[str, bool]:
+
+
+# The voice an English dub speaks with when Edge's list can't be had.
+EDGE_FALLBACK_VOICE = "en-US-ChristopherNeural"
+
+
+def _is_english(lang_code: str) -> bool:
+    return lang_code.lower()[:2] == "en"
+
+
+async def _edge_voices_for(lang_code: str) -> List[Dict]:
+    """Edge's voices for a language: those of its exact locale, else any of the language.
+
+    Without Edge's list an English dub still has EDGE_FALLBACK_VOICE. Any other would be read
+    by that English voice, accent and all, and still end "done", so it stops here instead and
+    says why: running it again keeps what's done and asks again."""
     try:
-        voices = await edge_tts.VoicesManager.create()
-        suitable = voices.find(Locale=lang_code)
-        if not suitable:
-            suitable = [v for v in voices.voices if v['Locale'].startswith(lang_code[:2])]
-        if suitable:
-            for voice in suitable:
-                if 'StyleList' in voice and voice['StyleList']:
-                    return voice['Name'], True
-            return suitable[0]['Name'], False
-    except Exception as e:
-        print(f"⚠️ Voice search error: {e}")
-    return "en-US-ChristopherNeural", False
+        voices = await edge_voice_list()
+    except Exception as exc:
+        if _is_english(lang_code):
+            _LOG.warning(f"⚠️  Edge's list of voices couldn't be had ({exc}); "
+                         f"speaking with {EDGE_FALLBACK_VOICE}")
+            return []
+        raise TTSError(
+            f"❌ Edge's list of voices couldn't be had ({exc}), so there's no '{lang_code}' "
+            f"voice to speak with. Run it again (what's done is kept), or name one with "
+            f"--edge-voice.") from exc
+    exact = [v for v in voices if v["Locale"] == lang_code]
+    return exact or [v for v in voices if v["Locale"].startswith(lang_code[:2])]
+
+
+def _edge_fallback(lang_code: str) -> str:
+    if not _is_english(lang_code):
+        _LOG.warning(f"⚠️  Edge has no voice for '{lang_code}'; speaking with "
+                     f"{EDGE_FALLBACK_VOICE}, in English")
+    return EDGE_FALLBACK_VOICE
+
+
+async def get_edge_voice(lang_code: str, emotion: Optional[str] = None) -> Tuple[str, bool]:
+    """The Edge voice to speak `lang_code` with, one with speaking styles if there is one, and
+    whether it has them. Raises TTSError when the list can't be had (see _edge_voices_for)."""
+    suitable = await _edge_voices_for(lang_code)
+    for voice in suitable:
+        if voice.get("StyleList"):
+            return voice["Name"], True
+    if suitable:
+        return suitable[0]["Name"], False
+    return _edge_fallback(lang_code), False
 
 
 async def get_edge_voices(lang_code: str) -> List[str]:
     """Distinct Edge voice names for a language (style-capable ones first), so different
     speakers can get different voices under --diarize. Returns at least one name."""
-    try:
-        voices = await edge_tts.VoicesManager.create()
-        suitable = voices.find(Locale=lang_code) or \
-            [v for v in voices.voices if v['Locale'].startswith(lang_code[:2])]
-        styled = [v['Name'] for v in suitable if v.get('StyleList')]
-        plain = [v['Name'] for v in suitable if not v.get('StyleList')]
-        names = list(dict.fromkeys(styled + plain))
-        if names:
-            return names
-    except Exception as e:
-        _LOG.warning(f"Edge voice pool lookup failed: {e}")
-    return ["en-US-ChristopherNeural"]
+    suitable = await _edge_voices_for(lang_code)
+    styled = [v["Name"] for v in suitable if v.get("StyleList")]
+    plain = [v["Name"] for v in suitable if not v.get("StyleList")]
+    return list(dict.fromkeys(styled + plain)) or [_edge_fallback(lang_code)]
 
 
 # ── Voices to choose from ─────────────────────────────────────────────────────
@@ -1731,13 +1757,28 @@ SAMPLE_LINES = {
 }
 
 
+# Microsoft's list of voices now and then answers 503 for a moment: it is asked up to this many
+# times, waiting this many seconds longer before each new try.
+EDGE_LIST_TRIES = 3
+EDGE_LIST_WAIT = 2.0
+
+
 async def edge_voice_list() -> List[Dict]:
-    """Edge's voices, as Microsoft lists them (about 300), asked once per process."""
+    """Edge's voices, as Microsoft lists them (about 300), asked once per process, and again
+    while it doesn't answer, up to EDGE_LIST_TRIES times."""
     global _EDGE_VOICES
     if _EDGE_VOICES is None:
         if edge_tts is None:
             raise RuntimeError("edge-tts isn't installed")
-        _EDGE_VOICES = list((await edge_tts.VoicesManager.create()).voices)
+        for attempt in range(1, EDGE_LIST_TRIES + 1):
+            try:
+                _EDGE_VOICES = list((await edge_tts.VoicesManager.create()).voices)
+                break
+            except Exception as exc:
+                if attempt == EDGE_LIST_TRIES:
+                    raise
+                _LOG.warning(f"⚠️  Edge's list of voices didn't come ({exc}); asking again")
+                await asyncio.sleep(EDGE_LIST_WAIT * attempt)
     return _EDGE_VOICES
 
 
