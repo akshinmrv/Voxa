@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   doesn't come, a dub into a language other than English stops and says why (running it again
   keeps what's done, and `--edge-voice` needs no list); an English one speaks with that voice
   as before. A language Edge has no voice for is said in the log too.
+- **`--diarize` works on real videos.** Voxa reads audio with soundfile in place of
+  `torchaudio.load` (for XTTS), but read the whole file each time it was asked for a window of
+  it, which is how pyannote reads: diarizing anything longer than about ten seconds failed
+  ("Sizes of tensors must match"), whatever the engine. It now reads the window asked for.
+  Checked on a two-speaker dialogue: each of its six lines went to the right speaker, and each
+  spoke with the voice the console was given for them.
 
 ## [1.17.0] - 2026-11-16
 

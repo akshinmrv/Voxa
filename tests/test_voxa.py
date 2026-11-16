@@ -982,6 +982,53 @@ def test_apply_runtime_patches_leaves_torch_load_safe():
     assert voxa.torch.load is before
 
 
+def _ramp_wav(path, frames, channels=1, rate=16000):
+    """A WAV whose every sample differs, kept exactly (float), to tell which frames were read."""
+    sf = pytest.importorskip("soundfile")
+    np = pytest.importorskip("numpy")
+    data = (np.arange(frames * channels, dtype="float32") / (frames * channels)).reshape(
+        frames, channels)
+    sf.write(str(path), data, rate, subtype="FLOAT")
+    return data
+
+
+def test_the_audio_loader_reads_only_the_window_asked_for(tmp_path):
+    # pyannote reads a file a window at a time (frame_offset, num_frames). Given the whole file
+    # each time, diarizing anything longer than a window failed: "Sizes of tensors must match".
+    if voxa.torch is None:
+        pytest.skip("torch not installed")
+    stereo = _ramp_wav(tmp_path / "stereo.wav", 1000, channels=2)
+    whole, rate = voxa.forced_load(str(tmp_path / "stereo.wav"))
+    assert rate == 16000 and tuple(whole.shape) == (2, 1000)
+    window, _ = voxa.forced_load(str(tmp_path / "stereo.wav"), frame_offset=100, num_frames=250)
+    assert tuple(window.shape) == (2, 250)
+    assert window[:, 0].tolist() == pytest.approx(stereo[100].tolist())
+    assert window[:, -1].tolist() == pytest.approx(stereo[349].tolist())
+    rest, _ = voxa.forced_load(str(tmp_path / "stereo.wav"), frame_offset=900)
+    assert tuple(rest.shape) == (2, 100)
+    frames_first, _ = voxa.forced_load(str(tmp_path / "stereo.wav"), num_frames=10,
+                                       channels_first=False)
+    assert tuple(frames_first.shape) == (10, 2)
+    _ramp_wav(tmp_path / "mono.wav", 500)
+    mono, _ = voxa.forced_load(str(tmp_path / "mono.wav"), frame_offset=50, num_frames=-1)
+    assert tuple(mono.shape) == (1, 450) and mono.dtype == voxa.torch.float32
+
+
+def test_after_the_patches_torchaudio_still_reads_a_window(tmp_path, monkeypatch):
+    torchaudio = pytest.importorskip("torchaudio")
+    if voxa.torchaudio is not torchaudio:
+        pytest.skip("voxa has no torchaudio to patch")
+    monkeypatch.setattr(torchaudio, "load", torchaudio.load)    # put back afterwards
+    data = _ramp_wav(tmp_path / "speech.wav", 48000)
+    voxa._apply_runtime_patches()
+    assert torchaudio.load is voxa.forced_load
+    # As pyannote's Audio.crop asks for one second, a second in.
+    window, rate = torchaudio.load(str(tmp_path / "speech.wav"), frame_offset=16000,
+                                   num_frames=16000, backend="soundfile")
+    assert rate == 16000 and tuple(window.shape) == (1, 16000)
+    assert window[0, 0].item() == pytest.approx(float(data[16000, 0]))
+
+
 # ── Structured (JSON) logging ────────────────────────────
 def test_json_formatter_emits_valid_json():
     import json as _json

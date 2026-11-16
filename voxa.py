@@ -225,15 +225,22 @@ PIPER_VOICES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 EMOTION_STYLES = ['angry', 'cheerful', 'excited', 'friendly', 'hopeful', 'sad',
                   'shouting', 'terrified', 'unfriendly', 'whispering']
 
-def forced_load(uri, **kwargs):
-    """Fixed audio loading with proper format handling"""
-    data, samplerate = sf.read(uri, dtype='float32')
-    tensor = torch.from_numpy(data).float()
-    if tensor.ndim == 1:
-        tensor = tensor.unsqueeze(0)
-    else:
+
+def forced_load(uri, frame_offset: int = 0, num_frames: int = -1, normalize: bool = True,
+                channels_first: bool = True, **kwargs):
+    """torchaudio.load, read with soundfile: torchaudio's own backends differ from one version
+    to the next, and XTTS reads its reference clip with it. Reads only the frames asked for,
+    from frame_offset, num_frames of them (-1: to the end), as pyannote reads a window of a
+    file: given the whole file instead, its diarization fails on any video longer than a
+    window ("Sizes of tensors must match"). Always float32, (channels, frames) unless
+    channels_first is False; other arguments (the backend) are ignored."""
+    stop = None if num_frames is None or num_frames < 0 else frame_offset + num_frames
+    data, samplerate = sf.read(uri, dtype='float32', start=frame_offset or 0, stop=stop,
+                               always_2d=True)
+    tensor = torch.from_numpy(data)                     # (frames, channels)
+    if channels_first:
         tensor = tensor.transpose(0, 1)
-    return tensor, samplerate
+    return tensor.contiguous(), samplerate
 
 
 def _apply_runtime_patches():
