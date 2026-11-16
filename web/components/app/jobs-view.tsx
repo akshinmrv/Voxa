@@ -76,7 +76,7 @@ export function JobsView() {
                 {job.config.targetLang} · {job.config.translator} · {job.config.tts}
               </p>
             </div>
-            <StatusBadge status={job.status} />
+            <StatusBadge status={job.status} cancelled={job.cancelled} />
           </Card>
         </Link>
       ))}

@@ -138,6 +138,14 @@ export type JobSummary = {
   /** The job keeps its translated lines, which can be changed and voiced (again). */
   hasTranslation?: boolean;
   error: string | null;
+  /** Epoch seconds: made, and its last run started and ended (null until it does). */
+  createdAt?: number;
+  startedAt?: number | null;
+  finishedAt?: number | null;
+  /** A queued job's place: 1 is next. */
+  queuePosition?: number | null;
+  /** Stopped from the console, rather than failed. */
+  cancelled?: boolean;
 };
 
 /** One translated line of a job (GET /api/jobs/{id}/translation). */

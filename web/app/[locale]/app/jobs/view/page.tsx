@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import { setRequestLocale } from "next-intl/server";
-import { JobDetailFromQuery } from "@/components/app/job-detail";
+import { JobWorkspaceFromQuery } from "@/components/workspace/job-workspace";
 import { Loading } from "@/components/app/query-states";
 
-// /app/jobs/view?id=<job id>. The id is read in the browser (see JobDetailFromQuery), so the
+// /app/jobs/view?id=<job id>. The id is read in the browser (see JobWorkspaceFromQuery), so the
 // page prerenders without knowing any job, as the bundled static console requires.
 export default async function JobDetailPage({
   params,
@@ -15,7 +15,7 @@ export default async function JobDetailPage({
 
   return (
     <Suspense fallback={<Loading />}>
-      <JobDetailFromQuery />
+      <JobWorkspaceFromQuery />
     </Suspense>
   );
 }

@@ -70,7 +70,11 @@ export function PlannedPath({
 }
 
 /** A dub's progress in seven dots, for lists: done, going, waiting, failed. */
-export function MiniPath({ job }: { job: Pick<JobSummary, "status" | "step" | "config"> }) {
+export function MiniPath({
+  job,
+}: {
+  job: Pick<JobSummary, "status" | "step" | "config" | "cancelled">;
+}) {
   const steps = Array.from({ length: 7 }, (_, i) => i + 1);
   const at = Math.max(job.step, 0);
   return (
@@ -82,22 +86,26 @@ export function MiniPath({ job }: { job: Pick<JobSummary, "status" | "step" | "c
         const current =
           (job.status === "running" && n === at) || (job.status === "review" && n === 6);
         const failed = job.status === "failed" && n === Math.max(at, 1);
+        // Stopped by the user: where it stopped, not a failure.
+        const stopped = failed && !!job.cancelled;
         return (
           <span
             key={n}
             className={cn(
               "size-1.5 rounded-full",
-              failed
-                ? "bg-danger"
-                : current
-                  ? job.status === "review"
-                    ? "bg-warning"
-                    : "animate-pulse bg-primary"
-                  : done
-                    ? "bg-primary"
-                    : skipped
-                      ? "border border-dashed border-border-strong"
-                      : "bg-border-strong/50",
+              stopped
+                ? "bg-muted-foreground"
+                : failed
+                  ? "bg-danger"
+                  : current
+                    ? job.status === "review"
+                      ? "bg-warning"
+                      : "animate-pulse bg-primary"
+                    : done
+                      ? "bg-primary"
+                      : skipped
+                        ? "border border-dashed border-border-strong"
+                        : "bg-border-strong/50",
             )}
           />
         );

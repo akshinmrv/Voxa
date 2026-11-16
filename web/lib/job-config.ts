@@ -69,3 +69,29 @@ export function configFor(
     preview,
   };
 }
+
+/** Where the Studio keeps its choices for the session (sessionStorage). */
+export const STUDIO_CHOICE_KEY = "voxa.studio";
+
+/**
+ * A finished (or failed) dub's settings as the Studio's choices, to start another from: the
+ * same engines and voice, the same language (to change), the videos to choose again.
+ */
+export function choiceFromJob(config: JobConfig): ConfigChoice {
+  return {
+    targetLangs: [config.targetLang],
+    translator: config.translator,
+    tts: config.tts,
+    whisperModel: config.whisperModel,
+    edgeVoices: config.edgeVoice ? { [config.targetLang]: config.edgeVoice } : {},
+    voiceSample: config.voiceSample,
+    openaiTtsModel: config.openaiTtsModel,
+    openaiVoice: config.openaiVoice,
+    diarize: config.diarize,
+    numSpeakers: config.numSpeakers,
+    separate: config.separate,
+    review: config.review,
+    subtitlesOnly: config.subtitlesOnly,
+    subtitlesInVideo: config.subtitlesInVideo,
+  };
+}

@@ -47,7 +47,7 @@ export function RecentDubs() {
               <span className="hidden md:block">
                 <MiniPath job={job} />
               </span>
-              <StatusBadge status={job.status} />
+              <StatusBadge status={job.status} cancelled={job.cancelled} />
             </Link>
           </li>
         ))}

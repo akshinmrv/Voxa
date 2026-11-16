@@ -13,7 +13,13 @@ import {
   Copy as Clone,
 } from "lucide-react";
 import { createJob, getKeys, getOptions, getSettings, uploadVideo } from "@/lib/api";
-import { configFor, effectiveConfig, KEYED_TRANSLATORS, type ConfigChoice } from "@/lib/job-config";
+import {
+  configFor,
+  effectiveConfig,
+  KEYED_TRANSLATORS,
+  STUDIO_CHOICE_KEY,
+  type ConfigChoice,
+} from "@/lib/job-config";
 import { keyLabel } from "@/lib/shortcuts";
 import { Link, useRouter } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +47,7 @@ import { RecentDubs } from "./recent-dubs";
 /** How much of the video a preview dubs, from its start. */
 const PREVIEW_SECONDS = 20;
 /** The choices outlive a visit to another page (not the files: a browser can't keep those). */
-const KEPT = "voxa.studio";
+const KEPT = STUDIO_CHOICE_KEY;
 
 function readKept(): ConfigChoice {
   try {

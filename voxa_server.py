@@ -251,6 +251,14 @@ class Job:
     created_at: float = field(default_factory=time.time)
     # The lines this job translated (or was given), kept with the job: see keep_translation.
     translation_file: Optional[Path] = None
+    # When its last run started and ended (epoch seconds; None until it does).
+    started_at: Optional[float] = None
+    finished_at: Optional[float] = None
+    # Stopped from the console (POST /cancel), not failed on its own.
+    cancelled: bool = False
+    # The run going on now, to stop it: its task and its voxa process. Never saved.
+    task: Optional[asyncio.Task] = field(default=None, repr=False, compare=False)
+    process: Optional[object] = field(default=None, repr=False, compare=False)
 
     def summary(self) -> dict:
         return {
@@ -264,7 +272,22 @@ class Job:
             "hasSrt": bool(self.result_srt and self.result_srt.exists()),
             "hasTranslation": bool(self.translation_file and self.translation_file.exists()),
             "error": self.error,
+            "createdAt": self.created_at,
+            "startedAt": self.started_at,
+            "finishedAt": self.finished_at,
+            "queuePosition": queue_position(self),
+            "cancelled": self.cancelled,
         }
+
+
+def queue_position(job: "Job") -> Optional[int]:
+    """Where a queued job stands: 1 is next. Jobs leave the queue about in the order they were
+    made (a second dub of the same video also waits for the first), so this is the order the
+    console shows; None for a job that isn't queued."""
+    if job.status != "queued":
+        return None
+    return 1 + sum(1 for other in JOBS.values()
+                   if other.status == "queued" and other.created_at < job.created_at)
 
 
 UPLOADS: Dict[str, Path] = {}
@@ -322,6 +345,9 @@ def save_job(job: Job) -> None:
         "resultSrt": _stored_path(job.result_srt),
         "translationFile": _stored_path(job.translation_file),
         "createdAt": job.created_at,
+        "startedAt": job.started_at,
+        "finishedAt": job.finished_at,
+        "cancelled": job.cancelled,
         "events": job.events[-HISTORY_EVENTS:],
     }
     folder = _history_dir()
@@ -358,7 +384,9 @@ def load_history() -> int:
                       result_video=_loaded_path(rec.get("resultVideo")),
                       result_srt=_loaded_path(rec.get("resultSrt")),
                       error=rec.get("error"), created_at=rec.get("createdAt") or 0,
-                      translation_file=_loaded_path(rec.get("translationFile")))
+                      translation_file=_loaded_path(rec.get("translationFile")),
+                      started_at=rec.get("startedAt"), finished_at=rec.get("finishedAt"),
+                      cancelled=bool(rec.get("cancelled")))
         except (KeyError, TypeError, ValueError):
             continue
         if job.id in JOBS:
@@ -511,10 +539,105 @@ async def _job_gate(job: Job):
                 slots.notify_all()
 
 
+CANCELLED = "Stopped before it finished."
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+
+def terminal_line(text: str) -> str:
+    """A log line as a terminal would have left it. A progress bar (tqdm: Whisper's model
+    download, Demucs) redraws itself on one line with carriage returns, so the pipe carries
+    every state of it run together; only the last one means anything. Colour and cursor codes
+    go too."""
+    text = _ANSI.sub("", text)
+    if "\r" not in text:
+        return text
+    states = [part for part in text.split("\r") if part.strip()]
+    return states[-1] if states else ""
+
+
+def kill_tree(pid: int, wait: float = 5.0) -> None:
+    """End a process and every process under it: voxa, its ffmpeg, an engine's worker. On
+    Windows taskkill does the whole tree; elsewhere the tree is read from ps (Linux and macOS
+    both have it), and the processes are asked to end, then made to."""
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True,
+                       timeout=60, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return
+    try:
+        listing = subprocess.run(["ps", "-A", "-o", "pid=,ppid="], capture_output=True,
+                                 text=True, timeout=30).stdout
+    except (OSError, subprocess.SubprocessError):
+        listing = ""
+    children: Dict[int, List[int]] = {}
+    for row in listing.splitlines():
+        parts = row.split()
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            children.setdefault(int(parts[1]), []).append(int(parts[0]))
+    tree, todo = [], [pid]
+    while todo:
+        current = todo.pop()
+        tree.append(current)
+        todo.extend(children.get(current, []))
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        for each in tree:
+            try:
+                os.kill(each, sig)
+            except (ProcessLookupError, PermissionError):
+                pass
+        deadline = time.time() + wait
+        while sig == signal.SIGTERM and time.time() < deadline:
+            if not any(_alive(each) for each in tree):
+                return
+            time.sleep(0.1)
+
+
+def _alive(pid: int) -> bool:
+    # Not waitpid: the voxa process is asyncio's child, and reaping it here would take its
+    # exit status from asyncio. An ended child not reaped yet counts as alive a moment longer.
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _start_job(job: Job) -> None:
+    """Run the job in the background, keeping its task so it can be stopped."""
+    job.task = asyncio.create_task(_run_job(job))
+
+
 async def _run_job(job: Job) -> None:
+    """Run one dubbing job, as _run_steps says. Stopped from the console (POST /cancel), its
+    voxa process and everything under it are ended and it is marked stopped; cancelled any
+    other way (the server shutting down) the cancellation goes on, and the next start shows
+    the dub interrupted."""
+    try:
+        await _run_steps(job)
+    except asyncio.CancelledError:
+        if not job.cancelled:
+            raise
+        proc = job.process
+        if proc is not None and getattr(proc, "returncode", None) is None and \
+                getattr(proc, "pid", None):
+            await asyncio.to_thread(kill_tree, proc.pid)
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=15)
+            except (asyncio.TimeoutError, Exception):
+                pass
+        job.status, job.error, job.finished_at = "failed", CANCELLED, time.time()
+        await _emit(job, {"type": "status", "status": "failed", "error": CANCELLED})
+        save_job(job)
+    finally:
+        job.task = job.process = None
+
+
+async def _run_steps(job: Job) -> None:
     """Run one dubbing job as a subprocess and stream its [N/7] progress."""
     async with _job_gate(job):
         job.status = "running"
+        job.started_at, job.finished_at = time.time(), None
         await _emit(job, {"type": "status", "status": "running"})
         save_job(job)
 
@@ -584,15 +707,17 @@ async def _run_job(job: Job) -> None:
         except OSError as exc:
             job.status = "failed"
             job.error = f"Failed to launch voxa: {exc}"
+            job.finished_at = time.time()
             await _emit(job, {"type": "status", "status": "failed", "error": job.error})
             save_job(job)
             return
+        job.process = proc
 
         assert proc.stdout is not None
         last_error = ""
         async for raw in proc.stdout:
-            line = raw.decode("utf-8", errors="replace").rstrip()
-            if not line:
+            line = terminal_line(raw.decode("utf-8", errors="replace").rstrip())
+            if not line.strip():
                 continue
             # Remember the most recent error so a failed job can show WHY.
             reason = error_from_log_line(line)
@@ -640,6 +765,7 @@ async def _run_job(job: Job) -> None:
             job.status = "failed"
             job.error = last_error or f"voxa exited with code {code}"
             await _emit(job, {"type": "status", "status": "failed", "error": job.error})
+        job.finished_at = time.time()
         save_job(job)
 
 
@@ -1501,7 +1627,7 @@ async def create_job(body: CreateJobModel) -> dict:
 
     JOBS[job_id] = job
     save_job(job)
-    asyncio.create_task(_run_job(job))
+    _start_job(job)
     return {"jobId": job_id}
 
 
@@ -1668,7 +1794,7 @@ async def dub_whole_video(job_id: str) -> dict:
                 work_dir=job.work_dir, source_url=job.source_url)
     JOBS[whole.id] = whole
     save_job(whole)
-    asyncio.create_task(_run_job(whole))
+    _start_job(whole)
     return {"jobId": whole.id}
 
 
@@ -1681,10 +1807,72 @@ async def voice_job(job_id: str) -> dict:
         raise HTTPException(status_code=409, detail="This job is already running.")
     _kept_lines(job)
     job.status, job.error, job.step = "queued", None, 0
+    job.started_at = job.finished_at = None
+    job.cancelled = False
     await _emit(job, {"type": "status", "status": "queued"})
     save_job(job)
-    asyncio.create_task(_run_job(job))
+    _start_job(job)
     return job.summary()
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str) -> dict:
+    """Stop a dub that is queued or running. Its voxa process ends with everything it started
+    (ffmpeg, an engine's worker), and the dub shows as stopped. What it finished stays in the
+    video's work dir, so dubbing the same video again picks up from there."""
+    job = _job_or_404(job_id)
+    if job.status not in ("queued", "running"):
+        raise HTTPException(status_code=409,
+                            detail="This dub isn't going, so there's nothing to stop.")
+    job.cancelled = True
+    task = job.task
+    if task is not None and not task.done():
+        task.cancel()
+        await asyncio.wait({task}, timeout=60)
+    else:                       # a job without a run in this server: just say it's stopped
+        job.status, job.error, job.finished_at = "failed", CANCELLED, time.time()
+        await _emit(job, {"type": "status", "status": "failed", "error": CANCELLED})
+        save_job(job)
+    return job.summary()
+
+
+def _same_file(a: Optional[Path], b: Optional[Path]) -> bool:
+    try:
+        return bool(a and b and a.resolve() == b.resolve())
+    except OSError:
+        return False
+
+
+@app.delete("/api/jobs/{job_id}")
+async def delete_job(job_id: str, files: bool = False) -> dict:
+    """Take a dub off the list: its record and the lines it kept go. With files=true its video
+    and subtitles go too, unless another dub on the list made the same files (the same video
+    into the same language again). The video's work dir stays: other dubs of it reuse what it
+    holds, its transcription first."""
+    job = _job_or_404(job_id)
+    if job.status in ("queued", "running"):
+        raise HTTPException(status_code=409, detail="Stop the dub before removing it.")
+    removed = []
+    if files:
+        others = [j for j in JOBS.values() if j is not job]
+        for path in (job.result_video, job.result_srt):
+            if not path or not path.exists() or any(
+                    _same_file(path, o.result_video) or _same_file(path, o.result_srt)
+                    for o in others):
+                continue
+            try:
+                path.unlink()
+                removed.append(path.name)
+            except OSError:
+                pass
+    for path in (job.translation_file, _history_dir() / f"{job.id}.json"):
+        try:
+            if path:
+                path.unlink(missing_ok=True)
+        except OSError:
+            pass
+    JOBS.pop(job_id, None)
+    return {"deleted": job_id, "removedFiles": removed}
 
 
 def _result(job_id: str, kind: str) -> FileResponse:

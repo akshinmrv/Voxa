@@ -55,6 +55,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     for review.
   - **Keys and memory.** Ctrl+Enter starts it, Ctrl+O chooses videos. The choices stay when
     you leave the page and come back, and the last five dubs are listed under it.
+- **Stop a dub.** A queued or running dub can be stopped from its page. Its voxa process ends
+  with everything it started (ffmpeg, an engine's worker): `taskkill /T` on Windows, the tree
+  `ps` lists elsewhere. It shows as stopped, not failed. What it finished stays, so dubbing the
+  same video again picks up from there. Through the API: `POST /api/jobs/{id}/cancel`. The
+  server shutting down doesn't count as a stop: the next start shows such a dub interrupted, as
+  before.
+- **Remove a dub from the list**, with its video and subtitles if you tick the box (unticked by
+  default). Files that another dub on the list made too are kept. So is the video's work dir,
+  whose transcription the video's other dubs reuse. Through the API:
+  `DELETE /api/jobs/{id}?files=true|false`.
+- **When and where in the queue.** A dub now says when it was made, when its run started and
+  ended, and, while queued, how many are before it. In the API these are `createdAt`,
+  `startedAt`, `finishedAt`, `queuePosition` and `cancelled`, kept in its history record.
+- **A dub's page, redone.**
+  - **While it runs:** its seven steps along a line (done, going, waiting for review, failed or
+    stopped), the step and time so far, and the log.
+  - **The log:** each line's time apart from what it says, warnings and errors in colour and
+    findable on their own, following the end unless you scroll up to read, and copied whole with
+    one click.
+  - **When it's done:** the result (player, files to save, the settings it ran with and how
+    long it took), its lines and its log as tabs.
+  - **When it fails:** the reason first, and a way to start another dub with the same settings
+    in the Studio.
 
 ### Changed
 
@@ -81,6 +104,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A progress bar no longer turns a dub's log into one long line.** A Whisper model
+  downloading, or Demucs, redraws its bar with carriage returns. The log got every state of it
+  run together, and colour codes with it. Now each bar leaves only its last state.
 - **Language names in the Azerbaijani console.** The browser has no Azerbaijani names for
   languages and gave codes ("Ru", "Tr"); the console now names its twelve itself in all three.
   A dub's steps in Azerbaijani were partly untranslated ("Denoise") and are now all in

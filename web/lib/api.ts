@@ -62,6 +62,21 @@ export async function getJob(id: string): Promise<JobSummary> {
   return asJson(await fetch(`${API_BASE}/api/jobs/${id}`));
 }
 
+/** Stop a queued or running dub (it ends as failed, `cancelled`). */
+export async function cancelJob(id: string): Promise<JobSummary> {
+  return asJson(await fetch(`${API_BASE}/api/jobs/${id}/cancel`, { method: "POST" }));
+}
+
+/** Take a dub off the list; with `files`, its video and subtitles go too. */
+export async function deleteJob(
+  id: string,
+  files: boolean,
+): Promise<{ deleted: string; removedFiles: string[] }> {
+  return asJson(
+    await fetch(`${API_BASE}/api/jobs/${id}?files=${files}`, { method: "DELETE" }),
+  );
+}
+
 export async function listJobs(): Promise<{ jobs: JobSummary[] }> {
   return asJson(await fetch(`${API_BASE}/api/jobs`));
 }
