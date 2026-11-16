@@ -2,7 +2,16 @@
 // command palette all read this, so a shortcut can't be shown that doesn't work, or work
 // unlisted (VOXA_DESIGN_PLAN.md §6.8).
 
-export type ShortcutId = "palette" | "newDub" | "settings" | "sidebar" | "goTo" | "help" | "close";
+export type ShortcutId =
+  | "palette"
+  | "newDub"
+  | "settings"
+  | "sidebar"
+  | "goTo"
+  | "help"
+  | "close"
+  | "openFile"
+  | "run";
 
 export type Shortcut = {
   id: ShortcutId;
@@ -20,6 +29,9 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "sidebar", keys: ["Mod", "B"] },
   { id: "help", keys: ["?"] },
   { id: "close", keys: ["Esc"] },
+  // The Studio page's own (components/studio/composer.tsx handles them).
+  { id: "openFile", keys: ["Mod", "O"] },
+  { id: "run", keys: ["Mod", "Enter"] },
 ];
 
 export function isMac(): boolean {

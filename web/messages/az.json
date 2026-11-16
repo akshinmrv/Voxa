@@ -265,7 +265,9 @@
         "settings": "Ayarlar",
         "sidebar": "Yan paneli yığ və ya aç",
         "help": "Bu siyahı",
-        "close": "Dialoqu və ya menyunu bağla"
+        "close": "Dialoqu və ya menyunu bağla",
+        "openFile": "Video seç (Studio)",
+        "run": "Dublyaja başla (Studio)"
       },
       "status": {
         "label": "Vəziyyət",
@@ -293,6 +295,71 @@
         "selectAll": "Hamısını seç"
       }
     },
+    "studio": {
+      "sectionSource": "Mənbə",
+      "sectionTarget": "Hədəf",
+      "sectionTranslation": "Tərcümə",
+      "sectionVoice": "Səs",
+      "sectionMore": "Əlavə",
+      "languages": "Dillər",
+      "languagesHint": "Bir və ya bir neçə: hər dil ayrıca dublyajdır, transkripsiyanı isə paylaşırlar.",
+      "translators": {
+        "google": "Pulsuz və tez, açarsız",
+        "ollama": "Bu kompüterdəki model, tam oflayn",
+        "openai": "Konteksti oxuyur; API açarı lazımdır",
+        "anthropic": "Konteksti oxuyur; API açarı lazımdır",
+        "openrouter": "Bir açarla çox model"
+      },
+      "engines": {
+        "edge": "Microsoft-un təbii səsləri, onlayn və pulsuz",
+        "piper": "Bu kompüterdə, oflayn",
+        "openai": "OpenAI-ın səsləri; API açarı lazımdır",
+        "xtts": "Nümunədən səsi klonlayır",
+        "chatterbox": "Səsi klonlayır, 23 dil",
+        "voxcpm": "Səsi klonlayır, 30 dil; GPU üçündür"
+      },
+      "keySet": "Açar var",
+      "keyMissing": "API açarı lazımdır",
+      "clones": "Səsi klonlayır",
+      "addKey": "Açarı Ayarlarda əlavə edin",
+      "installIt": "Mühərriklər bölməsində quraşdırın",
+      "voiceFor": "{language} üçün səs",
+      "searchVoices": "Səs axtarın…",
+      "noVoices": "Uyğun səs yoxdur.",
+      "styles": "üslublar",
+      "summary": "Bu dublyaj",
+      "videos": "{count} video",
+      "dubs": "{count} dublyaj",
+      "plan": "Nə edəcək",
+      "skipped": "atlanır",
+      "separateStep": "Səsi musiqidən ayır",
+      "reviewStop": "Burada yoxlamanız üçün dayanır",
+      "needsLanguage": "Dil seçin.",
+      "needsKey": "{name} üçün API açarı lazımdır: Ayarlarda əlavə edin.",
+      "needsEngine": "{name} quraşdırılmayıb: Mühərriklər bölməsində quraşdırın.",
+      "starting": "Başladılır: {done} / {total}…",
+      "recent": "Son dublyajlar",
+      "allDubs": "Bütün dublyajlar",
+      "moreWhisper": "Whisper {model}",
+      "moreSpeakers": "danışanlar",
+      "moreBackground": "musiqi saxlanır",
+      "moreReview": "əvvəl yoxlama",
+      "moreSubtitles": "altyazı videoda",
+      "langNames": {
+        "ru": "Rus",
+        "tr": "Türk",
+        "az": "Azərbaycan",
+        "en": "İngilis",
+        "de": "Alman",
+        "fr": "Fransız",
+        "es": "İspan",
+        "it": "İtalyan",
+        "pt": "Portuqal",
+        "ar": "Ərəb",
+        "zh": "Çin",
+        "ja": "Yapon"
+      }
+    },
     "newJob": {
       "reviewToggleSubtitles": "Altyazı hazırlanmazdan əvvəl tərcüməni yoxla",
       "reviewHintSubtitles": "Sətirlər tərcümə olunanda dayanır ki, onları əvvəlcə yoxlayıb dəyişə biləsiniz.",
@@ -309,7 +376,7 @@
       "title": "Studio",
       "subtitle": "Video yüklə, mühərrikləri seç və dublyaja başla.",
       "uploadTitle": "Videoları buraxın və ya klikləyib seçin",
-      "uploadHint": "MP4, MOV, MKV və ya WebM — bir neçəsini seçsəniz hər biri üçün ayrıca iş yaranır",
+      "uploadHint": "MP4, MOV, MKV və ya WebM; bir neçəsini seçsəniz, hər biri ayrıca dublyaj olur",
       "selectedFile": "Seçilmiş fayl",
       "selectedFiles": "{count} video seçildi",
       "addMore": "Daha əlavə et",
@@ -512,13 +579,13 @@
       "failed": "Bu iş uğursuz oldu. Aşağıdakı loqlara baxın.",
       "connecting": "İşə qoşulur…",
       "steps": [
-        "Audio çıxarış",
-        "Denoise",
-        "Transkripsiya",
+        "Səsi çıxar",
+        "Səsi təmizlə",
+        "Mətnə çevir",
         "Cümlələri birləşdir",
-        "Tərcümə",
-        "Sintez",
-        "Montaj"
+        "Tərcümə et",
+        "Səsləndir",
+        "Videonu yığ"
       ]
     },
     "update": {

@@ -1,20 +1,12 @@
-import { getTranslations, setRequestLocale } from "next-intl/server";
-import { AppPageHeader } from "@/components/app/app-page-header";
-import { NewJobFlow } from "@/components/app/new-job-flow";
+import { setRequestLocale } from "next-intl/server";
+import { Composer } from "@/components/studio/composer";
 
-export default async function NewJobPage({
+export default async function StudioPage({
   params,
 }: {
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
-  const t = await getTranslations("App.newJob");
-
-  return (
-    <>
-      <AppPageHeader subtitle={t("subtitle")} />
-      <NewJobFlow />
-    </>
-  );
+  return <Composer />;
 }

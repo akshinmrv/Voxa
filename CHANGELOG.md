@@ -39,6 +39,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Shortcuts.** `?` lists the shortcuts. In Voxa Studio's window Ctrl+N and Ctrl+1…4 work
     too; a browser keeps those for itself.
   - **System theme.** Settings offers it beside Dark and Light.
+- **The Studio: a dub put together top to bottom.** It replaces the one long form of New job.
+  - **Source and target.** The videos come first, each with its length read in the page. Then
+    the target: one or **several languages at once**, a dub each from a single upload. The
+    second language reuses the first one's transcription.
+  - **Engines as cards.** Translators and speech engines are cards that tell themselves apart:
+    offline, needs a key (or has one), clones a voice. An engine that isn't installed can't be
+    chosen and links to Engines. A translator without its key holds the dub back, and says to
+    add the key in Settings.
+  - **Voices.** A voice per language, found by typing and heard before it's chosen.
+  - **More.** The rest (Whisper, speakers, background, subtitles in the video, review) sits
+    under More, summed up in a line while it is closed.
+  - **Summary.** Beside it, the dub's sources, languages and engines, and its seven steps as
+    they will run: speaking and assembling skipped for subtitles only, a stop after translating
+    for review.
+  - **Keys and memory.** Ctrl+Enter starts it, Ctrl+O chooses videos. The choices stay when
+    you leave the page and come back, and the last five dubs are listed under it.
 
 ### Changed
 
@@ -65,6 +81,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Language names in the Azerbaijani console.** The browser has no Azerbaijani names for
+  languages and gave codes ("Ru", "Tr"); the console now names its twelve itself in all three.
+  A dub's steps in Azerbaijani were partly untranslated ("Denoise") and are now all in
+  Azerbaijani.
 - **The sidebar never marked the first page (New job, now Studio) as the current one** in the
   console Voxa ships. That console is exported with a slash at the end of each address (`/app/`),
   and the match wanted `/app` exactly.
