@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ("Sizes of tensors must match"), whatever the engine. It now reads the window asked for.
   Checked on a two-speaker dialogue: each of its six lines went to the right speaker, and each
   spoke with the voice the console was given for them.
+- **The console names a line's speaker as its voices do.** The review editor's voices said
+  "Speaker 1" and "Speaker 2", its lines pyannote's `SPEAKER_01` and `SPEAKER_00`, whose numbers
+  needn't follow the order they speak in. The lines now say "Speaker 1" too (the id is in the
+  tooltip).
 
 ## [1.17.0] - 2026-11-16
 

@@ -77,6 +77,9 @@ export function TranslationEditor({
     if (line.speaker && !speakers.some(([s]) => s === line.speaker))
       speakers.push([line.speaker, tidy(texts[i])]);
   });
+  // A line names its speaker as the voices above do ("Speaker 2"), not by pyannote's id
+  // (SPEAKER_00), whose numbers needn't follow the order they speak in.
+  const speakerNumber = new Map(speakers.map(([speaker], n) => [speaker, n + 1]));
   const savedVoice = ownVoice(config, library);
   const savedSpeakers = config.speakerVoices ?? {};
   const chosenVoice = voiceDraft === undefined ? savedVoice : voiceDraft;
@@ -190,7 +193,11 @@ export function TranslationEditor({
                   <span className="tabular-nums">
                     {clock(line.start)}–{clock(line.end)}
                   </span>
-                  {line.speaker && <Badge variant="neutral">{line.speaker}</Badge>}
+                  {line.speaker && (
+                    <Badge variant="neutral" title={line.speaker}>
+                      {t("speaker", { n: speakerNumber.get(line.speaker) ?? 1 })}
+                    </Badge>
+                  )}
                 </div>
                 <div className="min-w-0 space-y-1.5">
                   {line.source && (
