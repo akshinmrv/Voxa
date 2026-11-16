@@ -11,7 +11,11 @@ export type ShortcutId =
   | "help"
   | "close"
   | "openFile"
-  | "run";
+  | "run"
+  | "nextLine"
+  | "playLine"
+  | "toggleSource"
+  | "save";
 
 export type Shortcut = {
   id: ShortcutId;
@@ -32,6 +36,11 @@ export const SHORTCUTS: Shortcut[] = [
   // The Studio page's own (components/studio/composer.tsx handles them).
   { id: "openFile", keys: ["Mod", "O"] },
   { id: "run", keys: ["Mod", "Enter"] },
+  // A dub's lines (components/workspace/lines-view.tsx handles them).
+  { id: "nextLine", keys: ["Alt", "↑↓"] },
+  { id: "playLine", keys: ["Alt", "P"] },
+  { id: "toggleSource", keys: ["Alt", "O"] },
+  { id: "save", keys: ["Mod", "S"] },
 ];
 
 export function isMac(): boolean {

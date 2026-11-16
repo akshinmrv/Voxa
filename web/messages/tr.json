@@ -267,7 +267,11 @@
         "help": "Bu liste",
         "close": "İletişim kutusunu veya menüyü kapat",
         "openFile": "Video seç (Stüdyo)",
-        "run": "Dublajı başlat (Stüdyo)"
+        "run": "Dublajı başlat (Stüdyo)",
+        "nextLine": "Önceki veya sonraki satır (satırlar)",
+        "playLine": "Satırı çal (satırlar)",
+        "toggleSource": "Orijinal veya dublaj (satırlar)",
+        "save": "Satırları kaydet"
       },
       "status": {
         "label": "Durum",
@@ -657,6 +661,27 @@
       "saved": "Kaydedildi",
       "unsaved": "{count} satır değişti, henüz kaydedilmedi",
       "nothingToSay": "En az bir satırda söylenecek bir şey olmalı."
+    },
+    "lines": {
+      "filterAll": "Tümü",
+      "filterLong": "Uzun",
+      "filterChanged": "Değişen",
+      "filterEmpty": "Boş",
+      "search": "Satırlarda ara…",
+      "count": "{total} satırdan {shown}",
+      "noMatch": "Eşleşen satır yok.",
+      "play": "Bu satırı çal",
+      "original": "Orijinal",
+      "dub": "Dublaj",
+      "noVideo": "Video artık klasöründe değil, çalınacak bir şey yok.",
+      "timeline": "Zaman çizelgesi",
+      "revert": "Değişiklikleri geri al",
+      "leaveTitle": "Kaydetmeden çıkılsın mı?",
+      "leaveBody": "Değişen {count} satır kaydedilmedi ve kaybolacak.",
+      "leave": "Çık",
+      "stay": "Kal",
+      "captions": "Satırlar şimdiki haliyle",
+      "keys": "Alt+↑↓ satır · Alt+P çal · Alt+O orijinal/dublaj · Ctrl+S kaydet"
     },
     "voices": {
       "title": "Sesler",

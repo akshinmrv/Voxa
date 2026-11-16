@@ -228,6 +228,9 @@ export async function removeEngine(id: string): Promise<InstallableEngine> {
 }
 
 export const jobEventsUrl = (id: string) => `${API_BASE}/api/jobs/${id}/events`;
+/** The original video, to play beside the dub or under the lines being checked. */
+export const sourceVideoUrl = (id: string) => `${API_BASE}/api/jobs/${id}/source`;
+
 export const resultVideoUrl = (id: string) =>
   `${API_BASE}/api/jobs/${id}/result/video`;
 /** The subtitles as WebVTT, for the browser's video player. */

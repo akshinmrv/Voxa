@@ -267,7 +267,11 @@
         "help": "Bu siyahı",
         "close": "Dialoqu və ya menyunu bağla",
         "openFile": "Video seç (Studio)",
-        "run": "Dublyaja başla (Studio)"
+        "run": "Dublyaja başla (Studio)",
+        "nextLine": "Əvvəlki və ya növbəti sətir (sətirlər)",
+        "playLine": "Sətri oynat (sətirlər)",
+        "toggleSource": "Orijinal və ya dublyaj (sətirlər)",
+        "save": "Sətirləri yadda saxla"
       },
       "status": {
         "label": "Vəziyyət",
@@ -657,6 +661,27 @@
       "saved": "Saxlanıldı",
       "unsaved": "{count} sətir dəyişib, hələ saxlanılmayıb",
       "nothingToSay": "Ən azı bir sətirdə deyiləcək söz olmalıdır."
+    },
+    "lines": {
+      "filterAll": "Hamısı",
+      "filterLong": "Uzun",
+      "filterChanged": "Dəyişmiş",
+      "filterEmpty": "Boş",
+      "search": "Sətirlərdə axtar…",
+      "count": "{total} sətirdən {shown}",
+      "noMatch": "Uyğun sətir yoxdur.",
+      "play": "Bu sətri oynat",
+      "original": "Orijinal",
+      "dub": "Dublyaj",
+      "noVideo": "Video artıq öz qovluğunda deyil, ona görə oynadılacaq bir şey yoxdur.",
+      "timeline": "Zaman xətti",
+      "revert": "Dəyişiklikləri geri al",
+      "leaveTitle": "Yadda saxlamadan çıxılsın?",
+      "leaveBody": "Dəyişmiş {count} sətir yadda saxlanmayıb və itəcək.",
+      "leave": "Çıx",
+      "stay": "Qal",
+      "captions": "Sətirlər indiki halı ilə",
+      "keys": "Alt+↑↓ sətir · Alt+P oynat · Alt+O orijinal/dublyaj · Ctrl+S saxla"
     },
     "voices": {
       "title": "Səslər",

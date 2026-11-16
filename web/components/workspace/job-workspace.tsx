@@ -50,12 +50,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusBadge } from "@/components/app/status-badge";
-import { TranslationEditor } from "@/components/app/translation-editor";
 import { BackendError, Loading } from "@/components/app/query-states";
 import { formatDuration } from "@/components/studio/source-picker";
 import { usePlannedSteps } from "@/components/studio/signal-path";
 import { LivePath } from "./live-path";
 import { LogPanel } from "./log-panel";
+import { LinesView } from "./lines-view";
 
 const MAX_LOGS = 2000;
 
@@ -430,7 +430,14 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
   );
 
   const editor = canEdit && (
-    <TranslationEditor jobId={jobId} status={status} config={config} onVoice={followVoicing} />
+    <LinesView
+      jobId={jobId}
+      status={status}
+      config={config}
+      hasDub={hasVideo}
+      hasSource={!!job.hasSource}
+      onVoice={followVoicing}
+    />
   );
 
   // Going, or waiting for review: one page, nothing to switch between. Done or failed: tabs.
@@ -459,7 +466,12 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
         {result}
         {progress}
       </TabsContent>
-      {canEdit && <TabsContent value="lines">{editor}</TabsContent>}
+      {/* Kept mounted while another tab shows, so what was typed into the lines stays. */}
+      {canEdit && (
+        <TabsContent value="lines" forceMount className="data-[state=inactive]:hidden">
+          {editor}
+        </TabsContent>
+      )}
       <TabsContent value="log">{log}</TabsContent>
     </Tabs>
   );

@@ -82,6 +82,7 @@ export function VoiceChoice({
   value,
   onChange,
   autoLabel,
+  disabled,
 }: {
   id: string;
   engine: string;
@@ -89,6 +90,8 @@ export function VoiceChoice({
   value: string | null | undefined;
   onChange: (voice: string | null) => void;
   autoLabel: string;
+  /** Can't be changed now (the job is being voiced). */
+  disabled?: boolean;
 }) {
   const t = useTranslations("App.voices");
   const ts = useTranslations("App.studio");
@@ -109,7 +112,7 @@ export function VoiceChoice({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           id={id}
-          disabled={query.isPending}
+          disabled={disabled || query.isPending}
           className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-sm border border-input bg-surface-1 px-3 text-left text-ui-body transition-colors duration-(--dur-1) hover:border-border-strong disabled:opacity-50"
         >
           {query.isPending ? (

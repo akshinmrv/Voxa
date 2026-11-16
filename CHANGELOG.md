@@ -78,6 +78,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     long it took), its lines and its log as tabs.
   - **When it fails:** the reason first, and a way to start another dub with the same settings
     in the Studio.
+- **A dub's lines, anchored to its video.**
+  - **Layout.** The lines sit beside the video, with a timeline over both. Playing marks the
+    line being spoken and keeps it in view. A line's time, or its block on the timeline, takes
+    the video there, and ▶ (Alt+P) plays just that line and stops at its end.
+  - **Original and dub.** The dub and the original switch at the same moment (Alt+O). Before a
+    dub is voiced, the original plays with the lines as they read now as its subtitles, edits
+    and all.
+  - **Each line** shows how its length sits in its time: under the budget, over it (spoken
+    faster) or silent. Speakers are told apart by colour and by number.
+  - **Finding lines.** Lines are filtered (too long, changed, empty, one speaker's) and
+    searched.
+  - **Keys:** Alt+↑/↓ moves between them, Ctrl+S saves, Ctrl+Enter voices. Changes not saved
+    are counted and can be undone.
+  - **Leaving.** Leaving the page with changes not saved asks first.
+  - **Long dubs.** Only the lines in view are drawn: 400 lines scroll to the end in about 70 ms.
+    This uses @tanstack/react-virtual 3.14.25, MIT, pinned.
+- **The original video for the console:** `GET /api/jobs/{id}/source`, served inline with
+  ranges so the player can seek, and `hasSource` in a job's summary. For a dub from a link,
+  it is the video yt-dlp fetched, told apart from what Voxa made.
 
 ### Changed
 

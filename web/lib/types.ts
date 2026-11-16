@@ -137,6 +137,8 @@ export type JobSummary = {
   hasSrt: boolean;
   /** The job keeps its translated lines, which can be changed and voiced (again). */
   hasTranslation?: boolean;
+  /** The original video is still in its folder (GET /api/jobs/{id}/source). */
+  hasSource?: boolean;
   error: string | null;
   /** Epoch seconds: made, and its last run started and ended (null until it does). */
   createdAt?: number;

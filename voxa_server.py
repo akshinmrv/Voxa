@@ -271,6 +271,7 @@ class Job:
             "hasVideo": bool(self.result_video and self.result_video.exists()),
             "hasSrt": bool(self.result_srt and self.result_srt.exists()),
             "hasTranslation": bool(self.translation_file and self.translation_file.exists()),
+            "hasSource": source_media(self) is not None,
             "error": self.error,
             "createdAt": self.created_at,
             "startedAt": self.started_at,
@@ -1873,6 +1874,37 @@ async def delete_job(job_id: str, files: bool = False) -> dict:
             pass
     JOBS.pop(job_id, None)
     return {"deleted": job_id, "removedFiles": removed}
+
+
+SOURCE_EXTS = {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi"}
+
+
+def source_media(job: Job) -> Optional[Path]:
+    """The video a job dubs, as it sits in its work dir: an upload under its own name; a link
+    under the name yt-dlp gave it, so the largest video there that Voxa didn't make (not a
+    dub, a subtitled copy or a preview's cut)."""
+    if not job.source_url:
+        path = job.work_dir / job.file_name
+        return path if path.is_file() else None
+    try:
+        found = [p for p in job.work_dir.iterdir()
+                 if p.is_file() and p.suffix.lower() in SOURCE_EXTS
+                 and "_dubbed_" not in p.name and "_subtitled_" not in p.name
+                 and not re.search(r"\.preview\d+s\.", p.name)]
+    except OSError:
+        return None
+    return max(found, key=lambda p: p.stat().st_size, default=None)
+
+
+@app.get("/api/jobs/{job_id}/source")
+async def job_source(job_id: str) -> FileResponse:
+    """The original video, for the console to play beside the dub or under the lines being
+    checked. Served inline, with ranges, so the player can seek."""
+    job = _job_or_404(job_id)
+    path = source_media(job)
+    if path is None:
+        raise HTTPException(status_code=404, detail="The video isn't in its folder any more.")
+    return FileResponse(str(path), filename=path.name, content_disposition_type="inline")
 
 
 def _result(job_id: str, kind: str) -> FileResponse:

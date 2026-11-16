@@ -267,7 +267,11 @@
         "help": "This list",
         "close": "Close a dialog or menu",
         "openFile": "Choose videos (Studio)",
-        "run": "Start the dub (Studio)"
+        "run": "Start the dub (Studio)",
+        "nextLine": "Previous or next line (the lines)",
+        "playLine": "Play the line (the lines)",
+        "toggleSource": "Original or dub (the lines)",
+        "save": "Save the lines"
       },
       "status": {
         "label": "Status",
@@ -657,6 +661,27 @@
       "saved": "Saved",
       "unsaved": "{count, plural, one {# line changed} other {# lines changed}}, not saved yet",
       "nothingToSay": "At least one line needs something to say."
+    },
+    "lines": {
+      "filterAll": "All",
+      "filterLong": "Too long",
+      "filterChanged": "Changed",
+      "filterEmpty": "Empty",
+      "search": "Search the lines…",
+      "count": "{shown} of {total} lines",
+      "noMatch": "No line matches.",
+      "play": "Play this line",
+      "original": "Original",
+      "dub": "Dub",
+      "noVideo": "The video isn't in its folder any more, so there's nothing to play.",
+      "timeline": "Timeline",
+      "revert": "Undo the changes",
+      "leaveTitle": "Leave without saving?",
+      "leaveBody": "{count, plural, one {# changed line isn't saved} other {# changed lines aren't saved}} and will be lost.",
+      "leave": "Leave",
+      "stay": "Stay",
+      "captions": "The lines as they read now",
+      "keys": "Alt+↑↓ line · Alt+P play · Alt+O original/dub · Ctrl+S save"
     },
     "voices": {
       "title": "Voices",
