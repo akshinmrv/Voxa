@@ -105,17 +105,25 @@ except ImportError:
     GoogleTranslator = None
     _MISSING_DEPS.append("deep-translator")
 class _NoProgress:
-    """Silent stand-in for tqdm: iterates what it wraps and accepts update()/close(), so both
-    `for x in tqdm(items)` and a manual `pbar = tqdm(total=n)` keep working without it."""
+    """Silent stand-in for tqdm: iterates what it wraps and accepts update()/close(), so
+    `for x in tqdm(items)`, a manual `pbar = tqdm(total=n)` and `with tqdm(total=n) as bar`
+    all keep working without it."""
 
     def __init__(self, iterable=None, **kwargs):
         self._iterable = iterable if iterable is not None else ()
+        self.n = 0
 
     def __iter__(self):
         return iter(self._iterable)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
     def update(self, n=1):
-        pass
+        self.n += n
 
     def close(self):
         pass

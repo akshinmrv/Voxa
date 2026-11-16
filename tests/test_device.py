@@ -279,12 +279,22 @@ def test_a_separation_that_fails_on_apples_gpu_runs_on_the_cpu(workers, monkeypa
                                                              tmp_path, caplog):
     monkeypatch.setattr(voxa, "run_ffmpeg", lambda *a, **kw: None)
     monkeypatch.setattr(voxa, "_free_ollama", lambda *a, **kw: None)
+    monkeypatch.setattr(voxa, "tqdm", voxa._NoProgress)      # as in CI, without tqdm
     with caplog.at_level(logging.WARNING):
         voxa.separate_audio(tmp_path / "v.mp4", tmp_path / "bg.wav", tmp_path / "sp.wav",
                             tmp_path, logging.getLogger("t"), device="mps")
     assert [e for e in workers if e[0] == "separate"] == [("separate", "demucs", "mps"),
                                                          ("separate", "demucs", "cpu")]
     assert "separating on the CPU instead" in caplog.text
+
+
+def test_the_progress_stand_in_works_as_tqdm_is_used():
+    # Without tqdm, a `with tqdm(total=100) as bar` must work as `for x in tqdm(...)` does.
+    with voxa._NoProgress(total=100, desc="x") as bar:
+        bar.update(40)
+        bar.update(100 - bar.n)
+    assert bar.n == 100
+    assert list(voxa._NoProgress([1, 2])) == [1, 2]
 
 
 # ── voxa doctor, and the console ─────────────────────────
