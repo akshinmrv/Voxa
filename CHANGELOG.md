@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-11-16
+
 ### Added
 
 - **Apple Silicon's GPU, experimentally (`--device mps`).** `--device auto|cpu|cuda|mps` says
@@ -783,7 +785,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.17.0...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.18.0...HEAD
+[1.18.0]: https://github.com/akshinmrv/Voxa/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/akshinmrv/Voxa/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/akshinmrv/Voxa/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/akshinmrv/Voxa/compare/v1.14.2...v1.15.0
