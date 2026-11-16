@@ -214,7 +214,11 @@
     "themeLabel": "Toggle theme",
     "copy": "Copy",
     "copied": "Copied",
-    "skipToContent": "Skip to content"
+    "skipToContent": "Skip to content",
+    "cancel": "Cancel",
+    "close": "Close",
+    "moreActions": "More actions",
+    "loading": "Loading…"
   },
   "App": {
     "nav": {

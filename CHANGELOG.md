@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The console's colors pass WCAG AA in both themes, and a check keeps them there.** The
+  faintest text (placeholders, some hints) was 3.9:1 on the dark panels and is now 5.5:1. In the
+  light theme, white on the cyan buttons was 4.1:1 and is now 5.9:1. The light theme's colored
+  badges (cyan, green, amber, red) were 2.6 to 3.8:1 and the dark theme's red one 4.3:1; all are
+  4.5:1 or better now. The dark theme's red delete button was 3.6:1 under its white text and is
+  now 4.6:1. The light theme's focus ring was 2.8:1 against white and is now 4.1:1. `npm run check:contrast`, run by CI, measures every text color on every surface in
+  both themes, and fails under 4.5:1 for text and 3:1 for focus rings and outlines.
+- **The groundwork for the desktop redesign** (design tokens and building blocks, nothing moved
+  yet):
+  - new surfaces, a speaker palette, motion timings and a denser type scale for the app;
+  - dialogs, menus, right-click menus, tooltips, tabs, switches, segmented controls and choice
+    cards, built on Radix, so focus and the keyboard work in them as in a desktop app;
+  - a loading state for buttons;
+  - the style guide (`/en/style-guide`), rebuilt into a catalogue of all of them in both themes
+    and three languages.
+
 ## [1.18.0] - 2026-11-16
 
 ### Added

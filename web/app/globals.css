@@ -34,26 +34,56 @@
   --muted-foreground: #a1a1aa; /* fg-muted */
   --accent: #18181b; /* shadcn "accent" = subtle hover surface (NOT brand) */
   --accent-foreground: #fafafa;
-  --fg-subtle: #71717a; /* tertiary text, placeholder */
+  /* tertiary text, placeholder. Was #71717a: 3.9:1 on surface-1, under AA for small text. */
+  --fg-subtle: #8a8a93;
 
-  /* Elevated surfaces (exposed for utilities: bg-surface-1 / bg-surface-2) */
+  /* Surfaces, deepest to highest (VOXA_DESIGN_PLAN.md §10.1):
+     surface-0 window chrome (sidebar, status bar, title bar) · surface-1 panels and cards ·
+     surface-2 hover and selected rows · surface-3 menus, popovers, dialogs */
+  --surface-0: #0d0d0f;
   --surface-1: #111113;
   --surface-2: #18181b;
+  --surface-3: #1f1f23;
 
-  /* Semantic — functional colors, kept separate from brand */
+  /* Semantic — functional colors, kept separate from brand.
+     `danger` is the one for text and icons; `destructive` fills a button under white text. */
   --success: #22c55e;
   --success-foreground: #04140a;
   --warning: #f59e0b;
   --warning-foreground: #1a1204;
-  --danger: #ef4444;
-  --destructive: #ef4444;
+  --danger: #f87171;
+  --destructive: #dc2626;
   --destructive-foreground: #fafafa;
   --info: #38bdf8;
 
-  /* Lines & focus */
+  /* Lines & focus. `border` only separates; `border-strong` outlines a control that is
+     known by its outline alone (a checkbox, a switch that is off), so it needs 3:1. */
   --border: #26262b;
+  --border-strong: #6b6b74;
   --input: #26262b;
   --ring: #38bdf8;
+
+  /* A selected item's background, tinted with the brand. */
+  --brand-tint: color-mix(in oklab, var(--brand) 14%, transparent);
+
+  /* Speakers of a diarized job. Apart from the semantic colors and the brand, each at least
+     6:1 on surface-1, and always shown with its "Speaker N" label: color is never the only cue. */
+  --sp-1: #a78bfa;
+  --sp-2: #f472b6;
+  --sp-3: #a3e635;
+  --sp-4: #818cf8;
+  --sp-5: #fb923c;
+  --sp-6: #2dd4bf;
+
+  /* Only menus, popovers and dialogs cast a shadow; everything else is told apart by its surface. */
+  --overlay-shadow: 0 12px 32px rgb(0 0 0 / 0.45);
+  --scrim: rgb(0 0 0 / 0.55);
+
+  /* Motion: hover · menus and tooltips · panels and dialogs · page-level, rare. */
+  --dur-1: 100ms;
+  --dur-2: 160ms;
+  --dur-3: 220ms;
+  --dur-4: 320ms;
 }
 
 .light {
@@ -64,9 +94,10 @@
   --popover: #ffffff;
   --popover-foreground: #0a0a0b;
 
-  --primary: #0284c7; /* darker cyan for contrast as a fill on light bg */
+  /* Darker cyan, so white text on it and it as text both pass AA (#0284c7 was 4.1:1). */
+  --primary: #0369a1;
   --primary-foreground: #ffffff;
-  --brand: #0284c7;
+  --brand: #0369a1;
   --brand-foreground: #ffffff;
 
   --secondary: #f4f4f5;
@@ -75,23 +106,38 @@
   --muted-foreground: #52525b;
   --accent: #f4f4f5;
   --accent-foreground: #18181b;
-  --fg-subtle: #71717a;
+  --fg-subtle: #67676f;
 
+  --surface-0: #f6f6f7;
   --surface-1: #fafafa;
   --surface-2: #f4f4f5;
+  --surface-3: #ffffff;
 
-  --success: #16a34a;
+  /* Dark enough to be read on a 15% tint of themselves, as a badge draws them. */
+  --success: #166534;
   --success-foreground: #ffffff;
-  --warning: #d97706;
+  --warning: #92400e;
   --warning-foreground: #ffffff;
-  --danger: #dc2626;
+  --danger: #b91c1c;
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
-  --info: #0284c7;
+  --info: #0369a1;
 
   --border: #e4e4e7;
+  --border-strong: #8a8a93;
   --input: #e4e4e7;
-  --ring: #0ea5e9;
+  /* A focus ring needs 3:1 against what it sits on; #0ea5e9 was 2.8:1 on white. */
+  --ring: #0284c7;
+
+  --overlay-shadow: 0 12px 32px rgb(24 24 27 / 0.14);
+  --scrim: rgb(9 9 11 / 0.4);
+
+  --sp-1: #7c3aed;
+  --sp-2: #be185d;
+  --sp-3: #4d7c0f;
+  --sp-4: #4f46e5;
+  --sp-5: #c2410c;
+  --sp-6: #0f766e;
 }
 
 /* Map tokens into Tailwind's theme (inline = utilities reference the live vars). */
@@ -117,8 +163,18 @@
   --color-ring: var(--ring);
 
   /* Voxa extras */
+  --color-surface-0: var(--surface-0);
   --color-surface-1: var(--surface-1);
   --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border-strong: var(--border-strong);
+  --color-brand-tint: var(--brand-tint);
+  --color-sp-1: var(--sp-1);
+  --color-sp-2: var(--sp-2);
+  --color-sp-3: var(--sp-3);
+  --color-sp-4: var(--sp-4);
+  --color-sp-5: var(--sp-5);
+  --color-sp-6: var(--sp-6);
   --color-fg-subtle: var(--fg-subtle);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
@@ -137,6 +193,67 @@
 
   --font-sans: var(--font-inter);
   --font-mono: var(--font-jetbrains-mono);
+
+  /* The app's denser desktop scale (VOXA_DESIGN_PLAN.md §10.2); the landing keeps the
+     .type-* roles below. text-ui-display … text-ui-label, and text-ui-mono for time codes. */
+  --text-ui-display: 1.75rem;
+  --text-ui-display--line-height: 2.125rem;
+  --text-ui-display--font-weight: 600;
+  --text-ui-display--letter-spacing: -0.02em;
+  --text-ui-title: 1.25rem;
+  --text-ui-title--line-height: 1.75rem;
+  --text-ui-title--font-weight: 600;
+  --text-ui-title--letter-spacing: -0.01em;
+  --text-ui-section: 0.9375rem;
+  --text-ui-section--line-height: 1.375rem;
+  --text-ui-section--font-weight: 600;
+  --text-ui-body: 0.875rem;
+  --text-ui-body--line-height: 1.25rem;
+  --text-ui-editor: 0.9375rem;
+  --text-ui-editor--line-height: 1.5rem;
+  --text-ui-small: 0.8125rem;
+  --text-ui-small--line-height: 1.125rem;
+  --text-ui-label: 0.6875rem;
+  --text-ui-label--line-height: 1rem;
+  --text-ui-label--font-weight: 500;
+  --text-ui-label--letter-spacing: 0.06em;
+  --text-ui-mono: 0.75rem;
+  --text-ui-mono--line-height: 1.125rem;
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  --shadow-overlay: var(--overlay-shadow);
+  --color-scrim: var(--scrim);
+
+  /* Overlays come and go by opacity and a slight scale: nothing that moves the layout. */
+  --animate-voxa-in: voxa-in var(--dur-2) var(--ease-standard);
+  --animate-voxa-out: voxa-out var(--dur-1) var(--ease-exit);
+  --animate-voxa-fade-in: voxa-fade-in var(--dur-2) var(--ease-standard);
+  --animate-voxa-fade-out: voxa-fade-out var(--dur-1) var(--ease-exit);
+}
+
+@keyframes voxa-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@keyframes voxa-out {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@keyframes voxa-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes voxa-fade-out {
+  to {
+    opacity: 0;
+  }
 }
 
 @layer base {

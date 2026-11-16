@@ -131,6 +131,8 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run lint
+      # Every text color on every surface, both themes, at WCAG AA or better.
+      - run: npm run check:contrast
       - run: npm run build
 
   # The real one-line installer, with a wheel of this commit. A runner has no GPU, so it should

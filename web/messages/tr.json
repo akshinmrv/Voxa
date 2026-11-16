@@ -214,7 +214,11 @@
     "themeLabel": "Temayı değiştir",
     "copy": "Kopyala",
     "copied": "Kopyalandı",
-    "skipToContent": "İçeriğe atla"
+    "skipToContent": "İçeriğe atla",
+    "cancel": "İptal",
+    "close": "Kapat",
+    "moreActions": "Diğer işlemler",
+    "loading": "Yükleniyor…"
   },
   "App": {
     "nav": {
