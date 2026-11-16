@@ -13,6 +13,7 @@ import {
   jobEventsUrl,
   resultVideoUrl,
   resultSrtUrl,
+  resultVttUrl,
 } from "@/lib/api";
 import { useAutoDownload } from "@/lib/use-auto-download";
 import { Link, useRouter } from "@/i18n/navigation";
@@ -116,6 +117,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
   const step = sseStep ?? meta.data?.step ?? 0;
   const fileName = meta.data?.fileName ?? jobId;
   const hasSrt = status === "done" && (meta.data?.hasSrt ?? false);
+  const subtitlesOnly = !!meta.data?.config.subtitlesOnly;
   // The server reports the last error line, so the reason is visible without reading logs.
   const failureReason = sseError ?? meta.data?.error ?? null;
   const reviewing = status === "review";
@@ -145,23 +147,41 @@ export function JobDetail({ jobId }: { jobId: string }) {
         <StatusBadge status={status} />
       </div>
 
-      {status === "done" && hasVideo && (
+      {status === "done" && (hasVideo || hasSrt) && (
         <Card>
           <CardHeader>
             <CardTitle>{t("result")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <video
-              controls
-              className="w-full rounded-md border border-border bg-black"
-              src={resultVideoUrl(jobId)}
-            />
+            {hasVideo && (
+              // crossOrigin: the console's dev server reads the subtitles from the API's port.
+              <video
+                controls
+                crossOrigin="anonymous"
+                className="w-full rounded-md border border-border bg-black"
+                src={resultVideoUrl(jobId)}
+              >
+                {/* Drawn-on subtitles are in the picture already; a track in the MP4 isn't
+                    shown by browsers, so the player gets the subtitles as WebVTT. */}
+                {hasSrt && meta.data?.config.subtitlesInVideo !== "hard" && (
+                  <track
+                    kind="subtitles"
+                    src={resultVttUrl(jobId)}
+                    srcLang={meta.data?.config.targetLang}
+                    label={meta.data?.config.targetLang}
+                    default={subtitlesOnly || meta.data?.config.subtitlesInVideo === "soft"}
+                  />
+                )}
+              </video>
+            )}
             <div className="flex flex-wrap gap-3">
-              <Button asChild>
-                <a href={resultVideoUrl(jobId)} download>
-                  <Download /> {t("download")}
-                </a>
-              </Button>
+              {hasVideo && (
+                <Button asChild>
+                  <a href={resultVideoUrl(jobId)} download>
+                    <Download /> {t("download")}
+                  </a>
+                </Button>
+              )}
               {hasSrt && (
                 <Button asChild variant="secondary">
                   <a href={resultSrtUrl(jobId)} download>
@@ -178,7 +198,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
                 <div className="flex flex-wrap items-center gap-3">
                   <Button onClick={() => whole.mutate()} disabled={whole.isPending}>
                     {whole.isPending ? <Loader2 className="animate-spin" /> : <Film />}
-                    {t("wholeVideo")}
+                    {subtitlesOnly ? t("wholeVideoSubtitles") : t("wholeVideo")}
                   </Button>
                   {whole.isError && (
                     <span className="text-sm text-danger">{(whole.error as Error).message}</span>

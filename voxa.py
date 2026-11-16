@@ -388,14 +388,16 @@ def _resolve_video_inputs(videos: List[str], dest_dir: Path, logger=None) -> Lis
     return resolved
 
 
-def run_ffmpeg(cmd: List[str], what: str, *, stderr_lines: int = 5) -> None:
+def run_ffmpeg(cmd: List[str], what: str, *, stderr_lines: int = 5,
+               cwd: Optional[Path] = None) -> None:
     """Run ffmpeg, and on failure raise FFmpegError quoting what ffmpeg actually said.
     The bare `check=True` this replaces discarded stderr, leaving users with nothing but
     a numeric exit status. `-hide_banner` keeps the build blurb out of the diagnosis and
     `-nostdin` stops ffmpeg from swallowing the terminal's input."""
     if cmd and cmd[0] == "ffmpeg":
         cmd = [cmd[0], "-hide_banner", "-nostdin", *cmd[1:]]
-    proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+                          encoding="utf-8", errors="replace", cwd=cwd)
     if proc.returncode != 0:
         tail = [ln for ln in (proc.stderr or "").strip().splitlines() if ln.strip()]
         detail = "\n".join(f"   {ln}" for ln in tail[-stderr_lines:]) or "   (no stderr output)"
@@ -1825,6 +1827,123 @@ def _segments_from_srt(path: str) -> List[Dict]:
                          "end": _sub_end_ms(s) / 1000.0,
                          "text": text})
     return segments
+
+
+# ── Subtitles to read on screen ──────────────────────────────────────────────
+CAPTION_WIDTH = 42        # characters a subtitle line holds (the usual style guides' limit)
+CAPTION_LINES = 2
+_CLAUSE_END = re.compile(r"(?<=[.!?…;:,])\s+|(?<=[。！？；，、])")
+# What a "hard" subtitle looks like: a thin outline instead of a shadow, a little off the edge.
+CAPTION_STYLE = "Outline=1.2,Shadow=0,MarginV=22"
+# MP4 names a track's language in ISO 639-2 (three letters).
+_ISO639_2 = {"az": "aze", "tr": "tur", "ru": "rus", "en": "eng", "de": "deu", "fr": "fra",
+             "es": "spa", "it": "ita", "pt": "por", "ar": "ara", "zh": "zho", "ja": "jpn",
+             "ko": "kor", "uk": "ukr", "pl": "pol", "nl": "nld", "hi": "hin", "vi": "vie",
+             "fa": "fas", "ka": "kat", "kk": "kaz", "uz": "uzb", "he": "heb", "id": "ind"}
+
+
+def _wrap_caption(text: str, width: int) -> str:
+    """A caption on two lines when it's longer than one holds, broken at the space nearest its
+    middle (or at the middle, in a script written without spaces)."""
+    if len(text) <= width:
+        return text
+    middle = len(text) // 2
+    if " " not in text:
+        return text[:middle] + "\n" + text[middle:]
+    cut = min((i for i, c in enumerate(text) if c == " "), key=lambda i: abs(i - middle))
+    return text[:cut] + "\n" + text[cut + 1:]
+
+
+def _caption_chunks(text: str, limit: int) -> List[str]:
+    """`text` in pieces of at most `limit` characters: cut at the ends of clauses where it can,
+    between words where a clause is longer than that."""
+    sep = " " if " " in text else ""
+    units: List[str] = []
+    for clause in (c.strip() for c in _CLAUSE_END.split(text)):
+        if not clause:
+            continue
+        if len(clause) <= limit:
+            units.append(clause)
+            continue
+        part = ""
+        for token in (clause.split(" ") if sep else list(clause)):
+            joined = f"{part}{sep}{token}" if part else token
+            if len(joined) > limit and part:
+                units.append(part)
+                part = token
+            else:
+                part = joined
+        if part:
+            units.append(part)
+    chunks: List[str] = []
+    current = ""
+    for unit in units:
+        joined = f"{current}{sep}{unit}" if current else unit
+        if len(joined) > limit and current:
+            chunks.append(current)
+            current = unit
+        else:
+            current = joined
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def caption_cues(segments: Sequence[Dict], width: int = CAPTION_WIDTH,
+                 lines: int = CAPTION_LINES) -> List[Tuple[float, float, str]]:
+    """Subtitles to read on screen, from the translated lines. A line runs up to ten seconds,
+    too much to read at once, so each is cut into captions of at most `lines` lines of about
+    `width` characters (half that in a script written without spaces, whose characters are
+    wider), at clause ends where it can; each stays up for its share of the line's time. Pure."""
+    cues: List[Tuple[float, float, str]] = []
+    for seg in segments:
+        text = " ".join(str(seg.get("text") or "").split())
+        if not text:
+            continue
+        start, end = float(seg["start"]), float(seg["end"])
+        w = width if " " in text else max(8, width // 2)
+        chunks = _caption_chunks(text, w * lines)
+        total = sum(len(c) for c in chunks)
+        at = start
+        for i, chunk in enumerate(chunks):
+            stop = end if i == len(chunks) - 1 else at + (end - start) * len(chunk) / total
+            cues.append((round(at, 3), round(stop, 3), _wrap_caption(chunk, w)))
+            at = stop
+    return cues
+
+
+def write_srt(cues: Sequence[Tuple[float, float, str]], path: Path) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        for i, (start, end, text) in enumerate(cues, 1):
+            f.write(f"{i}\n{format_timestamp(start)} --> {format_timestamp(end)}\n{text}\n\n")
+
+
+def put_subtitles(video: Path, captions: Path, out: Path, mode: str, lang: str,
+                  audio: str = "copy") -> None:
+    """The captions in a video, written to `out` (which may be `video` itself): "soft", a
+    track players can turn on and off, copied in a moment; or "hard", drawn onto the picture
+    for players and sites that show no tracks, which encodes the video again. `audio` "aac"
+    re-encodes a source's own sound, which an MP4 may not take as it is. Raises FFmpegError."""
+    tmp = out.with_name(f"{out.stem}.subtitles{out.suffix}")
+    keep_audio = ["-c:a", "copy"] if audio == "copy" else ["-c:a", "aac", "-b:a", "192k"]
+    if mode == "soft":
+        cmd = ["ffmpeg", "-y", "-i", str(video), "-i", str(captions),
+               "-map", "0:v:0", "-map", "0:a?", "-map", "1:s", "-c:v", "copy", *keep_audio,
+               "-c:s", "mov_text"]
+        code = _ISO639_2.get(lang[:2].lower())
+        if code:
+            cmd += ["-metadata:s:s:0", f"language={code}"]
+        run_ffmpeg([*cmd, str(tmp)], "Adding the subtitle track")
+    else:
+        # The filter reads a path in a syntax of its own, where a drive letter's colon needs
+        # escaping: run beside the captions and name them alone.
+        run_ffmpeg(["ffmpeg", "-y", "-i", str(Path(video).resolve()), "-map", "0:v:0",
+                    "-map", "0:a?", "-vf",
+                    f"subtitles={captions.name}:force_style='{CAPTION_STYLE}'",
+                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                    "-pix_fmt", "yuv420p", *keep_audio, str(tmp.resolve())],
+                   "Drawing the subtitles onto the video", cwd=captions.parent)
+    os.replace(tmp, out)
 
 
 PREVIEW_SECONDS = 20          # --preview without a length
@@ -4675,21 +4794,39 @@ async def process_video(video_path: str, args, logger: Logger):
             f.write(f"{format_timestamp(seg['start'])} --> {format_timestamp(seg['end'])}\n")
             f.write(f"{seg['text']}\n\n")
 
-    # Subtitles-only mode: stop after producing the translated SRT (no TTS / no video).
-    if args.subtitles_only:
-        final_srt = out_dir / srt_file.name
-        if final_srt.resolve() != srt_file.resolve():
-            shutil.copy(str(srt_file), str(final_srt))
-        elapsed_time = time.time() - start_time
-        logger.info(f"✅ Subtitles-only completed in {elapsed_time/60:.1f} minutes!")
-        logger.info(f"📝 Subtitles: {final_srt}")
-        return 0
+    # The subtitles to read: the lines above, cut into captions that fit on screen. They are
+    # what a subtitle file and a subtitled video carry; the SRT above stays one cue per line
+    # spoken, which is what the speech is made from.
+    captions = work_dir / f"captions_{args.target_lang}.srt"
+    write_srt(caption_cues(translated_segments), captions)
+    in_video = getattr(args, "subtitles_in_video", None)
 
     # Review: stop with the lines translated and nothing voiced, so they can be checked first.
     if getattr(args, "review", False):
         logger.info(f"📝 {len(translated_segments)} lines translated; nothing is voiced yet. "
                     f"Check them, and change any, in {translated_json} (or in the console), "
-                    f"then run again without --review to voice them.")
+                    f"then run again without --review.")
+        return 0
+
+    # Subtitles-only mode: the subtitles, and with --subtitles-in-video the original video
+    # with them and its own sound. No speech.
+    if args.subtitles_only:
+        final_srt = out_dir / srt_file.name
+        if final_srt.resolve() != captions.resolve():
+            shutil.copy(str(captions), str(final_srt))
+        if in_video:
+            subtitled = out_dir / f"{video_basename}_subtitled_{args.target_lang}.mp4"
+            logger.info(f"💬 Putting the subtitles in the video ({in_video})...")
+            try:
+                put_subtitles(video_path, captions, subtitled, in_video, args.target_lang,
+                              audio="aac")
+            except FFmpegError as e:
+                logger.error(f"❌ {e}")
+                return 1
+            logger.info(f"🎞️  Subtitled video: {subtitled}")
+        elapsed_time = time.time() - start_time
+        logger.info(f"✅ Subtitles-only completed in {elapsed_time/60:.1f} minutes!")
+        logger.info(f"📝 Subtitles: {final_srt}")
         return 0
 
     # Step 6: Speech synthesis
@@ -4799,6 +4936,13 @@ async def process_video(video_path: str, args, logger: Logger):
         background = ducked
     _assemble_final_video(video_path, voiceover_norm, output_file,
                           background_volume, args.voice_volume, background)
+    if in_video:
+        logger.info(f"💬 Putting the subtitles in the video ({in_video})...")
+        try:
+            put_subtitles(output_file, captions, output_file, in_video, args.target_lang)
+        except FFmpegError as e:
+            logger.error(f"❌ {e}")
+            return 1
 
     if not args.keep_temp:
         logger.info("🧹 Cleaning up temporary files...")
@@ -5039,6 +5183,12 @@ Examples:
                         help="Keep temporary files")
     parser.add_argument("--subtitles-only", action="store_true",
                         help="Generate only subtitles")
+    parser.add_argument("--subtitles-in-video", choices=["soft", "hard"], default=None,
+                        help="Put the translated subtitles in the output video: soft, a track "
+                             "players can turn on and off (quick); hard, drawn onto the "
+                             "picture, for players and sites that show no tracks (the video "
+                             "is encoded again, which takes a while). With --subtitles-only, "
+                             "the original video gets them, with its own sound.")
     parser.add_argument("--subtitles", default=None, metavar="SRT",
                         help="Use this source-language .srt instead of transcribing the video "
                              "(skips Whisper). Handy for re-dubbing with hand-corrected "

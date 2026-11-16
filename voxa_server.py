@@ -42,7 +42,7 @@ from collections import deque
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Literal, Optional, Set, Tuple
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -215,6 +215,11 @@ class JobConfigModel(BaseModel):
     # A voice per speaker of a diarized job (voxa --speaker-voices): an engine voice, or for a
     # cloning engine a clip of the voice library. Set once the speakers are known.
     speakerVoices: Optional[Dict[str, str]] = None
+    # Subtitles, no speech (voxa --subtitles-only).
+    subtitlesOnly: bool = False
+    # The subtitles in the video: a track players can turn on ("soft"), or drawn onto the
+    # picture ("hard"); in the dub, or with subtitlesOnly in the original.
+    subtitlesInVideo: Optional[Literal["soft", "hard"]] = None
 
 
 class CreateJobModel(BaseModel):
@@ -548,6 +553,10 @@ async def _run_job(job: Job) -> None:
             cmd += ["--separate"]
         if cfg.preview:
             cmd += ["--preview", str(cfg.preview)]
+        if cfg.subtitlesOnly:
+            cmd += ["--subtitles-only"]
+        if cfg.subtitlesInVideo:
+            cmd += ["--subtitles-in-video", cfg.subtitlesInVideo]
         # Lines the job kept (reviewed, changed, or from an earlier run) are voiced as they
         # are; a job asked to be reviewed stops after translating the first time.
         given = job.translation_file if job.translation_file and \
@@ -612,9 +621,13 @@ async def _run_job(job: Job) -> None:
             # holds one source video and outputs are language-suffixed, so each pattern
             # matches exactly one file for this target language.
             lang = cfg.targetLang
-            videos = sorted(_of_run(job.work_dir.glob(f"*_dubbed_{lang}.mp4"), cfg.preview),
+            made = "subtitled" if cfg.subtitlesOnly else "dubbed"
+            videos = sorted(_of_run(job.work_dir.glob(f"*_{made}_{lang}.mp4"), cfg.preview),
                             key=lambda p: p.stat().st_mtime)
-            srts = sorted(_of_run(job.work_dir.glob(f"*_work/subtitles_{lang}.srt"), cfg.preview),
+            # The captions, cut to read on screen; an older run left only one cue per line.
+            srts = sorted(_of_run([*job.work_dir.glob(f"*_work/captions_{lang}.srt")]
+                                  or job.work_dir.glob(f"*_work/subtitles_{lang}.srt"),
+                                  cfg.preview),
                           key=lambda p: p.stat().st_mtime)
             job.result_video = videos[-1] if videos else None
             job.result_srt = srts[-1] if srts else None
@@ -1273,6 +1286,8 @@ async def upload(file: UploadFile = File(...)) -> dict:
 
 def _job_engines(cfg) -> List[str]:
     """The engines Voxa installs separately that a job runs with."""
+    if getattr(cfg, "subtitlesOnly", False):
+        return []                       # no speech, and nothing to separate it from
     engines = [cfg.tts] if cfg.tts in voxa_engines.ENGINES else []
     return engines + (["demucs"] if getattr(cfg, "separate", False) else [])
 
@@ -1680,6 +1695,17 @@ async def result_video(job_id: str) -> FileResponse:
 @app.get("/api/jobs/{job_id}/result/srt")
 async def result_srt(job_id: str) -> FileResponse:
     return _result(job_id, "srt")
+
+
+@app.get("/api/jobs/{job_id}/result/vtt")
+async def result_vtt(job_id: str) -> Response:
+    """The subtitles as WebVTT, which a browser's video player shows (it doesn't read SRT)."""
+    job = _job_or_404(job_id)
+    if not job.result_srt or not job.result_srt.exists():
+        raise HTTPException(status_code=404, detail="Result not ready")
+    srt = job.result_srt.read_text(encoding="utf-8-sig")
+    vtt = re.sub(r"(\d{2}:\d{2}:\d{2}),(\d{3})", r"\1.\2", srt.replace("\r\n", "\n"))
+    return Response("WEBVTT\n\n" + vtt, media_type="text/vtt; charset=utf-8")
 
 
 # --------------------------------------------------------------------------- #

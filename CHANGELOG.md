@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Subtitles to read, and in the video.** The subtitles a run gives are now cut to read on
+  screen: a line spoken can run ten seconds, so each becomes captions of at most two lines of
+  about 42 characters (half that for scripts written without spaces), at clause ends where it
+  can, each up for its share of the line's time (`<video>_work/captions_<lang>.srt`; the speech
+  is still made from one cue per line). `--subtitles-in-video soft|hard` puts them in the
+  output video: a track players can turn on, copied in a moment, or drawn onto the picture for
+  players and sites that show no tracks, which encodes the video again. With `--subtitles-only`
+  they go in the original video, with its own sound (`<video>_subtitled_<lang>.mp4`). The
+  console offers both: *Make* a dubbed video or subtitles only (no speech engine needed), and
+  where the subtitles go; its player shows them, and a subtitles job's lines can be checked
+  and changed like a dub's. `--review` now stops before the subtitles are made.
 - **Choose the voices, and keep your own to clone.** `voxa voices --lang az` lists the
   voices to choose from: Edge's (Microsoft's list) and Piper's (the language's voice, and the
   models in ~/.piper_models). `--edge-voice NAME` speaks with one of Edge's instead of the one

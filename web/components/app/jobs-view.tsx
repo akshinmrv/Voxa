@@ -61,6 +61,11 @@ export function JobsView() {
             <div className="min-w-0 flex-1">
               <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
                 <span className="truncate">{job.fileName}</span>
+                {job.config.subtitlesOnly ? (
+                  <Badge variant="neutral" className="shrink-0">
+                    {t("subtitles")}
+                  </Badge>
+                ) : null}
                 {job.config.preview ? (
                   <Badge variant="brand" className="shrink-0">
                     {t("preview", { seconds: job.config.preview })}

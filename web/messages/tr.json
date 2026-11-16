@@ -227,6 +227,18 @@
       "backToSite": "Siteye dön"
     },
     "newJob": {
+      "reviewToggleSubtitles": "Altyazı hazırlanmadan önce çeviriyi kontrol et",
+      "reviewHintSubtitles": "Satırlar çevrildiğinde durur; böylece önce onları kontrol edip değiştirebilirsiniz.",
+      "output": "Ne hazırlansın",
+      "outputDub": "Dublajlı video",
+      "outputSubtitles": "Yalnızca altyazı, sessiz",
+      "subtitlesInVideo": "Videoda altyazı",
+      "subtitlesNone": "Hayır, ayrı bir altyazı dosyası",
+      "subtitlesFileOnly": "Hayır, yalnızca altyazı dosyası",
+      "subtitlesSoft": "Oynatıcıda açılan iz olarak (hızlı)",
+      "subtitlesHard": "Görüntünün üzerine yazılmış",
+      "subtitlesHardHint": "Altyazı izi göstermeyen oynatıcı ve siteler için. Video yeniden kodlanır; uzun bir videoda bu biraz sürer.",
+      "runSubtitles": "Altyazıyı hazırla",
       "title": "Yeni iş",
       "subtitle": "Bir video yükle, motorlarını seç ve dublaja başla.",
       "uploadTitle": "Videoları bırak veya tıklayıp seç",
@@ -280,6 +292,7 @@
       "reset": "Bir tane daha başlat"
     },
     "jobs": {
+      "subtitles": "Altyazı",
       "preview": "Önizleme · {seconds} sn",
       "title": "İşler",
       "subtitle": "Dublaj geçmişin.",
@@ -410,6 +423,7 @@
       "loading": "Yükleniyor…"
     },
     "job": {
+      "wholeVideoSubtitles": "Videonun tamamına altyazı",
       "back": "İşlere dön",
       "progress": "İlerleme",
       "logs": "Günlükler",
@@ -448,6 +462,9 @@
       "newer": "{latest} çıktı"
     },
     "review": {
+      "descSubtitles": "İstediğiniz satırı değiştirin, sonra altyazıyı hazırlayın. Her satır kendi zamanında kalır.",
+      "editDescSubtitles": "İstediğiniz satırı değiştirip altyazıyı yeniden hazırlayın.",
+      "makeSubtitles": "Altyazıyı hazırla",
       "title": "Çeviriyi kontrol edin",
       "voices": "Sesler",
       "voicesHint": "Bir sesi değiştirmek onun tüm satırlarını yeniden seslendirir.",

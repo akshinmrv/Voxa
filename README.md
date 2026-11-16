@@ -512,6 +512,12 @@ voxa video.mp4 --target_lang ru --preview
 # Subtitles only, no synthesis
 voxa video.mp4 --target_lang es --subtitles-only
 
+# ...in the video too: as a track players can turn on (soft), or drawn onto the picture (hard)
+voxa video.mp4 --target_lang es --subtitles-only --subtitles-in-video hard
+
+# A dub with its subtitles in it
+voxa video.mp4 --target_lang es --subtitles-in-video soft
+
 # Check the translation before it's voiced: it stops once the lines are translated; change
 # any in video_work/translated.json, then run again without --review. Change a line later
 # and run again: only that line is voiced again.
@@ -592,6 +598,11 @@ running. Without the extra, or on Linux without GTK or Qt, it opens your browser
 
 The console comes inside the package: no Node, no second terminal. Working on the console
 itself? Run `npm run dev` in [`web/`](web/) next to `voxa serve`.
+
+**Subtitles.** *Make* a dubbed video, or subtitles only, with no voice; and put the subtitles
+in the video as a track players can turn on, or drawn onto the picture for players and sites
+that show none. Either way they are cut to read on screen, at most two lines of about 42
+characters, and the console's player shows them.
 
 **Choose the voices.** *Voices* lists the voices for a language, to hear Edge's and Piper's
 first, and keeps your own clips (3 to 30 seconds of one person) to clone voices from with

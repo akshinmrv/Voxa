@@ -477,6 +477,12 @@ voxa video.mp4 --target_lang ru --preview
 # Yalnız altyazı
 voxa video.mp4 --target_lang es --subtitles-only
 
+# ...videonun içində də: pleyerdə açılan trek (soft), ya da kadrın üstünə yazılmış (hard)
+voxa video.mp4 --target_lang es --subtitles-only --subtitles-in-video hard
+
+# Altyazısı içində olan dublyaj
+voxa video.mp4 --target_lang es --subtitles-in-video soft
+
 # Tərcüməni səsləndirmədən əvvəl yoxlayın: sətirlər tərcümə olunanda dayanır; istənilənini
 # video_work/translated.json-da dəyişin, sonra --review olmadan yenidən işə salın. Sonradan bir
 # sətri dəyişib yenidən işə salsanız, yalnız o sətir yenidən səsləndirilir.
@@ -551,6 +557,11 @@ Extra olmadan, ya da GTK və Qt olmayan Linux-da brauzeri açır.
 
 Konsol paketin içindədir: Node da, ikinci terminal da lazım deyil. Konsolun özü üzərində
 işləyirsinizsə, `voxa serve` ilə yanaşı [`web/`](web/)-də `npm run dev` işlədin.
+
+**Altyazı.** *Nə hazırlansın*: dublyaj olunmuş video, ya da səssiz, yalnız altyazı; altyazını
+videoya pleyerdə açılan trek kimi, ya da trek göstərməyən pleyer və saytlar üçün kadrın üstünə
+yazılmış qoyun. Hər iki halda ekranda oxunmaq üçün ən çox iki sətrə, sətirdə təxminən 42
+simvola bölünür və konsolun pleyeri onu göstərir.
 
 **Səsləri seçin.** *Səslər* bir dilin səslərini göstərir (Edge və Piper səslərini əvvəlcə
 dinləmək olur) və XTTS, Chatterbox və VoxCPM2 ilə səs klonlamaq üçün öz kliplərinizi (bir

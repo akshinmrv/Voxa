@@ -89,6 +89,10 @@ export type JobConfig = {
   edgeVoice?: string | null;
   /** A voice per speaker of a diarized job (an engine voice, or a library clip's id). */
   speakerVoices?: Record<string, string> | null;
+  /** Subtitles, no speech. */
+  subtitlesOnly?: boolean;
+  /** The subtitles in the video: a track to turn on, or drawn onto the picture. */
+  subtitlesInVideo?: "soft" | "hard" | null;
 };
 
 /** A voice to choose from (GET /api/voices). */

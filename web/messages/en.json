@@ -227,6 +227,18 @@
       "backToSite": "Back to site"
     },
     "newJob": {
+      "reviewToggleSubtitles": "Check the translation before the subtitles are made",
+      "reviewHintSubtitles": "Stops once the lines are translated, so you can check and change them first.",
+      "output": "Make",
+      "outputDub": "A dubbed video",
+      "outputSubtitles": "Subtitles only, no voice",
+      "subtitlesInVideo": "Subtitles in the video",
+      "subtitlesNone": "No, a separate subtitle file",
+      "subtitlesFileOnly": "No, just the subtitle file",
+      "subtitlesSoft": "As a track players can turn on (quick)",
+      "subtitlesHard": "Drawn onto the picture",
+      "subtitlesHardHint": "For players and sites that don't show subtitle tracks. The video is encoded again, which takes a while for a long one.",
+      "runSubtitles": "Make the subtitles",
       "title": "New job",
       "subtitle": "Upload a video, choose your engines, and start dubbing.",
       "uploadTitle": "Drop videos or click to browse",
@@ -280,6 +292,7 @@
       "reset": "Start another"
     },
     "jobs": {
+      "subtitles": "Subtitles",
       "preview": "Preview · {seconds} s",
       "title": "Jobs",
       "subtitle": "Your dubbing history.",
@@ -410,6 +423,7 @@
       "loading": "Loading…"
     },
     "job": {
+      "wholeVideoSubtitles": "Subtitle the whole video",
       "back": "Back to jobs",
       "progress": "Progress",
       "logs": "Logs",
@@ -448,6 +462,9 @@
       "newer": "{latest} is out"
     },
     "review": {
+      "descSubtitles": "Change any line, then make the subtitles. Each line keeps its time.",
+      "editDescSubtitles": "Change any line and make the subtitles again.",
+      "makeSubtitles": "Make the subtitles",
       "title": "Check the translation",
       "voices": "Voices",
       "voicesHint": "Changing a voice voices all of its lines again.",

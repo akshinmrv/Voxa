@@ -84,7 +84,9 @@ export function TranslationEditor({
   const voicesChanged =
     (voiceDraft !== undefined && voiceDraft !== savedVoice) ||
     (speakerDraft !== undefined && !sameVoices(speakerDraft, savedSpeakers));
-  const pickable = config.tts === "edge" || config.tts === "openai" || library;
+  const subtitlesOnly = !!config.subtitlesOnly;
+  const pickable =
+    !subtitlesOnly && (config.tts === "edge" || config.tts === "openai" || library);
   const autoLabel = library ? t("fromVideo") : config.tts === "piper" ? t("languageVoice") : t("voxaVoice");
 
   const save = useMutation({
@@ -123,10 +125,18 @@ export function TranslationEditor({
     <Card>
       <CardHeader>
         <CardTitle>{reviewing ? t("title") : t("editTitle")}</CardTitle>
-        <CardDescription>{reviewing ? t("desc") : t("editDesc")}</CardDescription>
+        <CardDescription>
+          {subtitlesOnly
+            ? reviewing
+              ? t("descSubtitles")
+              : t("editDescSubtitles")
+            : reviewing
+              ? t("desc")
+              : t("editDesc")}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {(speakers.length > 0 || pickable) && (
+        {!subtitlesOnly && (speakers.length > 0 || pickable) && (
           <div className="space-y-3 rounded-md border border-border bg-surface-1 p-4">
             <div>
               <p className="text-sm font-medium text-foreground">{t("voices")}</p>
@@ -217,7 +227,11 @@ export function TranslationEditor({
             disabled={!editable || nothingToSay || save.isPending}
           >
             {voice.isPending ? <Loader2 className="animate-spin" /> : <AudioLines />}
-            {reviewing ? t("voice") : t("voiceAgain")}
+            {subtitlesOnly
+              ? t("makeSubtitles")
+              : reviewing
+                ? t("voice")
+                : t("voiceAgain")}
           </Button>
           <Button
             variant="secondary"

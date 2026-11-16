@@ -210,5 +210,7 @@ export async function removeEngine(id: string): Promise<InstallableEngine> {
 export const jobEventsUrl = (id: string) => `${API_BASE}/api/jobs/${id}/events`;
 export const resultVideoUrl = (id: string) =>
   `${API_BASE}/api/jobs/${id}/result/video`;
+/** The subtitles as WebVTT, for the browser's video player. */
+export const resultVttUrl = (id: string) => `${API_BASE}/api/jobs/${id}/result/vtt`;
 export const resultSrtUrl = (id: string) =>
   `${API_BASE}/api/jobs/${id}/result/srt`;

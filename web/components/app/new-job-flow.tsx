@@ -97,6 +97,8 @@ export function NewJobFlow() {
     numSpeakers: sel.numSpeakers,
     separate: !!options.separateAvailable && (sel.separate ?? false),
     review: sel.review ?? false,
+    subtitlesOnly: sel.subtitlesOnly ?? false,
+    subtitlesInVideo: sel.subtitlesInVideo ?? null,
   };
 
   const selectedTts = options.ttsEngines.find((e) => e.id === config.tts);
@@ -177,6 +179,17 @@ export function NewJobFlow() {
             </Select>
           </Field>
 
+          <Field id="output" label={t("output")}>
+            <Select
+              id="output"
+              value={config.subtitlesOnly ? "subtitles" : "dub"}
+              onChange={(e) => set("subtitlesOnly", e.target.value === "subtitles")}
+            >
+              <option value="dub">{t("outputDub")}</option>
+              <option value="subtitles">{t("outputSubtitles")}</option>
+            </Select>
+          </Field>
+
           <Field id="translator" label={t("translator")}>
             <Select
               id="translator"
@@ -203,92 +216,96 @@ export function NewJobFlow() {
             </div>
           </Field>
 
-          <Field id="tts" label={t("tts")}>
-            <Select
-              id="tts"
-              value={config.tts}
-              onChange={(e) => set("tts", e.target.value)}
-            >
-              {options.ttsEngines.map((e) => (
-                <option key={e.id} value={e.id} disabled={e.available === false}>
-                  {e.label} — {e.available === false ? t("notInstalled") : e.description}
-                </option>
-              ))}
-            </Select>
-            {selectedTts?.offline && (
-              <div>
-                <Badge variant="success">
-                  <WifiOff /> {t("offlineBadge")}
-                </Badge>
-              </div>
-            )}
-          </Field>
-
-          {config.tts === "edge" && (
-            <Field id="edgeVoice" label={t("voice")} hint={t("voiceHint")}>
-              <VoicePicker
-                id="edgeVoice"
-                engine="edge"
-                lang={config.targetLang}
-                value={config.edgeVoice}
-                onChange={(v) => set("edgeVoice", v)}
-                autoLabel={t("voiceAuto")}
-              />
-            </Field>
-          )}
-
-          {config.tts === "openai" && (
+          {!config.subtitlesOnly && (
             <>
-              <Field id="openaiTtsModel" label={t("openaiModel")}>
+              <Field id="tts" label={t("tts")}>
                 <Select
-                  id="openaiTtsModel"
-                  value={config.openaiTtsModel}
-                  onChange={(e) => set("openaiTtsModel", e.target.value)}
+                  id="tts"
+                  value={config.tts}
+                  onChange={(e) => set("tts", e.target.value)}
                 >
-                  {options.openaiTtsModels.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
+                  {options.ttsEngines.map((e) => (
+                    <option key={e.id} value={e.id} disabled={e.available === false}>
+                      {e.label} — {e.available === false ? t("notInstalled") : e.description}
                     </option>
                   ))}
                 </Select>
+                {selectedTts?.offline && (
+                  <div>
+                    <Badge variant="success">
+                      <WifiOff /> {t("offlineBadge")}
+                    </Badge>
+                  </div>
+                )}
               </Field>
 
-              <Field id="openaiVoice" label={t("openaiVoice")}>
-                <Select
-                  id="openaiVoice"
-                  value={config.openaiVoice}
-                  onChange={(e) => set("openaiVoice", e.target.value)}
-                >
-                  {options.openaiVoices.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              {config.tts === "edge" && (
+                <Field id="edgeVoice" label={t("voice")} hint={t("voiceHint")}>
+                  <VoicePicker
+                    id="edgeVoice"
+                    engine="edge"
+                    lang={config.targetLang}
+                    value={config.edgeVoice}
+                    onChange={(v) => set("edgeVoice", v)}
+                    autoLabel={t("voiceAuto")}
+                  />
+                </Field>
+              )}
+
+              {config.tts === "openai" && (
+                <>
+                  <Field id="openaiTtsModel" label={t("openaiModel")}>
+                    <Select
+                      id="openaiTtsModel"
+                      value={config.openaiTtsModel}
+                      onChange={(e) => set("openaiTtsModel", e.target.value)}
+                    >
+                      {options.openaiTtsModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+
+                  <Field id="openaiVoice" label={t("openaiVoice")}>
+                    <Select
+                      id="openaiVoice"
+                      value={config.openaiVoice}
+                      onChange={(e) => set("openaiVoice", e.target.value)}
+                    >
+                      {options.openaiVoices.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                </>
+              )}
+
+              {needsVoiceSample && (
+                <Field id="voiceSample" label={t("voiceSample")}>
+                  <VoicePicker
+                    id="voiceSample"
+                    engine={config.tts}
+                    lang={config.targetLang}
+                    value={config.voiceSample}
+                    onChange={(v) => set("voiceSample", v ?? undefined)}
+                    autoLabel={t("voiceFromVideo")}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t.rich("voiceSampleHint", {
+                      voices: (chunks) => (
+                        <Link href="/app/voices" className="text-primary hover:underline">
+                          {chunks}
+                        </Link>
+                      ),
+                    })}
+                  </p>
+                </Field>
+              )}
             </>
-          )}
-
-          {needsVoiceSample && (
-            <Field id="voiceSample" label={t("voiceSample")}>
-              <VoicePicker
-                id="voiceSample"
-                engine={config.tts}
-                lang={config.targetLang}
-                value={config.voiceSample}
-                onChange={(v) => set("voiceSample", v ?? undefined)}
-                autoLabel={t("voiceFromVideo")}
-              />
-              <p className="text-xs text-muted-foreground">
-                {t.rich("voiceSampleHint", {
-                  voices: (chunks) => (
-                    <Link href="/app/voices" className="text-primary hover:underline">
-                      {chunks}
-                    </Link>
-                  ),
-                })}
-              </p>
-            </Field>
           )}
 
           <Field id="whisperModel" label={t("whisperModel")}>
@@ -305,51 +322,79 @@ export function NewJobFlow() {
             </Select>
           </Field>
 
-          {options.diarizeAvailable && (
-            <Field id="diarize" label={t("diarize")} hint={t("diarizeHint")}>
-              <label className="flex items-center gap-2 text-sm text-foreground">
-                <input
-                  type="checkbox"
-                  checked={!!config.diarize}
-                  onChange={(e) => set("diarize", e.target.checked)}
-                  className="h-4 w-4 rounded-sm border-input accent-primary"
-                />
-                {t("diarizeToggle")}
-              </label>
-              {config.diarize && (
-                <input
-                  type="number"
-                  min={1}
-                  placeholder={t("numSpeakersPlaceholder")}
-                  value={config.numSpeakers ?? ""}
-                  onChange={(e) =>
-                    set("numSpeakers", e.target.value ? Number(e.target.value) : undefined)
-                  }
-                  className="mt-2 h-10 w-full rounded-sm border border-input bg-surface-1 px-3 text-sm text-foreground transition-colors hover:border-primary/40 placeholder:text-fg-subtle"
-                />
+          {!config.subtitlesOnly && (
+            <>
+              {options.diarizeAvailable && (
+                <Field id="diarize" label={t("diarize")} hint={t("diarizeHint")}>
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={!!config.diarize}
+                      onChange={(e) => set("diarize", e.target.checked)}
+                      className="h-4 w-4 rounded-sm border-input accent-primary"
+                    />
+                    {t("diarizeToggle")}
+                  </label>
+                  {config.diarize && (
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder={t("numSpeakersPlaceholder")}
+                      value={config.numSpeakers ?? ""}
+                      onChange={(e) =>
+                        set("numSpeakers", e.target.value ? Number(e.target.value) : undefined)
+                      }
+                      className="mt-2 h-10 w-full rounded-sm border border-input bg-surface-1 px-3 text-sm text-foreground transition-colors hover:border-primary/40 placeholder:text-fg-subtle"
+                    />
+                  )}
+                </Field>
               )}
-            </Field>
+
+              {/* Offered even before Demucs is installed, so the choice can be found. */}
+              <Field
+                id="separate"
+                label={t("separate")}
+                hint={options.separateAvailable ? t("separateHint") : t("separateInstall")}
+              >
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={!!config.separate}
+                    disabled={!options.separateAvailable}
+                    onChange={(e) => set("separate", e.target.checked)}
+                    className="h-4 w-4 rounded-sm border-input accent-primary disabled:opacity-50"
+                  />
+                  {t("separateToggle")}
+                </label>
+              </Field>
+            </>
           )}
 
-          {/* Offered even before Demucs is installed, so the choice can be found. */}
           <Field
-            id="separate"
-            label={t("separate")}
-            hint={options.separateAvailable ? t("separateHint") : t("separateInstall")}
+            id="subtitlesInVideo"
+            label={t("subtitlesInVideo")}
+            hint={config.subtitlesInVideo === "hard" ? t("subtitlesHardHint") : undefined}
           >
-            <label className="flex items-center gap-2 text-sm text-foreground">
-              <input
-                type="checkbox"
-                checked={!!config.separate}
-                disabled={!options.separateAvailable}
-                onChange={(e) => set("separate", e.target.checked)}
-                className="h-4 w-4 rounded-sm border-input accent-primary disabled:opacity-50"
-              />
-              {t("separateToggle")}
-            </label>
+            <Select
+              id="subtitlesInVideo"
+              value={config.subtitlesInVideo ?? ""}
+              onChange={(e) =>
+                set("subtitlesInVideo", (e.target.value || null) as JobConfig["subtitlesInVideo"])
+              }
+            >
+              <option value="">
+                {config.subtitlesOnly ? t("subtitlesFileOnly") : t("subtitlesNone")}
+              </option>
+              <option value="soft">{t("subtitlesSoft")}</option>
+              <option value="hard">{t("subtitlesHard")}</option>
+            </Select>
           </Field>
 
-          <Field id="review" label={t("review")} hint={t("reviewHint")}>
+          <Field
+            id="review"
+            label={t("review")}
+            hint={config.subtitlesOnly ? t("reviewHintSubtitles") : t("reviewHint")}
+          >
             <label className="flex items-center gap-2 text-sm text-foreground">
               <input
                 type="checkbox"
@@ -357,7 +402,7 @@ export function NewJobFlow() {
                 onChange={(e) => set("review", e.target.checked)}
                 className="h-4 w-4 rounded-sm border-input accent-primary"
               />
-              {t("reviewToggle")}
+              {config.subtitlesOnly ? t("reviewToggleSubtitles") : t("reviewToggle")}
             </label>
           </Field>
 
@@ -374,7 +419,9 @@ export function NewJobFlow() {
               )}
               {submit.isPending && !submit.variables?.preview && !urlMode && files.length > 1
                 ? t("uploading", { done: uploaded, total: files.length })
-                : t("run")}
+                : config.subtitlesOnly
+                  ? t("runSubtitles")
+                  : t("run")}
             </Button>
             <Button
               variant="secondary"
