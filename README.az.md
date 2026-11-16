@@ -551,6 +551,12 @@ backend təqdim edir — bir dizayn sistemi, iki səth:
 - **Operator app** — lokal konsol: video yüklə, mühərrik seç, yeddi-addımlı pipeline-ı canlı
   izlə (SSE) və nəticəni yüklə. Heç nə serverə yüklənmir — öz maşınında işləyir.
 
+<div align="center">
+<img src="docs/assets/app-az.png" alt="Voxa konsolu: hazır dublyaj və dəyişmək üçün açılmış tərcüməsi" width="820">
+<br>
+<sub>Hazır dublyaj: baxın, altyazısı ilə endirin, istənilən sətri dəyişin. Yalnız dəyişdiyiniz sətirlər yenidən səsləndirilir.</sub>
+</div>
+
 ```bash
 pipx install "voxa-dub[studio]"
 voxa studio                             # serveri işə salır və konsolu öz pəncərəsində açır

@@ -553,6 +553,12 @@ operatör arka ucu sunar — tek tasarım sistemi, iki yüzey:
 - **Operatör uygulaması** — yerel konsol: video yükle, motor seç, yedi adımlı hattı canlı izle
   (SSE) ve sonucu indir. Hiçbir şey sunucuya yüklenmez — kendi makinende çalışır.
 
+<div align="center">
+<img src="docs/assets/app-tr.png" alt="Voxa konsolu: hazır bir dublaj ve değiştirmek için açılmış çevirisi" width="820">
+<br>
+<sub>Hazır bir dublaj: izleyin, altyazısıyla indirin, istediğiniz satırı değiştirin. Yalnızca değiştirdiğiniz satırlar yeniden seslendirilir.</sub>
+</div>
+
 ```bash
 pipx install "voxa-dub[studio]"
 voxa studio                             # sunucuyu başlatır ve konsolu kendi penceresinde açar

@@ -587,9 +587,9 @@ Started with `--host 0.0.0.0`, to reach it from another machine, it asks for an 
 given in the link it prints (or yours, from `--token` or `VOXA_TOKEN`).
 
 <div align="center">
-<img src="docs/assets/app-en.png" alt="The local operator console after a finished dubbing job" width="820">
+<img src="docs/assets/app-en.png" alt="The Voxa console: a finished dub, with its translation open to change" width="820">
 <br>
-<sub>Upload a video, pick engines, watch the seven-step pipeline live, download the dub.</sub>
+<sub>A finished dub: watch it, download it with its subtitles, change any line. Only the lines you change are voiced again.</sub>
 </div>
 
 ```bash
