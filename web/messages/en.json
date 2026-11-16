@@ -378,6 +378,14 @@
         "saved": "Saved"
       },
       "advanced": {
+        "deviceLabel": "Where the models run",
+        "deviceHint": "Whisper, diarization and the local voices. Automatic uses an NVIDIA GPU when there is one, else the CPU.",
+        "deviceMpsHint": "Experimental: Whisper, diarization, Chatterbox and Demucs try Apple's GPU and fall back to the CPU if they fail there; XTTS, VoxCPM2 and faster-whisper stay on the CPU. Tell us how it goes.",
+        "deviceAuto": "Automatic",
+        "deviceCpu": "CPU",
+        "deviceCuda": "NVIDIA GPU (CUDA)",
+        "deviceMps": "Apple GPU (MPS), experimental",
+        "deviceMissing": "not on this machine",
         "title": "Advanced",
         "desc": "Reliability and timing knobs for power users. The defaults are recommended.",
         "fallbackLabel": "Fallback translator",

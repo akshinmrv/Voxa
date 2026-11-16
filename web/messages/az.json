@@ -378,6 +378,14 @@
         "saved": "Saxlanıldı"
       },
       "advanced": {
+        "deviceLabel": "Modellər harada işləsin",
+        "deviceHint": "Whisper, danışanların ayrılması və lokal səslər. Avtomatik: NVIDIA GPU varsa onu, yoxdursa CPU-nu istifadə edir.",
+        "deviceMpsHint": "Eksperimental: Whisper, danışanların ayrılması, Chatterbox və Demucs Apple GPU-nu sınayır, orada alınmasa CPU-ya keçir; XTTS, VoxCPM2 və faster-whisper CPU-da qalır. Necə işlədiyini bizə yazın.",
+        "deviceAuto": "Avtomatik",
+        "deviceCpu": "CPU",
+        "deviceCuda": "NVIDIA GPU (CUDA)",
+        "deviceMps": "Apple GPU (MPS), eksperimental",
+        "deviceMissing": "bu kompüterdə yoxdur",
         "title": "Ətraflı",
         "desc": "Təcrübəli istifadəçilər üçün etibarlılıq və timing ayarları. Defolt dəyərlər tövsiyə olunur.",
         "fallbackLabel": "Ehtiyat tərcüməçi",

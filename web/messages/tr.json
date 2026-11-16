@@ -378,6 +378,14 @@
         "saved": "Kaydedildi"
       },
       "advanced": {
+        "deviceLabel": "Modeller nerede çalışsın",
+        "deviceHint": "Whisper, konuşmacı ayırma ve yerel sesler. Otomatik: NVIDIA GPU varsa onu, yoksa CPU'yu kullanır.",
+        "deviceMpsHint": "Deneysel: Whisper, konuşmacı ayırma, Chatterbox ve Demucs Apple GPU'yu dener, orada başarısız olursa CPU'ya geçer; XTTS, VoxCPM2 ve faster-whisper CPU'da kalır. Nasıl gittiğini bize yazın.",
+        "deviceAuto": "Otomatik",
+        "deviceCpu": "CPU",
+        "deviceCuda": "NVIDIA GPU (CUDA)",
+        "deviceMps": "Apple GPU (MPS), deneysel",
+        "deviceMissing": "bu bilgisayarda yok",
         "title": "Gelişmiş",
         "desc": "İleri düzey kullanıcılar için güvenilirlik ve zamanlama ayarları. Varsayılanlar önerilir.",
         "fallbackLabel": "Yedek çevirmen",

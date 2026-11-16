@@ -153,6 +153,7 @@ export function SettingsView() {
   const qualityGate = settings.advanced?.qualityGate ?? false;
   const autoDownload = settings.advanced?.autoDownload ?? false;
   const checkUpdates = settings.advanced?.checkUpdates ?? true;
+  const device = settings.advanced?.device ?? "auto";
 
   return (
     <Shell>
@@ -514,6 +515,38 @@ export function SettingsView() {
               </span>
             </span>
           </label>
+
+          <div className="border-t border-border pt-4">
+            <Field
+              id="device"
+              label={t("advanced.deviceLabel")}
+              hint={device === "mps" ? t("advanced.deviceMpsHint") : t("advanced.deviceHint")}
+            >
+              <Select
+                id="device"
+                value={device}
+                disabled={toggleQualityGate.isPending}
+                onChange={(e) =>
+                  toggleQualityGate.mutate({
+                    advanced: {
+                      device: e.target.value as "auto" | "cpu" | "cuda" | "mps",
+                    },
+                  })
+                }
+              >
+                <option value="auto">{t("advanced.deviceAuto")}</option>
+                <option value="cpu">{t("advanced.deviceCpu")}</option>
+                <option value="cuda" disabled={!options.gpu?.cuda && device !== "cuda"}>
+                  {t("advanced.deviceCuda")}
+                  {options.gpu?.cuda ? "" : ` — ${t("advanced.deviceMissing")}`}
+                </option>
+                <option value="mps" disabled={!options.gpu?.mps && device !== "mps"}>
+                  {t("advanced.deviceMps")}
+                  {options.gpu?.mps ? "" : ` — ${t("advanced.deviceMissing")}`}
+                </option>
+              </Select>
+            </Field>
+          </div>
         </CardContent>
       </Card>
 

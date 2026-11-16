@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Apple Silicon's GPU, experimentally (`--device mps`).** `--device auto|cpu|cuda|mps` says
+  where Whisper, diarization and the local models run; `auto`, the default, is as before (an
+  NVIDIA GPU when there is one, else the CPU), and `cpu` now keeps everything there. `mps` tries
+  the Mac's GPU for Whisper, pyannote, Chatterbox and Demucs, each falling back to the CPU if it
+  fails there; XTTS, VoxCPM2 and faster-whisper stay on the CPU. Whisper's sparse
+  `alignment_heads`, which MPS can't hold (pytorch/pytorch#141711), stays on the CPU while the
+  rest of the model moves, so word timing still works. The GPU counts only if a tensor can be
+  put on it: GitHub's macOS runners report one that can't. Not measured on a Mac yet, so it is
+  off by default; `voxa doctor` says when it's there, and the console's Settings → Advanced
+  offers it.
+
 ## [1.17.0] - 2026-11-16
 
 ### Added

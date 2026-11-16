@@ -387,9 +387,10 @@ voxa doctor --deep     # bağımlılık güncellemelerinde bozulan XTTS ve pyann
 > (eğitim verisinin bir kısmı yalnızca araştırma için yayımlandı), bu yüzden ticari
 > kullanımdan önce bunu kontrol edin — [NOTICE](NOTICE.md#47-engines-in-environments-of-their-own-voxa-engines).
 
-**4. GPU hızlandırma** — isteğe bağlı, yalnızca NVIDIA.
+**4. GPU hızlandırma** — isteğe bağlı: NVIDIA ve deneysel olarak Apple Silicon.
 
-Voxa CUDA'yı kendisi algılar; açmak için bir bayrak yoktur. Neyi hızlandırır:
+Voxa CUDA'yı kendisi algılar; açmak için bir bayrak yoktur (`--device cpu` her şeyi CPU'da
+tutar). Neyi hızlandırır:
 
 | Aşama | GPU'da |
 |---|---|
@@ -430,7 +431,15 @@ GPU kullanıldığında çalışma günlüğü yazıya çevirme adımında `⚙�
 > [!NOTE]
 > `--whisper-backend faster` (CTranslate2) de GPU'da çalışır, ancak NVIDIA cuBLAS ve cuDNN
 > kütüphanelerini gerektirir: `pip install nvidia-cublas-cu12 nvidia-cudnn-cu12`.
-> Voxa **yalnızca CUDA**'yı kontrol eder — Apple Silicon (MPS) ve AMD GPU'lar CPU'ya düşer.
+> AMD GPU'lar CPU'ya düşer.
+
+**Apple Silicon (deneysel).** `--device mps` (ya da konsolda Ayarlar → Gelişmiş) Whisper
+transkripsiyonu, konuşmacı ayırma, Chatterbox ve Demucs için Mac'in GPU'sunu dener. Her biri
+orada başarısız olursa CPU'ya geçer, bu yüzden dublaj durmaz; XTTS, VoxCPM2 ve
+`--whisper-backend faster` CPU'da kalır. Henüz bir Mac'te ölçülmediği için varsayılan olarak
+kapalıdır: Whisper MPS'te CPU'dan bile yavaş olabilir. `voxa doctor` GPU varsa bunu söyler;
+denerseniz, ölçtüğünüzü bir issue'da yazmanız varsayılan olup olmayacağına karar vermeye yardım
+eder.
 
 ## Yapılandırma
 

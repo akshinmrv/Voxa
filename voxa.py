@@ -30,7 +30,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 
 def _detect_version() -> str:
@@ -514,12 +514,51 @@ def split_for_tts(text: str, max_chars: int = 220) -> List[str]:
 #  XTTS v2 — voice cloning
 # ─────────────────────────────────────────────
 
-def load_xtts_model():
-    """Load XTTS v2 model (downloaded automatically on first run)"""
+# ─────────────────────────────────────────────
+#  Where the models run
+# ─────────────────────────────────────────────
+DEVICES = ("auto", "cpu", "cuda", "mps")
+
+
+def mps_usable() -> bool:
+    """Whether Apple's GPU can take work: torch says it's there and a tensor can be put on it.
+    Asking is_available() alone isn't enough: GitHub's macOS runners report one that can't
+    allocate two numbers."""
+    if torch is None:
+        return False
+    try:
+        if not torch.backends.mps.is_available():
+            return False
+        torch.zeros(2, device="mps")
+        return True
+    except Exception:
+        return False
+
+
+def pick_device(choice: Optional[str] = "auto") -> str:
+    """The device for --device: "auto" is CUDA when there is a GPU it can use, else the CPU;
+    Apple's GPU only when asked for ("mps"), as that is experimental. A device that isn't
+    there falls back to the CPU, with a warning."""
+    if torch is None or choice == "cpu":
+        return "cpu"
+    if choice == "mps":
+        if mps_usable():
+            return "mps"
+        _LOG.warning("⚠️  --device mps: Apple's GPU isn't usable here; running on the CPU")
+        return "cpu"
+    if choice == "cuda" and not torch.cuda.is_available():
+        _LOG.warning("⚠️  --device cuda: no CUDA GPU here; running on the CPU")
+        return "cpu"
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def load_xtts_model(device: str = "auto"):
+    """Load XTTS v2 model (downloaded automatically on first run). On CUDA when there is one
+    and `device` allows it, else the CPU: Coqui's XTTS isn't known to run on Apple's GPU."""
     try:
         from TTS.api import TTS
         _LOG.info("🔄 Loading XTTS v2 model (first run may take a while)...")
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = "cpu" if device in ("cpu", "mps") or not torch.cuda.is_available() else "cuda"
         # XTTS checkpoints store config objects, so they need weights_only=False —
         # scoped to this trusted local load only (see _allow_unsafe_torch_load).
         with _allow_unsafe_torch_load():
@@ -3048,7 +3087,7 @@ def _merge_similar_speakers(turns: Sequence[Tuple[str, float, float]], labels: S
 
 def diarize_segments(audio_path: str, segments: List[Dict], *, num_speakers: Optional[int] = None,
                      min_speakers: Optional[int] = None, max_speakers: Optional[int] = None,
-                     hf_token: Optional[str] = None) -> List[Dict]:
+                     hf_token: Optional[str] = None, device: str = "auto") -> List[Dict]:
     """Tag every transcription segment with a 'speaker' from pyannote diarization; returns a new
     list (inputs untouched). Optional feature: pyannote.audio is an extra and its pretrained
     model is Hugging-Face-gated — MIT-licensed, but you must accept its terms and pass a token
@@ -3068,8 +3107,9 @@ def diarize_segments(audio_path: str, segments: List[Dict], *, num_speakers: Opt
             # pyannote.audio < 4 spelled the token argument use_auth_token.
             pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1",
                                                 use_auth_token=token)
-        if torch is not None and torch.cuda.is_available():
-            pipeline.to(torch.device("cuda"))
+        device = pick_device(device)
+        if device != "cpu":
+            pipeline.to(torch.device(device))
         # An exact count wins; otherwise optional bounds curb over-/under-splitting. pyannote
         # does the constrained clustering itself, so this never mislabels the way a hand-rolled
         # merge would.
@@ -3082,7 +3122,16 @@ def diarize_segments(audio_path: str, segments: List[Dict], *, num_speakers: Opt
             if max_speakers:
                 opts["max_speakers"] = max_speakers
         try:
-            result = pipeline(audio_path, **opts)
+            try:
+                result = pipeline(audio_path, **opts)
+            except Exception as e:
+                if device != "mps" or isinstance(e, TypeError):
+                    raise
+                # Apple's GPU is experimental: diarize on the CPU rather than not at all.
+                _LOG.warning(f"⚠️  Diarization failed on Apple's GPU ({str(e)[:160]}); "
+                             f"diarizing on the CPU instead")
+                pipeline.to(torch.device("cpu"))
+                result = pipeline(audio_path, **opts)
         except TypeError:
             # A pyannote build that doesn't accept these bounds shouldn't break diarization —
             # fall back to an unconstrained (or exact-count) run.
@@ -3716,6 +3765,35 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
     if emotion_stats:
         _LOG.info(f"🎭 Emotion usage: {emotion_stats}")
     return concat_list, temp_files
+def _load_whisper(model_name: str, device: str):
+    """openai-whisper on `device`. On Apple's GPU, the model's alignment_heads buffer can't go:
+    it is a sparse tensor, which MPS doesn't hold (pytorch/pytorch#141711), and word timing
+    reads its indices(). So the model loads on the CPU, everything else moves, and the buffer
+    stays behind on the CPU as a plain attribute, sparse, where word timing still finds it."""
+    if device != "mps":
+        return whisper.load_model(model_name, device=device)
+    model = whisper.load_model(model_name, device="cpu")
+    heads = model._buffers.pop("alignment_heads", None)
+    model.to("mps")
+    if heads is not None:
+        model.alignment_heads = heads
+    return model
+
+
+def transcribe_on(device: str, transcribe: Callable[[str], Tuple[List[Dict], str]],
+                  logger) -> Tuple[List[Dict], str]:
+    """`transcribe(device)`, and on Apple's GPU, if that fails, again on the CPU: Whisper on
+    MPS is experimental, and a dub shouldn't stop for it."""
+    try:
+        return transcribe(device)
+    except Exception as e:
+        if device != "mps":
+            raise
+        logger.warning(f"⚠️  Whisper failed on Apple's GPU ({str(e)[:160]}); "
+                       f"transcribing on the CPU instead")
+        return transcribe("cpu")
+
+
 def transcribe_audio(audio_path: str, model_name: str, backend: str,
                      device: str) -> Tuple[List[Dict], str]:
     """Transcribe audio and return (segments, detected_language). `segments` is a list
@@ -3726,6 +3804,8 @@ def transcribe_audio(audio_path: str, model_name: str, backend: str,
             from faster_whisper import WhisperModel
         except ImportError:
             raise RuntimeError("faster-whisper not installed. Run: pip install 'voxa[faster]'")
+        if device == "mps":
+            device = "cpu"      # CTranslate2, under faster-whisper, has no Apple GPU support
         compute_type = "float16" if device == "cuda" else "int8"
         # faster-whisper names the turbo model 'large-v3-turbo'.
         fw_model = "large-v3-turbo" if model_name == "turbo" else model_name
@@ -3743,7 +3823,7 @@ def transcribe_audio(audio_path: str, model_name: str, backend: str,
 
     # Default: openai-whisper. Loads a trusted local checkpoint (weights_only scoped).
     with _allow_unsafe_torch_load():
-        model = whisper.load_model(model_name, device=device)
+        model = _load_whisper(model_name, device)
     result = model.transcribe(audio_path, fp16=(device == "cuda"), verbose=False,
                               word_timestamps=True)
     for seg in result["segments"]:
@@ -4012,6 +4092,35 @@ def _clone_references(subs, args, work_dir, video_path, logger,
     return speaker_wav, speaker_refs
 
 
+def engine_device(args, runs_on_mps: bool) -> Optional[str]:
+    """The device an engine's worker is asked to load on: None lets it pick (CUDA when there
+    is one, else the CPU), unless --device names one; Apple's GPU only for an engine known to
+    run on it (Chatterbox, Demucs)."""
+    choice = getattr(args, "device", None) or "auto"
+    if choice == "cpu":
+        return "cpu"
+    if choice == "mps":
+        return "mps" if runs_on_mps and mps_usable() else "cpu"
+    return None
+
+
+def start_worker(engine_id: str, log_path: Path, device: Optional[str], logger):
+    """Start an engine's worker on `device` (None: it picks) and return it with what it said;
+    on Apple's GPU, if the model won't load there, again on the CPU."""
+    import voxa_engines
+    worker = voxa_engines.Worker(engine_id, log_path=log_path)
+    try:
+        return worker, worker.start(**({"device": device} if device else {}))
+    except voxa_engines.EngineError as e:
+        worker.close()
+        if device != "mps":
+            raise
+        logger.warning(f"⚠️  {voxa_engines.get(engine_id).label} wouldn't load on Apple's GPU "
+                       f"({str(e)[:160]}); using the CPU")
+        worker = voxa_engines.Worker(engine_id, log_path=log_path)
+        return worker, worker.start(device="cpu")
+
+
 async def _tts_xtts(subs, args, work_dir, video_path, gate_asr, logger):
     # ── XTTS voice cloning ───────────────────────────
     lang_code = args.target_lang[:2].lower()
@@ -4022,7 +4131,7 @@ async def _tts_xtts(subs, args, work_dir, video_path, gate_asr, logger):
                                                   "XTTS")
 
     # Load model
-    tts_model = load_xtts_model()
+    tts_model = load_xtts_model(getattr(args, "device", "auto"))
     if tts_model is None:
         raise TTSError("Failed to load XTTS model")
 
@@ -4166,18 +4275,18 @@ async def generate_chatterbox(subs, speaker_wav: str, lang_code: str, concat_lis
                               temp_files: list, work_dir: Path, enable_stretch: bool,
                               quality_gate: bool = False, asr_model=None,
                               media_ms: Optional[float] = None,
-                              speaker_refs: Optional[Dict[str, str]] = None):
+                              speaker_refs: Optional[Dict[str, str]] = None,
+                              device: Optional[str] = None):
     """Cloned speech with Chatterbox Multilingual, made by its worker in the engine's own
     environment. The reference is the original speaker, so it's in the source language;
     at Chatterbox's default cfg_weight the dub would keep that language's accent, so it is
     set to 0, as Chatterbox's README advises for cloning across languages."""
     import voxa_engines
-    worker = voxa_engines.Worker("chatterbox", log_path=work_dir / "chatterbox_worker.log")
     _LOG.info("🔄 Loading Chatterbox (its first run downloads the model)...")
     try:
-        info = await asyncio.to_thread(worker.start)
+        worker, info = await asyncio.to_thread(
+            start_worker, "chatterbox", work_dir / "chatterbox_worker.log", device, _LOG)
     except voxa_engines.EngineError as e:
-        worker.close()
         raise TTSError(f"❌ {e}") from e
     sample_rate = info["sample_rate"]
     _LOG.info(f"🎙️  Chatterbox on {info['device']}, cloning from: {speaker_wav}")
@@ -4233,7 +4342,8 @@ async def _tts_chatterbox(subs, args, work_dir, video_path, gate_asr, logger):
     await generate_chatterbox(
         subs, speaker_wav, args.target_lang[:2].lower(), concat_list, temp_files, work_dir,
         enable_stretch=not args.no_stretch, quality_gate=args.quality_gate,
-        asr_model=gate_asr, media_ms=_media_ms(video_path), speaker_refs=speaker_refs)
+        asr_model=gate_asr, media_ms=_media_ms(video_path), speaker_refs=speaker_refs,
+        device=engine_device(args, runs_on_mps=True))
     return concat_list, temp_files
 
 
@@ -4252,16 +4362,16 @@ async def generate_voxcpm(subs, speaker_wav: str, lang_code: str, concat_list: l
                           temp_files: list, work_dir: Path, enable_stretch: bool,
                           quality_gate: bool = False, asr_model=None,
                           media_ms: Optional[float] = None,
-                          speaker_refs: Optional[Dict[str, str]] = None):
+                          speaker_refs: Optional[Dict[str, str]] = None,
+                          device: Optional[str] = None):
     """Cloned speech with VoxCPM2, made by its worker in the engine's own environment. It
     reads the language from the text, so `lang_code` is for the quality gate only."""
     import voxa_engines
-    worker = voxa_engines.Worker("voxcpm", log_path=work_dir / "voxcpm_worker.log")
     _LOG.info("🔄 Loading VoxCPM2 (its first run downloads the model, about 5 GB)...")
     try:
-        info = await asyncio.to_thread(worker.start)
+        worker, info = await asyncio.to_thread(
+            start_worker, "voxcpm", work_dir / "voxcpm_worker.log", device, _LOG)
     except voxa_engines.EngineError as e:
-        worker.close()
         raise TTSError(f"❌ {e}") from e
     sample_rate = info["sample_rate"]
     _LOG.info(f"🎙️  VoxCPM2 on {info['device']}, cloning from: {speaker_wav}")
@@ -4312,7 +4422,8 @@ async def _tts_voxcpm(subs, args, work_dir, video_path, gate_asr, logger):
     await generate_voxcpm(
         subs, speaker_wav, args.target_lang[:2].lower(), concat_list, temp_files, work_dir,
         enable_stretch=not args.no_stretch, quality_gate=args.quality_gate,
-        asr_model=gate_asr, media_ms=_media_ms(video_path), speaker_refs=speaker_refs)
+        asr_model=gate_asr, media_ms=_media_ms(video_path), speaker_refs=speaker_refs,
+        device=engine_device(args, runs_on_mps=False))
     return concat_list, temp_files
 
 
@@ -4345,25 +4456,40 @@ def _separation_hint(error: Exception) -> str:
 
 
 def separate_audio(video_path: Path, background: Path, speech: Path, work_dir: Path,
-                   logger, ollama_model: Optional[str] = None) -> None:
+                   logger, ollama_model: Optional[str] = None,
+                   device: Optional[str] = None) -> None:
     """Split the original's audio with Demucs, in its own environment, into its speech and
     its background (music, effects, ambience). Ollama keeps the model it translated with in
     memory for minutes, so in a batch the previous video's could leave Demucs short (it did
     on a 14 GB machine); that model is freed first."""
     _free_ollama(ollama_model, logger)
     import voxa_engines
-    worker = voxa_engines.Worker("demucs", log_path=work_dir / "demucs_worker.log")
+    log_path = work_dir / "demucs_worker.log"
+    worker, info = start_worker("demucs", log_path, device, logger)
     mix = work_dir / "separation_input.wav"
-    try:
-        info = worker.start()
-        run_ffmpeg(["ffmpeg", "-y", "-i", str(video_path), "-vn", "-ac", str(info["channels"]),
-                    "-ar", str(info["sample_rate"]), "-acodec", "pcm_s16le", str(mix)],
-                   "Audio extraction for separation")
+
+    def separate():
         with tqdm(total=100, desc=f"Separating ({info['device']})", unit="%") as bar:
             worker.request(on_progress=lambda done: bar.update(round(done * 100) - bar.n),
                            cmd="separate", input=str(mix), background=str(background),
                            speech=str(speech))
             bar.update(100 - bar.n)
+
+    try:
+        run_ffmpeg(["ffmpeg", "-y", "-i", str(video_path), "-vn", "-ac", str(info["channels"]),
+                    "-ar", str(info["sample_rate"]), "-acodec", "pcm_s16le", str(mix)],
+                   "Audio extraction for separation")
+        try:
+            separate()
+        except voxa_engines.EngineError as e:
+            if info.get("device") != "mps":
+                raise
+            # Apple's GPU is experimental: separate on the CPU rather than not at all.
+            logger.warning(f"⚠️  Demucs failed on Apple's GPU ({str(e)[:160]}); "
+                           f"separating on the CPU instead")
+            worker.close()
+            worker, info = start_worker("demucs", log_path, "cpu", logger)
+            separate()
     finally:
         worker.close()
         mix.unlink(missing_ok=True)
@@ -4603,7 +4729,8 @@ async def process_video(video_path: str, args, logger: Logger):
             import voxa_engines
             try:
                 separate_audio(video_path, background_wav, speech_wav, work_dir, logger,
-                               ollama_model=args.ollama_model)
+                               ollama_model=args.ollama_model,
+                               device=engine_device(args, runs_on_mps=True))
             except voxa_engines.EngineError as e:
                 logger.error(f"❌ {str(e).rstrip('.')}{_separation_hint(e)} Run again to retry "
                              f"it, or drop --separate.")
@@ -4647,11 +4774,13 @@ async def process_video(video_path: str, args, logger: Logger):
     else:
         logger.info(f"[3/7] ({_elapsed()}) Transcribing with Whisper ({args.whisper_model}, "
                     f"backend: {args.whisper_backend})...")
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info(f"⚙️  Using device: {device.upper()}")
+        device = pick_device(getattr(args, "device", "auto"))
+        logger.info(f"⚙️  Using device: {device.upper()}"
+                    + (" (experimental)" if device == "mps" else ""))
         try:
-            segments, detected_lang = transcribe_audio(
-                str(audio_clean), args.whisper_model, args.whisper_backend, device)
+            segments, detected_lang = transcribe_on(
+                device, lambda d: transcribe_audio(
+                    str(audio_clean), args.whisper_model, args.whisper_backend, d), logger)
             logger.info(f"🌍 Detected language: {detected_lang}")
             with open(transcript_json, 'w', encoding='utf-8') as f:
                 json.dump(segments, f, ensure_ascii=False, indent=2)
@@ -4684,7 +4813,8 @@ async def process_video(video_path: str, args, logger: Logger):
                                             num_speakers=args.num_speakers,
                                             min_speakers=getattr(args, "min_speakers", None),
                                             max_speakers=getattr(args, "max_speakers", None),
-                                            hf_token=args.hf_token)
+                                            hf_token=args.hf_token,
+                                            device=getattr(args, "device", "auto"))
             except DiarizationError as e:
                 logger.error(f"Diarization failed: {e}")
                 return 1
@@ -5224,6 +5354,11 @@ Examples:
                         help="Upper bound on the speaker count for --diarize — curbs "
                              "over-splitting when the exact count is unknown (ignored when "
                              "--num-speakers is set).")
+    parser.add_argument("--device", choices=DEVICES, default="auto",
+                        help="Where Whisper and the local models run: auto (a CUDA GPU when "
+                             "there is one, else the CPU), cpu, cuda, or mps, Apple's GPU, "
+                             "which is experimental: each model falls back to the CPU if it "
+                             "fails there, and XTTS, VoxCPM2 and faster-whisper stay on it.")
     parser.add_argument("--edge-voice", default=None, metavar="NAME",
                         help="The Edge voice to speak with, e.g. az-AZ-BanuNeural, instead of "
                              "the one Voxa picks for the language. List them with: voxa voices "
@@ -5769,6 +5904,9 @@ def doctor_checks(online: bool = False, deep: bool = False) -> List[DoctorCheck]
     elif shutil.which("nvidia-smi"):
         add("Speed", "GPU", "warn", "an NVIDIA GPU is present, but this torch can't use it",
             "install the CUDA build of torch (see the README's GPU section)")
+    elif sys.platform == "darwin" and mps_usable():
+        add("Speed", "GPU", "warn", "Apple's GPU (MPS) is here, unused by default: the local "
+            "models run on the CPU", "try it with --device mps (experimental)")
     else:
         add("Speed", "GPU", "warn", "none — Whisper and the local voices run on the CPU, slower")
     if _has_module("faster_whisper"):

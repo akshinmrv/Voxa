@@ -153,6 +153,9 @@ def build_options() -> dict:
         "urlAvailable": voxa._ytdlp_available(),
         # So the job form can offer keeping the background only once Demucs is installed.
         "separateAvailable": voxa_engines.is_installed("demucs"),
+        # So Settings can offer the GPUs this machine has: CUDA, or Apple's (MPS).
+        "gpu": {"cuda": bool(voxa.torch is not None and voxa.torch.cuda.is_available()),
+                "mps": voxa.mps_usable()},
     }
 
 
@@ -677,7 +680,9 @@ def default_settings() -> dict:
         "advanced": {"speechRate": None, "qualityGate": False, "ttsWorkers": None,
                      "maxConcurrentJobs": None, "autoDownload": False,
                      # Ask PyPI once a day whether a newer Voxa is out (voxa.latest_version).
-                     "checkUpdates": True},
+                     "checkUpdates": True,
+                     # Where the local models run (voxa --device); None is "auto".
+                     "device": None},
     }
 
 
@@ -1077,6 +1082,8 @@ def advanced_timing_args(settings: dict) -> List[str]:
     if workers is not None:
         clamped = max(TTS_WORKERS_MIN, min(TTS_WORKERS_MAX, int(workers)))
         args += ["--tts-workers", str(clamped)]
+    if adv.get("device") in voxa.DEVICES and adv.get("device") != "auto":
+        args += ["--device", adv["device"]]
     return args
 
 
@@ -1183,6 +1190,9 @@ async def put_settings(patch: SettingsPatch, _: None = Depends(require_local)) -
     if "advanced" in data:
         if not isinstance((data["advanced"] or {}).get("checkUpdates", True), bool):
             raise HTTPException(status_code=422, detail="checkUpdates must be true or false.")
+        if (data["advanced"] or {}).get("device") not in (None, *voxa.DEVICES):
+            raise HTTPException(status_code=422,
+                                detail=f"device must be one of {', '.join(voxa.DEVICES)}.")
         rate = (data["advanced"] or {}).get("speechRate")
         if rate is not None:
             try:

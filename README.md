@@ -396,9 +396,10 @@ voxa doctor --deep     # also loads XTTS and pyannote, which break on dependency
 > their training data was released for research only), so check that before commercial
 > use — see [NOTICE](NOTICE.md#47-engines-in-environments-of-their-own-voxa-engines).
 
-**4. GPU acceleration** — optional, NVIDIA only.
+**4. GPU acceleration** — optional: NVIDIA, and experimentally Apple Silicon.
 
-Voxa detects CUDA on its own; there is no flag to turn it on. What it speeds up:
+Voxa detects CUDA on its own; there is no flag to turn it on (`--device cpu` keeps everything on
+the CPU). What it speeds up:
 
 | Stage | On GPU |
 |---|---|
@@ -439,7 +440,14 @@ When the GPU is in use, the run log prints `⚙️  Using device: CUDA` at the t
 > [!NOTE]
 > `--whisper-backend faster` (CTranslate2) runs on the GPU too, but needs NVIDIA's cuBLAS and
 > cuDNN libraries: `pip install nvidia-cublas-cu12 nvidia-cudnn-cu12`.
-> Voxa checks for **CUDA only** — Apple Silicon (MPS) and AMD GPUs fall back to CPU.
+> AMD GPUs fall back to the CPU.
+
+**Apple Silicon (experimental).** `--device mps` (or Settings → Advanced in the console) tries the
+Mac's GPU for Whisper transcription, diarization, Chatterbox and Demucs. Each falls back to the
+CPU if it fails there, so a dub never stops for it; XTTS, VoxCPM2 and `--whisper-backend faster`
+stay on the CPU. It is off by default because it hasn't been measured on a Mac yet: Whisper on
+MPS may even be slower than on the CPU. `voxa doctor` says when the GPU is there; if you try it,
+an issue with what you measured helps decide whether it should become the default.
 
 ## Configuration
 

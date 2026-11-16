@@ -65,7 +65,7 @@ def test_missing_keys_backfilled_from_defaults(store):
     assert s["defaultTts"] == "edge"
     assert s["advanced"] == {"speechRate": None, "qualityGate": False, "ttsWorkers": None,
                              "maxConcurrentJobs": None, "autoDownload": False,
-                             "checkUpdates": True}
+                             "checkUpdates": True, "device": None}
 
 
 def test_invalid_file_falls_back_to_defaults(store):

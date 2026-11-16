@@ -66,6 +66,8 @@ export type VoxaOptions = {
   urlAvailable?: boolean;
   /** Whether Demucs is installed, so the form can offer keeping the music and effects. */
   separateAvailable?: boolean;
+  /** The GPUs this machine has that the local models could use. */
+  gpu?: { cuda: boolean; mps: boolean };
 };
 
 export type JobConfig = {
@@ -183,6 +185,8 @@ export type VoxaSettings = {
     autoDownload: boolean;
     /** Ask PyPI once a day whether a newer Voxa is out. */
     checkUpdates: boolean;
+    /** Where the local models run (voxa --device); null is "auto". */
+    device: "auto" | "cpu" | "cuda" | "mps" | null;
   };
 };
 
@@ -200,6 +204,7 @@ export type SettingsPatch = {
     maxConcurrentJobs?: number | null;
     autoDownload?: boolean;
     checkUpdates?: boolean;
+    device?: "auto" | "cpu" | "cuda" | "mps" | null;
   };
 };
 
