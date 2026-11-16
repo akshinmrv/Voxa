@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { ArrowLeft, Download, AlertTriangle, PencilLine, Film, Loader2 } from "lucide-react";
+import { Download, AlertTriangle, PencilLine, Film, Loader2 } from "lucide-react";
 import type { JobEvent, JobStatus } from "@/lib/types";
 import {
   dubWholeVideo,
@@ -16,7 +16,7 @@ import {
   resultVttUrl,
 } from "@/lib/api";
 import { useAutoDownload } from "@/lib/use-auto-download";
-import { Link, useRouter } from "@/i18n/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -115,7 +115,6 @@ export function JobDetail({ jobId }: { jobId: string }) {
     return <BackendError onRetry={() => meta.refetch()} />;
 
   const step = sseStep ?? meta.data?.step ?? 0;
-  const fileName = meta.data?.fileName ?? jobId;
   const hasSrt = status === "done" && (meta.data?.hasSrt ?? false);
   const subtitlesOnly = !!meta.data?.config.subtitlesOnly;
   // The server reports the last error line, so the reason is visible without reading logs.
@@ -126,25 +125,14 @@ export function JobDetail({ jobId }: { jobId: string }) {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <div>
-        <Link
-          href="/app/jobs"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" /> {t("back")}
-        </Link>
-      </div>
-
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <h1 className="type-h2 min-w-0 truncate">{fileName}</h1>
-          {preview ? (
-            <Badge variant="brand" className="shrink-0">
-              {t("previewBadge", { seconds: preview })}
-            </Badge>
-          ) : null}
-        </div>
+      {/* The file's name and the way back are in the header's "Dubs › name". */}
+      <div className="flex items-center gap-2">
         <StatusBadge status={status} />
+        {preview ? (
+          <Badge variant="brand" className="shrink-0">
+            {t("previewBadge", { seconds: preview })}
+          </Badge>
+        ) : null}
       </div>
 
       {status === "done" && (hasVideo || hasSrt) && (

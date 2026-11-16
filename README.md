@@ -301,7 +301,7 @@ Open the link it prints, `http://127.0.0.1:8000/?token=…`. Listening beyond th
 loopback, the console asks for an access token: a new one each start, or your own with
 `-e VOXA_TOKEN=…`. Publishing on `127.0.0.1` keeps it off your network as well. Uploads, jobs
 and dubs stay in the mounted folder, and so do keys you add in Settings (in its `.env`); you can
-pass them with `-e` instead. Engines go into the `voxa-engines` volume, from the console's Models
+pass them with `-e` instead. Engines go into the `voxa-engines` volume, from the console's Engines
 page or from the CLI:
 
 ```bash
@@ -367,7 +367,7 @@ voxa doctor --deep     # also loads XTTS and pyannote, which break on dependency
 > **Engines in environments of their own.** Chatterbox pins its own versions of PyTorch and
 > transformers, so `voxa engines install chatterbox` puts it in a separate environment under
 > `~/.voxa/engines` instead of next to Voxa; nothing clashes, and `voxa engines remove
-> chatterbox` deletes it. The console's **Models** page does the same with a click. On a laptop
+> chatterbox` deletes it. The console's **Engines** page does the same with a click. On a laptop
 > CPU it took 40–60 seconds per sentence, so a GPU makes the difference here; every clip it
 > makes carries Resemble AI's inaudible PerTh watermark. With faster-whisper installed, Voxa
 > also cuts the words Chatterbox sometimes adds after a line.

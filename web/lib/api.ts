@@ -191,6 +191,11 @@ export async function testProvider(provider: string): Promise<ProviderTestResult
 }
 
 // ── Engines installed into environments of their own ──────────────────────────
+/** Whether the server answers, and its version (the status bar asks every few seconds). */
+export async function getHealth(): Promise<{ status: string; version: string }> {
+  return asJson(await fetch(`${API_BASE}/api/health`, { cache: "no-store" }));
+}
+
 export async function getUpdate(): Promise<UpdateStatus> {
   return asJson(await fetch(`${API_BASE}/api/update`));
 }

@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import { setRequestLocale } from "next-intl/server";
 import { IS_PUBLIC } from "@/lib/site";
-import { AppSidebar } from "@/components/app/app-sidebar";
-import { AppTopbar } from "@/components/app/app-topbar";
 import { QueryProvider } from "@/components/query-provider";
 import { LocalOnlyNotice } from "@/components/app/local-only-notice";
-import { UpdateBanner } from "@/components/app/update-banner";
+import { AppFrame } from "@/components/shell/app-frame";
+import { SIDEBAR_SCRIPT } from "@/components/shell/sidebar-state";
 
 // The operator console runs locally; keep it out of search indexes on any public deploy.
 export const metadata: Metadata = {
@@ -29,16 +28,9 @@ export default async function AppLayout({
 
   return (
     <QueryProvider>
-      <div className="flex flex-1">
-        <AppSidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <AppTopbar />
-          <UpdateBanner />
-          <main id="main-content" className="flex-1 px-5 py-8 md:px-8">
-            {children}
-          </main>
-        </div>
-      </div>
+      {/* Before the sidebar is drawn: open it as it was left (sidebar-state.ts). */}
+      <script dangerouslySetInnerHTML={{ __html: SIDEBAR_SCRIPT }} />
+      <AppFrame>{children}</AppFrame>
     </QueryProvider>
   );
 }

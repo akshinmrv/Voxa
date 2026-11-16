@@ -294,7 +294,7 @@ dinlədiyi üçün konsol giriş tokeni istəyir: hər başlanğıcda yenisi, ya
 öz tokeniniz. `127.0.0.1`-də açmaq onu həm də şəbəkənizdən kənarda saxlayır. Yükləmələr, işlər
 və dublyajlar mount edilmiş qovluqda qalır, Settings-də əlavə etdiyiniz açarlar da (onun
 `.env`-ində); əvəzində onları `-e` ilə də ötürə bilərsiniz. Mühərriklər `voxa-engines`
-volume-una qurulur — konsolun Models səhifəsindən, ya da CLI ilə:
+volume-una qurulur — konsolun Mühərriklər səhifəsindən, ya da CLI ilə:
 
 ```bash
 docker run --rm -v voxa-cache:/cache -v voxa-engines:/engines \
@@ -356,7 +356,7 @@ voxa doctor --deep     # asılılıq yeniləmələrində sınan XTTS və pyannot
 > **Öz mühitində işləyən mühərriklər.** Chatterbox PyTorch və transformers-in öz versiyalarını
 > tələb edir, ona görə `voxa engines install chatterbox` onu Voxa-nın yanına yox, `~/.voxa/engines`
 > altında ayrıca mühitə qoyur; heç nə toqquşmur, `voxa engines remove chatterbox` isə onu silir.
-> Konsolun **Modellər** səhifəsi eyni işi bir kliklə görür. Noutbuk CPU-sunda hər cümlə 40–60
+> Konsolun **Mühərriklər** səhifəsi eyni işi bir kliklə görür. Noutbuk CPU-sunda hər cümlə 40–60
 > saniyə çəkdi, yəni burada GPU həlledicidir; yaratdığı hər klipdə Resemble AI-ın eşidilməyən
 > PerTh su nişanı var. faster-whisper quraşdırılıbsa, Voxa Chatterbox-un bəzən sətrin sonuna
 > əlavə etdiyi sözləri də kəsir.

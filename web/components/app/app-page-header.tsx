@@ -1,17 +1,8 @@
-/** Consistent app page heading: H1 title + muted subtitle. */
-export function AppPageHeader({
-  title,
-  subtitle,
-}: {
-  title: string;
-  subtitle?: string;
-}) {
-  return (
-    <div className="mb-8">
-      <h1 className="type-h1">{title}</h1>
-      {subtitle && (
-        <p className="mt-1.5 text-sm text-muted-foreground">{subtitle}</p>
-      )}
-    </div>
-  );
+/**
+ * What a page is for, in a line under the header. The page's name is the header's title
+ * (components/shell/header.tsx), so it isn't repeated here.
+ */
+export function AppPageHeader({ subtitle }: { subtitle?: string }) {
+  if (!subtitle) return null;
+  return <p className="mb-6 text-ui-body text-muted-foreground">{subtitle}</p>;
 }

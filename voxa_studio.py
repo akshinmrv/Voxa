@@ -249,22 +249,303 @@ class Server:
 
 
 STARTING = {"en": "Starting…", "az": "Başlayır…", "tr": "Başlatılıyor…"}
+# Shown under it after ten seconds: the wait is the server loading its libraries, longest from
+# a cold disk (measured 9 s warm, 21 s right after a restart, on the laptop Voxa is built on).
+HINT = {
+    "en": "The first start after turning the computer on takes the longest: Voxa loads its "
+          "libraries.",
+    "az": "Kompüter açılandan sonrakı ilk başlanğıc ən uzun çəkir: Voxa kitabxanalarını yükləyir.",
+    "tr": "Bilgisayar açıldıktan sonraki ilk başlangıç en uzun sürer: Voxa kitaplıklarını "
+          "yüklüyor.",
+}
 FAILED = {
     "en": "Voxa's server didn't start. What it printed is in {log}",
     "az": "Voxa-nın serveri başlamadı. Yazdıqları buradadır: {log}",
     "tr": "Voxa'nın sunucusu başlamadı. Yazdıkları şurada: {log}",
 }
+OPEN_LOGS = {"en": "Open the log folder", "az": "Loq qovluğunu aç", "tr": "Günlük klasörünü aç"}
+WEBVIEW2_URL = "https://developer.microsoft.com/microsoft-edge/webview2/"
+NO_WEBVIEW2 = {
+    "en": "Voxa Studio shows its window with Microsoft Edge WebView2, which this computer doesn't "
+          "have (or its .NET Framework is older than 4.6.2). The console opens in your browser "
+          "instead.\n\nWebView2 can be installed from:\n{url}",
+    "az": "Voxa Studio pəncərəsini Microsoft Edge WebView2 ilə göstərir, bu kompüterdə isə o "
+          "yoxdur (və ya .NET Framework 4.6.2-dən köhnədir). Konsol bunun əvəzinə brauzerdə "
+          "açılır.\n\n"
+          "WebView2-ni buradan qura bilərsiniz:\n{url}",
+    "tr": "Voxa Studio penceresini Microsoft Edge WebView2 ile gösterir; bu bilgisayarda o yok "
+          "(ya da .NET Framework 4.6.2'den eski). Konsol bunun yerine tarayıcıda açılıyor.\n\n"
+          "WebView2'yi şuradan kurabilirsiniz:\n{url}",
+}
+
+# The console's own colors (web/app/globals.css), for what the window draws before and around
+# it: background, text, heading, brand.
+PAGE_COLORS = {
+    "dark": ("#0A0A0B", "#A1A1AA", "#FAFAFA", "#38BDF8"),
+    "light": ("#FFFFFF", "#52525B", "#0A0A0B", "#0369A1"),
+}
+# The title bar: caption, its text, the window's border. surface-0, foreground and border.
+CHROME = {
+    "dark": ("#0D0D0F", "#FAFAFA", "#26262B"),
+    "light": ("#F6F6F7", "#0A0A0B", "#E4E4E7"),
+}
 
 
-def page(text: str) -> str:
-    """The window's own page while the server starts, or when it couldn't."""
+def page(text: str, theme: str = "dark", hint: str = "", button: str = "") -> str:
+    """The window's own page while the server starts, or when it couldn't: Voxa's waveform,
+    what is happening, `hint` faded in after ten seconds of waiting, and `button`, which opens
+    the log folder. In the theme the console was last in, so nothing flashes."""
     from html import escape
+    bg, fg, heading, brand = PAGE_COLORS.get(theme, PAGE_COLORS["dark"])
+    bars = "".join(f'<i style="height:{h}px;animation-delay:{i * 120}ms"></i>'
+                   for i, h in enumerate((12, 22, 32, 18, 28, 14, 24)))
+    hint_html = f'<p class="hint">{escape(hint)}</p>' if hint else ""
+    button_html = (f'<button onclick="window.pywebview&&window.pywebview.api.open_logs()">'
+                   f'{escape(button)}</button>' if button else "")
+    scheme = "light" if theme == "light" else "dark"
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>
-html,body{{height:100%;margin:0}}
-body{{display:grid;place-items:center;background:#0a0a0b;color:#a1a1aa;
-font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center;padding:24px}}
-h1{{color:#e7e7ea;font-size:20px;margin:0 0 8px}}
-</style></head><body><div><h1>{TITLE}</h1><p>{escape(text)}</p></div></body></html>"""
+*{{box-sizing:border-box}}
+html,body{{height:100%;margin:0;overflow:hidden;color-scheme:{scheme}}}
+body{{display:grid;place-items:center;background:{bg};color:{fg};
+font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center;padding:24px}}
+h1{{color:{heading};font-size:20px;font-weight:600;margin:16px 0 6px}}
+p{{margin:0;max-width:440px}}
+.wave{{display:flex;gap:4px;align-items:center;justify-content:center;height:36px}}
+.wave i{{display:block;width:4px;border-radius:2px;background:{brand};
+animation:w 1.2s ease-in-out infinite;transform:scaleY(.4)}}
+@keyframes w{{50%{{transform:scaleY(1)}}}}
+.hint{{margin-top:18px;font-size:13px;opacity:0;animation:show .3s 10s forwards}}
+@keyframes show{{to{{opacity:1}}}}
+button{{margin-top:20px;font:inherit;font-weight:500;color:{bg};background:{brand};border:0;
+border-radius:6px;padding:8px 14px;cursor:pointer}}
+button:focus-visible{{outline:2px solid {brand};outline-offset:2px}}
+@media (prefers-reduced-motion:reduce){{.wave i{{animation:none;transform:scaleY(.7)}}}}
+</style></head><body><div><div class="wave" aria-hidden="true">{bars}</div>
+<h1>{TITLE}</h1><p>{escape(text)}</p>{hint_html}{button_html}</div></body></html>"""
+
+
+# ── where the window was, and in which theme ─────────────
+WINDOW_FILE = "window.json"
+DEFAULT_SIZE = (1280, 840)
+MIN_SIZE = (960, 640)
+
+
+def read_place(workspace: Path) -> dict:
+    """What the last window left in window.json: its size, place, whether it was maximized,
+    and the console's theme."""
+    try:
+        data = json.loads((workspace / WINDOW_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _number(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def window_place(saved: dict, screens) -> dict:
+    """create_window's size and place: the last window's size, at least the minimum; its
+    place only if a screen is still there (a monitor may have been unplugged since), else
+    centred; and maximized if it was."""
+    place = {"width": DEFAULT_SIZE[0], "height": DEFAULT_SIZE[1]}
+    if _number(saved.get("width")) and _number(saved.get("height")):
+        place["width"] = max(saved["width"], MIN_SIZE[0])
+        place["height"] = max(saved["height"], MIN_SIZE[1])
+    x, y = saved.get("x"), saved.get("y")
+    # Its title bar, a little in from the corner, has to be on a screen to be dragged back.
+    if _number(x) and _number(y) and any(
+            s.x <= x + 40 < s.x + s.width and s.y <= y + 10 < s.y + s.height for s in screens):
+        place["x"], place["y"] = x, y
+    if saved.get("maximized") is True:
+        place["maximized"] = True
+    return place
+
+
+def _write_place(workspace: Path, data: dict) -> None:
+    path = workspace / WINDOW_FILE
+    try:
+        workspace.mkdir(parents=True, exist_ok=True)
+        part = path.with_suffix(".json.part")
+        part.write_text(json.dumps(data), encoding="utf-8")
+        part.replace(path)
+    except OSError:
+        pass                                # not kept: the next window opens at the default
+
+
+def remember_place(workspace: Path, x: int, y: int, width: int, height: int, state: str) -> None:
+    """Keep the window's place for the next launch. A maximized window keeps the size it had
+    before, to go back to; a minimized one keeps nothing (Windows parks it off every screen)."""
+    data = read_place(workspace)
+    if state == "normal":
+        data.update(x=x, y=y, width=width, height=height, maximized=False)
+    elif state == "maximized":
+        data["maximized"] = True
+    else:
+        return
+    _write_place(workspace, data)
+
+
+# ── the title bar in Voxa's colors (Windows 11) ──────────
+def _colorref(hex_color: str) -> int:
+    r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+    return r | (g << 8) | (b << 16)
+
+
+def paint_title_bar(hwnd: int, theme: str, dwm=None) -> bool:
+    """Draw the native title bar in the console's colors, so the window reads as one piece.
+    The frame stays Windows' own: Snap Layouts, resizing by the edges and DPI keep working,
+    which a frameless window drawn by the page loses in pywebview (VOXA_DESIGN_PLAN.md §7.1).
+    Dark mode for the caption buttons from Windows 10 1809; the colors from Windows 11, which
+    10 refuses, leaving its own. True when the colors took."""
+    if os.name != "nt":
+        return False
+    import ctypes
+    if dwm is None:
+        dwm = ctypes.WinDLL("dwmapi")
+        dwm.DwmSetWindowAttribute.argtypes = (ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p,
+                                              ctypes.c_uint)
+        dwm.DwmSetWindowAttribute.restype = ctypes.c_long
+
+    def attribute(name: int, value: int) -> bool:
+        data = ctypes.c_uint(value)
+        return dwm.DwmSetWindowAttribute(hwnd, name, ctypes.byref(data), 4) == 0
+
+    caption, text, border = CHROME.get(theme, CHROME["dark"])
+    attribute(20, 1 if theme == "dark" else 0)       # DWMWA_USE_IMMERSIVE_DARK_MODE
+    attribute(38, 1)                                  # DWMWA_SYSTEMBACKDROP_TYPE: none, not Mica
+    return all([attribute(35, _colorref(caption)),   # DWMWA_CAPTION_COLOR
+                attribute(36, _colorref(text)),      # DWMWA_TEXT_COLOR
+                attribute(34, _colorref(border))])   # DWMWA_BORDER_COLOR
+
+
+def paint_window(window, theme: str) -> bool:
+    try:
+        hwnd = int(window.native.Handle.ToInt64())     # the WinForms form pywebview made
+    except Exception:
+        return False
+    return paint_title_bar(hwnd, theme)
+
+
+def follow_system_theme(repaint: Callable[[], None]) -> None:
+    """pywebview paints the title bar for Windows' theme again whenever that changes; paint it
+    for the console's after it (handlers run in the order they were added)."""
+    if os.name != "nt":
+        return
+    try:
+        # pythonnet, which pywebview's WinForms backend has loaded
+        from Microsoft.Win32 import SystemEvents
+        SystemEvents.UserPreferenceChanged += lambda sender, args: repaint()
+    except Exception:
+        pass
+
+
+LOCAL_ORIGINS = ("http://127.0.0.1:", "http://localhost:")
+
+
+def clipboard_rule(read_kind, allow) -> Callable:
+    """WebView2's PermissionRequested handler: the console's own right-click Paste reads the
+    clipboard, which WebView2 would ask the user about ("127.0.0.1 wants to see text and
+    images copied to the clipboard"). Voxa's local server may read it; anything else asks."""
+    def requested(sender, args) -> None:
+        if args.PermissionKind == read_kind and str(args.Uri).startswith(LOCAL_ORIGINS):
+            args.State = allow
+    return requested
+
+
+def allow_clipboard_read(window) -> bool:
+    """Add clipboard_rule to the window's WebView2, on its UI thread (WebView2 refuses others)."""
+    if os.name != "nt":
+        return False
+    try:
+        from Microsoft.Web.WebView2.Core import (
+            CoreWebView2PermissionKind,
+            CoreWebView2PermissionState,
+        )
+        from System import Action
+        rule = clipboard_rule(CoreWebView2PermissionKind.ClipboardRead,
+                              CoreWebView2PermissionState.Allow)
+
+        def add() -> None:
+            window.native.webview.CoreWebView2.PermissionRequested += rule
+
+        window.native.Invoke(Action(add))
+        return True
+    except Exception:
+        return False
+
+
+def open_folder(path: Path) -> bool:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        if os.name == "nt":
+            os.startfile(str(path))                 # noqa: S606 (our own folder, no arguments)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path)])
+        return True
+    except OSError:
+        return False
+
+
+def _shell_version() -> Optional[str]:
+    try:
+        from importlib.metadata import version
+        return version("voxa-dub")
+    except Exception:
+        return None
+
+
+class StudioApi:
+    """What the console may ask of the window it is in, as window.pywebview.api.*: paint the
+    title bar for its theme, open the log folder, say what it runs on. None of it takes a path
+    or a command, so no page can make it open anything else. pywebview hands the page public
+    methods only, so the state is kept in private attributes."""
+
+    def __init__(self, workspace: Path, theme: str = "dark") -> None:
+        self._workspace = workspace
+        self._theme = theme
+        self._window = None
+        self._renderer: Optional[str] = None
+
+    def _from_voxa(self) -> bool:
+        """The window shows Voxa's own page or its local server, never anything else."""
+        try:
+            url = self._window.get_current_url() if self._window is not None else None
+        except Exception:
+            return False
+        return (not url or url.startswith(("http://127.0.0.1:", "http://localhost:", "data:"))
+                or url == "about:blank")
+
+    def set_chrome(self, theme: str) -> bool:
+        if theme not in CHROME:
+            return False
+        self._theme = theme
+        data = read_place(self._workspace)
+        if data.get("theme") != theme:
+            data["theme"] = theme
+            _write_place(self._workspace, data)
+        return paint_window(self._window, theme) if self._window is not None else False
+
+    def open_logs(self) -> bool:
+        return self._from_voxa() and open_folder(self._workspace)
+
+    def app_info(self) -> dict:
+        import platform
+        return {"shell": _shell_version(), "renderer": self._renderer, "os": platform.platform()}
+
+
+def say_no_webview2(language: str) -> None:
+    text = NO_WEBVIEW2.get(language, NO_WEBVIEW2["en"]).format(url=WEBVIEW2_URL)
+    if os.name == "nt":
+        import ctypes
+        user32 = ctypes.WinDLL("user32")
+        user32.MessageBoxW.argtypes = (ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_wchar_p,
+                                       ctypes.c_uint)
+        # INFORMATION, SETFOREGROUND, TOPMOST: there's no window yet to own it
+        user32.MessageBoxW(None, text, TITLE, 0x40 | 0x10000 | 0x40000)
+    print(f"⚠️  {text}", file=sys.stderr)
 
 
 def window_icon(windows: Optional[bool] = None) -> Optional[str]:
@@ -289,25 +570,70 @@ def open_window(url: Optional[str], storage: Path, may_close_now: Callable[["obj
         import webview
     except Exception:                       # not installed, or no GUI backend to import
         return False
+    workspace = storage.parent
+    language = system_language()
+    saved = read_place(workspace)
+    theme = saved.get("theme") if saved.get("theme") in CHROME else "dark"
+    api = StudioApi(workspace, theme)
     try:
+        try:
+            screens = list(webview.screens)
+        except Exception:
+            screens = []
+        place = window_place(saved, screens)
+        state = {"now": "maximized" if place.get("maximized") else "normal"}
         webview.settings["ALLOW_DOWNLOADS"] = True      # a Save dialog, starting in Downloads
-        window = webview.create_window(TITLE, f"{url}/" if url else None,
-                                       html=None if url else page(waiting),
-                                       width=1280, height=840, min_size=(960, 640),
-                                       background_color="#0A0A0B", text_select=True)
+        window = webview.create_window(
+            TITLE, f"{url}/" if url else None,
+            html=None if url else page(waiting, theme, HINT[language]),
+            js_api=api, min_size=MIN_SIZE, background_color=PAGE_COLORS[theme][0],
+            text_select=True, **place)
+        api._window = window
+
+        def initialized(renderer: str) -> bool:
+            # Without WebView2 (or with a .NET older than 4.6.2) pywebview falls back to
+            # Internet Explorer's engine, which shows the console as a blank page: no window
+            # then, and the browser instead.
+            api._renderer = renderer
+            return renderer != "mshtml"
+
+        def shown() -> None:
+            paint_window(window, api._theme)
+            follow_system_theme(lambda: paint_window(window, api._theme))
+
+        def loaded() -> None:
+            # WebView2 is ready once a page has loaded (the splash, first).
+            if not state.get("clipboard"):
+                state["clipboard"] = allow_clipboard_read(window)
 
         def closing() -> bool:
-            return may_close_now(window)
+            if not may_close_now(window):
+                return False
+            try:
+                remember_place(workspace, window.x, window.y, window.width, window.height,
+                               state["now"])
+            except Exception:
+                pass
+            return True
 
+        window.events.initialized += initialized
+        window.events.shown += shown
+        window.events.loaded += loaded
         window.events.closing += closing
+        window.events.maximized += lambda: state.update(now="maximized")
+        window.events.minimized += lambda: state.update(now="minimized")
+        window.events.restored += lambda: state.update(now="normal")
         # Not private: the console keeps its language, theme and settings between launches,
         # here in the Voxa folder rather than pywebview's.
         webview.start(when_shown, (window,) if when_shown else None,
                       private_mode=False, storage_path=str(storage), icon=window_icon())
-        return True
     except Exception as e:                  # e.g. Linux without GTK or Qt
         print(f"⚠️  Couldn't open a window ({e}); opening the browser instead", file=sys.stderr)
         return False
+    if api._renderer == "mshtml":
+        say_no_webview2(language)
+        return False
+    return True
 
 
 def run(argv: Optional[List[str]] = None, hidden: bool = False) -> int:
@@ -349,7 +675,10 @@ def run(argv: Optional[List[str]] = None, hidden: bool = False) -> int:
         if ready():
             window.load_url(f"{url}/")
         else:
-            window.load_html(page(FAILED[language].format(log=log if hidden else "the terminal")))
+            theme = read_place(workspace).get("theme")
+            window.load_html(page(FAILED[language].format(log=log if hidden else "the terminal"),
+                                  theme if theme in CHROME else "dark",
+                                  button=OPEN_LOGS[language]))
 
     def may_close_now(window) -> bool:
         if server is None or not outcome["ready"]:   # not ours, or nothing running yet

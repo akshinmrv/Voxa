@@ -22,7 +22,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { ThemeChoice } from "@/components/shell/theme-choice";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
 export function SettingsView() {
@@ -556,9 +556,12 @@ export function SettingsView() {
           <CardTitle>{t("appearance.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <Field id="theme" label={t("appearance.theme")}>
-            <ThemeToggle />
-          </Field>
+          <div className="space-y-2">
+            <p id="theme-label" className="text-sm font-medium text-foreground">
+              {t("appearance.theme")}
+            </p>
+            <ThemeChoice id="theme-label" />
+          </div>
           <Field id="language" label={t("appearance.language")}>
             <LanguageSwitcher />
           </Field>
@@ -592,7 +595,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const t = useTranslations("App.settings");
   return (
     <>
-      <AppPageHeader title={t("title")} subtitle={t("subtitle")} />
+      <AppPageHeader subtitle={t("subtitle")} />
       <div className="max-w-2xl space-y-6">{children}</div>
     </>
   );

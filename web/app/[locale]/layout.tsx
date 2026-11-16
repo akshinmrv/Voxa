@@ -107,7 +107,7 @@ export default async function LocaleLayout({
           <ThemeProvider
             attribute="class"
             defaultTheme="dark"
-            enableSystem={false}
+            enableSystem
             disableTransitionOnChange
           >
             <SkipLink />

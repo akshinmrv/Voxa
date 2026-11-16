@@ -13,7 +13,7 @@ export default async function NewJobPage({
 
   return (
     <>
-      <AppPageHeader title={t("title")} subtitle={t("subtitle")} />
+      <AppPageHeader subtitle={t("subtitle")} />
       <NewJobFlow />
     </>
   );

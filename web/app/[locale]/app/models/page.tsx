@@ -13,7 +13,7 @@ export default async function ModelsPage({
 
   return (
     <>
-      <AppPageHeader title={t("title")} subtitle={t("subtitle")} />
+      <AppPageHeader subtitle={t("subtitle")} />
       <ModelsView />
     </>
   );

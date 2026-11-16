@@ -295,7 +295,7 @@ dinlediği için konsol bir erişim belirteci ister: her başlangıçta yenisi, 
 `-e VOXA_TOKEN=…` ile kendi belirteciniz. `127.0.0.1` üzerinde yayınlamak onu ağınızın dışında
 da tutar. Yüklemeler, işler ve dublajlar bağlanan klasörde kalır, Settings'te eklediğiniz
 anahtarlar da (onun `.env` dosyasında); bunun yerine onları `-e` ile de aktarabilirsiniz.
-Motorlar `voxa-engines` birimine kurulur — konsolun Models sayfasından ya da CLI ile:
+Motorlar `voxa-engines` birimine kurulur — konsolun Motorlar sayfasından ya da CLI ile:
 
 ```bash
 docker run --rm -v voxa-cache:/cache -v voxa-engines:/engines \
@@ -358,7 +358,7 @@ voxa doctor --deep     # bağımlılık güncellemelerinde bozulan XTTS ve pyann
 > **Kendi ortamında çalışan motorlar.** Chatterbox kendi PyTorch ve transformers sürümlerini
 > ister, bu yüzden `voxa engines install chatterbox` onu Voxa'nın yanına değil, `~/.voxa/engines`
 > altında ayrı bir ortama kurar; hiçbir şey çakışmaz ve `voxa engines remove chatterbox` onu
-> siler. Konsolun **Modeller** sayfası aynısını tek tıkla yapar. Bir dizüstü CPU'sunda cümle
+> siler. Konsolun **Motorlar** sayfası aynısını tek tıkla yapar. Bir dizüstü CPU'sunda cümle
 > başına 40–60 saniye sürdü, yani burada GPU belirleyicidir; ürettiği her klipte Resemble AI'ın
 > duyulmayan PerTh filigranı vardır. faster-whisper kuruluysa, Voxa Chatterbox'ın bazen satırın
 > sonuna eklediği sözcükleri de keser.

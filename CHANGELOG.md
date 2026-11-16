@@ -7,7 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Voxa Studio's window looks and behaves like one piece.**
+  - **Title bar.** It is drawn in the console's colors on Windows 11 and follows its theme, also
+    when Windows' own theme changes. The frame stays Windows' own, so Snap Layouts, resizing by
+    the edges and display scaling keep working; a window without a frame, drawn by the page,
+    loses those in pywebview.
+  - **Size and place.** The window opens where it was closed and at that size, maximized if it
+    was. If that monitor is gone, it opens centered.
+  - **Starting page.** It is in the theme the console was last in, so nothing flashes. After ten
+    seconds it explains the wait (Voxa loading its libraries; measured 9 s warm and 21 s right
+    after a restart). If the server doesn't start, a button opens the log folder.
+  - **Without Microsoft Edge WebView2** (or with a .NET Framework older than 4.6.2), pywebview
+    fell back to Internet Explorer's engine and the window stayed blank. Now a message says so,
+    links to WebView2, and the console opens in the browser.
+  - **Right-click menu.** WebView2's own is off in the window, so text fields had none. The
+    console now offers Cut, Copy, Paste and Select all on a field or on selected text. Reading
+    the clipboard for Paste is allowed for Voxa's own local server only, so WebView2 doesn't ask
+    about it each time.
+- **The console's frame for the desktop app:**
+  - **Sidebar.** It collapses to a rail of icons (Ctrl+B) and stays as it was left, with no
+    flicker on load. Below 1100 px it is a rail unless opened, and on a phone it moves into a
+    menu. It shows how many dubs are going, and a dot when one waits for review.
+  - **Header.** It names the page, or *Dubs › the file* on a dub's page.
+  - **Status bar.** It shows whether the server answers, where the models run, the dubs running,
+    queued or waiting for review, a newer Voxa and how to get it, and which Voxa this is, with
+    links to its documentation.
+  - **Command palette (Ctrl+K).** Every page, the theme, the language, the sidebar, the
+    shortcuts, the last eight dubs and the documentation, by typing a few letters.
+  - **Shortcuts.** `?` lists the shortcuts. In Voxa Studio's window Ctrl+N and Ctrl+1…4 work
+    too; a browser keeps those for itself.
+  - **System theme.** Settings offers it beside Dark and Light.
+
 ### Changed
+
+- **The console's sections are now Studio, Dubs, Voices, Engines and Settings** (they were New
+  job, Jobs, Voices, Models). Their addresses are unchanged. Language and theme moved from the
+  top bar to Settings and the command palette. A dub's page names its file in the header
+  instead of repeating it.
 
 - **The console's colors pass WCAG AA in both themes, and a check keeps them there.** The
   faintest text (placeholders, some hints) was 3.9:1 on the dark panels and is now 5.5:1. In the
@@ -24,6 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - a loading state for buttons;
   - the style guide (`/en/style-guide`), rebuilt into a catalogue of all of them in both themes
     and three languages.
+
+### Fixed
+
+- **The sidebar never marked the first page (New job, now Studio) as the current one** in the
+  console Voxa ships. That console is exported with a slash at the end of each address (`/app/`),
+  and the match wanted `/app` exactly.
 
 ## [1.18.0] - 2026-11-16
 

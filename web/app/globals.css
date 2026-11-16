@@ -11,6 +11,8 @@
   Brand accent = Signal Cyan (#38BDF8) exposed as `--primary` and `--brand`.
 */
 :root {
+  /* Native parts (scrollbars, a <select>'s list, date pickers) drawn for the theme too. */
+  color-scheme: dark;
   --radius: 10px;
 
   /* Base neutrals — OLED dark */
@@ -87,6 +89,7 @@
 }
 
 .light {
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #0a0a0b;
   --card: #ffffff;
@@ -326,6 +329,30 @@
     font-family: var(--font-mono), ui-monospace, monospace;
     font-size: 0.875rem;
     line-height: 1.5;
+  }
+}
+
+/*
+  The app's sidebar: 232 px, or a 56 px rail of icons (VOXA_DESIGN_PLAN.md §6.4).
+  data-sidebar on <html> is the user's last choice, set by an inline script before the first
+  paint so a collapsed sidebar doesn't open and close on every launch. Without a choice it is
+  a rail below 1100 px. It changes width at once: nothing animates the layout.
+*/
+.voxa-sidebar {
+  width: 232px;
+}
+html[data-sidebar="collapsed"] .voxa-sidebar {
+  width: 56px;
+}
+html[data-sidebar="collapsed"] .voxa-sidebar .voxa-sidebar-label {
+  display: none;
+}
+@media (max-width: 1099px) {
+  html:not([data-sidebar="expanded"]) .voxa-sidebar {
+    width: 56px;
+  }
+  html:not([data-sidebar="expanded"]) .voxa-sidebar .voxa-sidebar-label {
+    display: none;
   }
 }
 
