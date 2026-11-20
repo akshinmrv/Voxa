@@ -3,7 +3,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { useRouter as useNextRouter } from "next/navigation";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AudioLines, Check, Play, Save, Search, Undo2 } from "lucide-react";
 import {
@@ -22,16 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedControl } from "@/components/ui/segmented";
 import { Tooltip } from "@/components/ui/tooltip";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { LeaveDialog, useLeaveGuard } from "@/components/app/leave-guard";
 import { Loading } from "@/components/app/query-states";
 import { useVoices } from "@/components/app/voice-picker";
 import { VoiceChoice } from "@/components/studio/voice-choice";
@@ -125,7 +115,6 @@ export function LinesView({
   const t = useTranslations("App.lines");
   const tr = useTranslations("App.review");
   const qc = useQueryClient();
-  const nextRouter = useNextRouter();
   const query = useQuery({
     queryKey: ["translation", jobId],
     queryFn: () => getTranslation(jobId),
@@ -145,7 +134,6 @@ export function LinesView({
   const [filter, setFilter] = useState<Filter>("all");
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [leaving, setLeaving] = useState<string | null>(null);
   // State, not a ref: the player appears only once the lines have loaded (or the source
   // switches), and its listeners have to be added to that element when it does.
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
@@ -408,27 +396,7 @@ export function LinesView({
   }, []);
 
   // ── not losing what was typed ────────────────────────
-  useEffect(() => {
-    if (!dirty) return;
-    const onBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
-    const onClick = (event: MouseEvent) => {
-      const link = (event.target as HTMLElement | null)?.closest?.("a[href]");
-      if (!(link instanceof HTMLAnchorElement) || event.defaultPrevented) return;
-      if (link.target === "_blank" || link.hasAttribute("download") || event.button !== 0) return;
-      if (event.metaKey || event.ctrlKey || event.shiftKey) return;
-      const url = new URL(link.href, window.location.href);
-      if (url.origin !== window.location.origin) return;
-      event.preventDefault();
-      event.stopPropagation();
-      setLeaving(url.pathname + url.search);
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    document.addEventListener("click", onClick, true);
-    return () => {
-      window.removeEventListener("beforeunload", onBeforeUnload);
-      document.removeEventListener("click", onClick, true);
-    };
-  }, [dirty]);
+  const guard = useLeaveGuard(dirty);
 
   if (query.isPending) return <Loading />;
   if (query.isError)
@@ -827,32 +795,18 @@ export function LinesView({
         <span className="ml-auto hidden text-ui-small text-fg-subtle xl:block">{t("keys")}</span>
       </div>
 
-      <AlertDialog open={leaving !== null} onOpenChange={(open) => !open && setLeaving(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("leaveTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("leaveBody", { count: Math.max(unsaved, 1) })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("stay")}</AlertDialogCancel>
-            <AlertDialogAction
-              destructive
-              onClick={() => {
-                const to = leaving;
-                setDrafts({});
-                setVoiceDraft(undefined);
-                setSpeakerDraft(undefined);
-                setLeaving(null);
-                if (to) nextRouter.push(to);
-              }}
-            >
-              {t("leave")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <LeaveDialog
+        guard={guard}
+        title={t("leaveTitle")}
+        body={t("leaveBody", { count: Math.max(unsaved, 1) })}
+        stayLabel={t("stay")}
+        leaveLabel={t("leave")}
+        onForget={() => {
+          setDrafts({});
+          setVoiceDraft(undefined);
+          setSpeakerDraft(undefined);
+        }}
+      />
     </div>
   );
 }

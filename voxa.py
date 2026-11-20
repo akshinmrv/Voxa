@@ -5678,13 +5678,36 @@ def _in_container() -> bool:
     return Path("/.dockerenv").exists() or Path("/run/.containerenv").exists()
 
 
+def _setup_dir() -> Optional[Path]:
+    """The folder VoxaSetup.exe installed this copy of Voxa into, or None. Setup keeps the
+    tool's environment in <folder>\tools\voxa-dub, beside its uninstaller."""
+    folder = Path(sys.prefix).parent.parent
+    return folder if (folder / "Uninstall Voxa.exe").exists() else None
+
+
 def _uv_tool_command(extras: Sequence[str], flag: str = "--upgrade") -> str:
     """uv's command that installs Voxa again as a tool, with these extras. uv replaces the
     tool's environment, so the extras it already has are named again. So is the PyTorch
     backend, as the one-line installers set it: uv doesn't keep it, and re-resolving without
     it takes PyTorch from PyPI alone, which on Linux is the CUDA build (about 3 GB)."""
     spec = f"voxa-dub[{','.join(sorted(set(extras)))}]" if extras else "voxa-dub"
-    return f'uv tool install {flag} --torch-backend auto "{spec}"'
+    setup = _setup_dir()
+    if setup is None:
+        return f'uv tool install {flag} --torch-backend auto "{spec}"'
+    # VoxaSetup.exe keeps its own uv, Python and Voxa in its folder and tells uv so (voxa.nsi,
+    # UvEnvironment). Without the same settings, uv would install a second Voxa elsewhere. The
+    # version stays this one: the next Setup upgrades it, and keeps the extras (extras.nsh).
+    # PowerShell, which Windows' terminal opens.
+    def quoted(path: Path) -> str:
+        return "'" + str(path).replace("'", "''") + "'"
+    settings = {"UV_TOOL_DIR": quoted(setup / "tools"), "UV_TOOL_BIN_DIR": quoted(setup / "bin"),
+                "UV_PYTHON_INSTALL_DIR": quoted(setup / "python"),
+                "UV_PYTHON_PREFERENCE": "'only-managed'", "UV_NO_CACHE": "'1'",
+                "UV_NO_CONFIG": "'1'"}
+    python = f"{sys.version_info.major}.{sys.version_info.minor}"
+    return ("; ".join(f"$env:{name}={value}" for name, value in settings.items())
+            + f"; & {quoted(setup / 'uv.exe')} tool install {flag} --torch-backend auto"
+            f' --python {python} "{spec}=={__version__}"')
 
 
 def _install_hint(extra: str) -> str:
@@ -5809,8 +5832,7 @@ def _install_kind() -> str:
     (a git checkout), "uv" (uv tool: the one-line installers), "pipx" or "pip"."""
     if _in_container():
         return "container"
-    # VoxaSetup.exe keeps the tool environment in <install dir>\tools\voxa-dub.
-    if (Path(sys.prefix).parent.parent / "Uninstall Voxa.exe").exists():
+    if _setup_dir() is not None:
         return "setup"
     if (Path(__file__).resolve().parent / ".git").exists():
         return "source"

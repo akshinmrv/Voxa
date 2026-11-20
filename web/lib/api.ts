@@ -1,12 +1,13 @@
 import { API_BASE } from "./config";
 import type {
+  DoctorReport,
   InstallableEngine,
   JobConfig,
   JobSummary,
   JobTranslation,
   LibraryVoice,
   VoiceList,
-  ProviderKeyStatus,
+  KeysStatus,
   ProviderTestResult,
   SettingsPatch,
   UpdateStatus,
@@ -178,14 +179,12 @@ export async function resetSettings(): Promise<VoxaSettings> {
   return asJson(await fetch(`${API_BASE}/api/settings/reset`, { method: "POST" }));
 }
 
-export async function getKeys(): Promise<{ keys: ProviderKeyStatus[] }> {
+export async function getKeys(): Promise<KeysStatus> {
   return asJson(await fetch(`${API_BASE}/api/keys`));
 }
 
-export async function putKey(
-  provider: string,
-  value: string,
-): Promise<{ keys: ProviderKeyStatus[] }> {
+/** An LLM provider's key, or "hf" for the Hugging Face token. */
+export async function putKey(provider: string, value: string): Promise<KeysStatus> {
   return asJson(
     await fetch(`${API_BASE}/api/keys/${provider}`, {
       method: "PUT",
@@ -195,7 +194,7 @@ export async function putKey(
   );
 }
 
-export async function deleteKey(provider: string): Promise<{ keys: ProviderKeyStatus[] }> {
+export async function deleteKey(provider: string): Promise<KeysStatus> {
   return asJson(await fetch(`${API_BASE}/api/keys/${provider}`, { method: "DELETE" }));
 }
 
@@ -227,6 +226,11 @@ export async function revealFile(
   return asJson(
     await fetch(`${API_BASE}/api/jobs/${id}/reveal?file=${file}`, { method: "POST" }),
   );
+}
+
+/** What `voxa doctor` says; with online, Google, Edge and Hugging Face are tried too. */
+export async function getDoctor(online = false): Promise<DoctorReport> {
+  return asJson(await fetch(`${API_BASE}/api/doctor?online=${online}`, { cache: "no-store" }));
 }
 
 export async function getUpdate(): Promise<UpdateStatus> {

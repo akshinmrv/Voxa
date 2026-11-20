@@ -229,7 +229,8 @@
       "models": "Engines",
       "settings": "Settings",
       "docs": "Docs",
-      "backToSite": "Back to site"
+      "backToSite": "Back to site",
+      "system": "System"
     },
     "shell": {
       "nav": "Main",
@@ -255,7 +256,8 @@
         "openLogs": "Open the log folder",
         "docs": "Documentation",
         "website": "Voxa's website",
-        "github": "Voxa on GitHub"
+        "github": "Voxa on GitHub",
+        "system": "System check"
       },
       "shortcuts": {
         "title": "Keyboard shortcuts",
@@ -272,7 +274,7 @@
         "nextLine": "Previous or next line (the lines)",
         "playLine": "Play the line (the lines)",
         "toggleSource": "Original or dub (the lines)",
-        "save": "Save the lines",
+        "save": "Save the lines, or Settings",
         "search": "Search the dubs (Dubs)",
         "moveRow": "Previous or next dub (Dubs)",
         "removeRow": "Remove the dub (Dubs)"
@@ -489,10 +491,9 @@
       "install": "Install",
       "installing": "Installing…",
       "remove": "Remove",
-      "removeConfirm": "Remove {label}? Its environment is deleted; downloaded model files stay in the Hugging Face cache.",
+      "removeConfirm": "Its environment is deleted. The model files it downloaded stay in the Hugging Face cache.",
       "installed": "Installed",
       "installFailed": "Install failed",
-      "download": "≈{gb} GB download",
       "languages": "{count, plural, one {# language} other {# languages}}",
       "anyLanguage": "Any language",
       "homepage": "Project page",
@@ -502,22 +503,27 @@
         "no": "non-commercial",
         "unknown": "licence unclear"
       },
-      "ncConfirm": "{label} is licensed for non-commercial use only. Install it anyway?"
+      "ncConfirm": "{label} is licensed for non-commercial use only. Install it anyway?",
+      "installSize": "Install · about {gb} GB",
+      "licence": "Licence",
+      "log": "Install log",
+      "removeTitle": "Remove {label}?",
+      "ncTitle": "Install {label}?",
+      "builtIn": "Built in",
+      "whisper": "Whisper turns the speech into text. The larger the model, the more accurate and the slower it is; each downloads the first time it's used.",
+      "addKey": "Add the key in Settings"
     },
     "settings": {
       "title": "Settings",
-      "subtitle": "Providers, API keys, and appearance.",
+      "subtitle": "What a dub uses unless it says otherwise, your keys, and Voxa itself.",
       "providers": {
-        "title": "Providers",
         "desc": "Default engines used when a job doesn't override them.",
         "translator": "Default translator",
-        "tts": "Default speech engine",
-        "save": "Save changes",
-        "saved": "Saved"
+        "tts": "Default speech engine"
       },
       "keys": {
         "title": "API providers",
-        "desc": "Add a key to use OpenAI or Anthropic for translation. Keys are stored in your local .env and never leave this machine.",
+        "desc": "Add a key to translate with OpenAI, Anthropic or OpenRouter. Keys are kept in your local .env and never leave this machine.",
         "notSet": "Not set",
         "keyLabel": "API key",
         "keyPlaceholderSet": "Saved — enter a new key to replace",
@@ -527,20 +533,31 @@
         "saveKey": "Save key",
         "deleteKey": "Remove",
         "modelLabel": "Default model",
-        "saveModel": "Save",
         "test": "Test connection",
         "testing": "Testing…",
         "testOk": "Connected",
-        "testFail": "Connection failed"
+        "testFail": "Connection failed",
+        "source": {
+          "file": "in Voxa's .env",
+          "environment": "from the environment"
+        },
+        "sourceEnvHint": "Set as {name} where Voxa was started.",
+        "replace": "Replace",
+        "keyFor": "{label} key",
+        "testOkUser": "Hugging Face takes the token of {user}",
+        "removeTitle": "Remove the {label} key?",
+        "removeBody": "It's deleted from Voxa's .env file. Dubs that need it won't run until a key is added again.",
+        "removeBodyEnv": "It was set as {name} where Voxa was started, so it's back when Voxa next starts. Remove it there to remove it for good; here it's gone until then.",
+        "access": "can be downloaded",
+        "noAccess": "its terms aren't accepted for this account",
+        "accessUnknown": "couldn't be checked",
+        "acceptTerms": "Accept them"
       },
       "translation": {
         "title": "Translation style",
         "desc": "Extra guidance for LLM translators (OpenAI, Anthropic), layered on top of the built-in prompt. The output format, line count and timing rules always stay enforced.",
         "placeholder": "e.g. Formal register for a medical audience. Keep terminology precise. Brand voice: warm and concise.",
-        "hint": "Applies to OpenAI/Anthropic translation only. Leave empty for the default behaviour.",
-        "save": "Save style",
-        "reset": "Reset to default",
-        "saved": "Saved"
+        "hint": "Applies to OpenAI/Anthropic translation only. Leave empty for the default behaviour."
       },
       "speech": {
         "title": "Speech style",
@@ -549,9 +566,7 @@
         "textLabel": "Your own direction",
         "placeholder": "e.g. Like a nature documentary narrator. Confident, never rushed.",
         "guard": "Timing is always enforced: Voxa appends a locked instruction for steady, natural pacing with no added pauses. Style changes how the voice sounds — never how long a line takes, so the dub stays in sync.",
-        "save": "Save style",
-        "reset": "Reset to default",
-        "saved": "Saved"
+        "notInstalled": "not installed"
       },
       "advanced": {
         "deviceLabel": "Where the models run",
@@ -573,8 +588,6 @@
         "workersHint": "How many segments the cloud engines (OpenAI, Edge) synthesize at once. Default 4; range 1–16. Higher is faster but may hit your API rate limit. Offline engines ignore it.",
         "concurrentLabel": "Videos dubbed at once",
         "concurrentHint": "How many jobs run in parallel instead of queueing. Default 1; range 1–4. Raising it helps when the engines wait on the network (cloud translation and speech) and costs memory when they don't — each job loads its own Whisper model. Two dubs of the same video always run one after the other.",
-        "save": "Save advanced",
-        "saved": "Saved",
         "qualityGateLabel": "Quality gate (score & retry speech)",
         "qualityGateHint": "Scores each synthesized line and re-renders a garbled one with neutral delivery. Slower, OpenAI TTS. Off by default.",
         "autoDownloadLabel": "Save each dub automatically",
@@ -583,7 +596,6 @@
         "checkUpdatesHint": "Once a day, Voxa asks PyPI which voxa-dub is the newest and tells you here when it's newer than yours. PyPI sees what any download shows it (your IP address) and this Voxa's version; nothing about your videos or settings is sent. VOXA_NO_UPDATE_CHECK=1 turns it off for the command line as well."
       },
       "appearance": {
-        "title": "Appearance",
         "theme": "Theme",
         "language": "Language"
       },
@@ -591,7 +603,70 @@
         "title": "Danger zone",
         "desc": "Reset all settings to their defaults. Your API keys are not affected.",
         "reset": "Reset settings",
-        "confirm": "Reset all settings to their defaults?"
+        "confirm": "Reset all settings to their defaults?",
+        "resetBody": "Every setting goes back to its default. Your API keys and the Hugging Face token stay."
+      },
+      "search": "Search Settings",
+      "results": "Results",
+      "noResults": "Nothing in Settings matches.",
+      "sections": {
+        "general": "General",
+        "translation": "Translation",
+        "speech": "Speech",
+        "speakers": "Speakers",
+        "performance": "Performance",
+        "about": "About",
+        "reset": "Reset"
+      },
+      "sectionDesc": {
+        "general": "Language, theme, and what Voxa does on its own.",
+        "translation": "The translator a dub uses, its keys, and the style it translates in.",
+        "speech": "The voice a dub speaks with, and how.",
+        "speakers": "Telling speakers apart, so each keeps a voice of their own.",
+        "performance": "Where the models run, and how much runs at once.",
+        "about": "This Voxa, and where to find more.",
+        "reset": "Every setting back to its default."
+      },
+      "unsavedHere": "Changes not saved here",
+      "unsaved": "Changes not saved",
+      "changes": "{count, plural, one {# change not saved} other {# changes not saved}}",
+      "discard": "Discard",
+      "saveChanges": "Save",
+      "savedNote": "Settings saved.",
+      "leaveTitle": "Leave without saving?",
+      "leaveBody": "{count, plural, one {# change in Settings isn't saved. It will be lost.} other {# changes in Settings aren't saved. They will be lost.}}",
+      "stay": "Stay",
+      "leave": "Leave without saving",
+      "speakers": {
+        "token": "Hugging Face token",
+        "desc": "Telling speakers apart (Speakers, in the Studio) uses pyannote's two models, which download from Hugging Face. Each asks a free account to accept its terms, and Voxa downloads them with a token from that account.",
+        "step1": "Accept the terms of both models, with the account the token will come from:",
+        "step2": "Create a token that can read:",
+        "step3": "Paste it here and test it: both models should say they can be downloaded.",
+        "notInstalled": "Telling speakers apart needs pyannote, which this Voxa doesn't have. System shows the command that adds it.",
+        "openSystem": "Open System",
+        "paste": "Paste your token"
+      },
+      "about": {
+        "version": "Version",
+        "newest": "the newest",
+        "newer": "{latest} is out",
+        "pypiNewest": "PyPI's newest is {latest}",
+        "updateOff": "updates aren't checked",
+        "updateUnknown": "couldn't ask PyPI for the newest",
+        "updateSearch": "update, version, newest",
+        "notes": "What's new in it",
+        "window": "Window",
+        "system": "System check",
+        "systemHint": "What this Voxa can do, and the commands that fix what it can't.",
+        "openSystem": "Open System",
+        "logs": "Log folder",
+        "logsHint": "Voxa's logs, dubs and settings (.voxa_serve).",
+        "openLogs": "Open the log folder",
+        "links": "Links",
+        "docs": "Documentation",
+        "website": "Website",
+        "licences": "Licences (NOTICE)"
       }
     },
     "status": {
@@ -740,12 +815,24 @@
       "libraryEmpty": "No voices yet.",
       "listen": "Listen",
       "delete": "Delete",
-      "deleteConfirm": "Delete {name}? Dubs that use it will cut a voice from their video instead.",
+      "deleteConfirm": "Dubs that use it will cut a voice from their video instead.",
       "male": "male",
       "female": "female",
       "notDownloaded": "downloads on first use",
       "seconds": "{n} s",
-      "loadFailed": "Couldn't load the voices: {error}"
+      "loadFailed": "Couldn't load the voices: {error}",
+      "catalogue": "Catalogue",
+      "engine": "Engine",
+      "chooseLanguage": "Type a language",
+      "noLanguage": "No language matches.",
+      "findVoice": "Find a voice",
+      "count": "{count, plural, one {# voice} other {# voices}}",
+      "styles": "speaks in styles",
+      "useInStudio": "Use in the Studio",
+      "drop": "Drop an audio or video file here",
+      "choose": "Choose a file",
+      "chooseAnother": "Choose another",
+      "deleteTitle": "Delete {name}?"
     },
     "localOnly": {
       "title": "The operator console runs on your machine",
@@ -756,6 +843,45 @@
       "serve": "voxa studio",
       "backHome": "Back to home",
       "viewGithub": "View on GitHub"
+    },
+    "system": {
+      "subtitle": "What this Voxa can do, and how to fix what it can't.",
+      "ready": "Ready to dub",
+      "notReady": "{count, plural, one {# problem stops Voxa from dubbing} other {# problems stop Voxa from dubbing}}",
+      "warnings": "{count, plural, one {# warning} other {# warnings}}",
+      "about": "Voxa {version} · Python {python} · {os} · {install}",
+      "install": {
+        "setup": "installed with VoxaSetup",
+        "uv": "installed with uv",
+        "pipx": "installed with pipx",
+        "pip": "installed with pip",
+        "source": "from a git checkout",
+        "container": "in a container"
+      },
+      "again": "Check again",
+      "online": "Try the online services too",
+      "copyFix": "Copy the command",
+      "fixIn": {
+        "settings": "Add the key in Settings",
+        "speakers": "Add the token in Settings",
+        "engines": "Install it under Engines"
+      },
+      "deepHint": "voxa doctor --deep also loads XTTS and pyannote to see that they work. That takes a while, so it stays in the command line. What each check found is written in English.",
+      "sections": {
+        "Required": "Required",
+        "Speed": "Speed",
+        "Translation": "Translation",
+        "Speech": "Speech",
+        "Extras": "Extras",
+        "Disk": "Disk",
+        "Updates": "Updates"
+      },
+      "status": {
+        "ok": "Works",
+        "warn": "Works, with a caveat",
+        "fail": "Doesn't work",
+        "off": "Not set up (optional)"
+      }
     }
   }
 }

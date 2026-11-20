@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 let playing: HTMLAudioElement | null = null;
 
 /** ▶ for one voice: a library clip as it is, an Edge or Piper voice saying a line. */
-function Play({
+export function Play({
   engine,
   voice,
   lang,

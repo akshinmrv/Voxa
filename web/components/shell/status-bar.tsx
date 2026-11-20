@@ -15,6 +15,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
+import { SYSTEM_NAV } from "@/components/app/nav-items";
 import { getHealth, getOptions, getSettings } from "@/lib/api";
 import { useUpdateStatus } from "@/lib/use-update";
 import { countJobs, useJobs } from "@/lib/use-jobs";
@@ -179,6 +180,9 @@ function AboutItem({ version }: { version: string | null }) {
         <p className="px-2 pb-1.5 pt-1 text-ui-label uppercase text-muted-foreground">
           {t("status.about")}
         </p>
+        <Link className={row} href={SYSTEM_NAV.href}>
+          <SYSTEM_NAV.icon /> {t("palette.system")}
+        </Link>
         <button type="button" className={row} onClick={openShortcuts}>
           <Keyboard /> {t("palette.shortcuts")}
         </button>

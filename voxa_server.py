@@ -34,6 +34,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -910,20 +911,88 @@ def delete_env_key(env_key: str) -> None:
     os.environ.pop(env_key, None)
 
 
+def _env_file_value(env_key: str) -> Optional[str]:
+    """KEY's value in the .env file, or None."""
+    try:
+        lines = Path(ENV_FILE).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        name, sep, value = line.partition("=")
+        if sep and name.strip().removeprefix("export ").strip() == env_key:
+            return value.strip().strip('"').strip("'")
+    return None
+
+
+def key_source(env_key: str, value: str) -> Optional[str]:
+    """Where a key that is set comes from: "file", the .env file Settings writes (and Voxa
+    reads when it starts), or "environment", set where Voxa was started. One of those is
+    removed in Settings for good; the other comes back with the next start."""
+    if not value:
+        return None
+    return "file" if _env_file_value(env_key) == value else "environment"
+
+
+def _key_status(env_key: str) -> dict:
+    value = os.environ.get(env_key, "")
+    return {"envKey": env_key, "hasKey": bool(value), "masked": _mask(value) if value else None,
+            "source": key_source(env_key, value)}
+
+
 def read_key_status() -> List[dict]:
     """Masked status for every provider that needs a key. 'hasKey' reflects the live
     environment (what a job would actually use), never the raw value."""
-    out = []
-    for pid, info in voxa.LLM_PROVIDERS.items():
-        env_key = info["env_key"]
-        value = os.environ.get(env_key, "")
-        out.append({
-            "provider": pid,
-            "envKey": env_key,
-            "hasKey": bool(value),
-            "masked": _mask(value) if value else None,
-        })
-    return out
+    return [{"provider": pid, **_key_status(info["env_key"])}
+            for pid, info in voxa.LLM_PROVIDERS.items()]
+
+
+# The Hugging Face token pyannote needs to download its models (--diarize). Voxa reads
+# HF_TOKEN, or HUGGINGFACE_TOKEN; Settings writes HF_TOKEN.
+HF_ENV = "HF_TOKEN"
+HF_MODELS = ("pyannote/speaker-diarization-3.1", "pyannote/segmentation-3.0")
+
+
+def hf_token_status() -> dict:
+    name = next((n for n in (HF_ENV, "HUGGINGFACE_TOKEN") if os.environ.get(n)), HF_ENV)
+    return {**_key_status(name), "models": [f"https://huggingface.co/{m}" for m in HF_MODELS]}
+
+
+def all_key_status() -> dict:
+    return {"keys": read_key_status(), "hf": hf_token_status()}
+
+
+def test_hf_token() -> dict:
+    """Does Hugging Face take the token, and may it download pyannote's models (whose terms
+    each account accepts on their pages)? The token goes to huggingface.co only. Never
+    raises."""
+    token = os.environ.get(HF_ENV) or os.environ.get("HUGGINGFACE_TOKEN")
+    if not token:
+        return {"ok": False, "error": "No token set."}
+    headers = {"Authorization": f"Bearer {token}", "User-Agent": "voxa-console"}
+    started = time.perf_counter()
+    try:
+        req = urllib.request.Request("https://huggingface.co/api/whoami-v2", headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            who = json.load(resp)
+    except urllib.error.HTTPError as exc:
+        return {"ok": False, "error": "Hugging Face doesn't accept this token." if exc.code == 401
+                else f"Hugging Face answered {exc.code}."}
+    except Exception as exc:  # noqa: BLE001 — a network error, said to the UI
+        return {"ok": False, "error": f"Couldn't reach Hugging Face: {exc}"[:300]}
+    models = []
+    for repo in HF_MODELS:
+        req = urllib.request.Request(f"https://huggingface.co/{repo}/resolve/main/config.yaml",
+                                     method="HEAD", headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=15):
+                access: Optional[bool] = True
+        except urllib.error.HTTPError as exc:
+            access = False if exc.code in (401, 403) else None
+        except Exception:  # noqa: BLE001
+            access = None
+        models.append({"id": repo, "url": f"https://huggingface.co/{repo}", "access": access})
+    return {"ok": all(m["access"] for m in models), "user": who.get("name"), "models": models,
+            "latencyMs": int((time.perf_counter() - started) * 1000)}
 
 
 # --------------------------------------------------------------------------- #
@@ -1379,32 +1448,70 @@ async def post_settings_reset(_: None = Depends(require_local)) -> dict:
 
 @app.get("/api/keys")
 async def get_keys(_: None = Depends(require_local)) -> dict:
-    return {"keys": read_key_status()}
+    return all_key_status()
+
+
+def _key_env(provider: str) -> str:
+    """The variable a key is kept in: an LLM provider's, or "hf" for Hugging Face's token."""
+    if provider == "hf":
+        return HF_ENV
+    info = voxa.LLM_PROVIDERS.get(provider)
+    if not info:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
+    return info["env_key"]
 
 
 @app.put("/api/keys/{provider}")
 async def put_key(provider: str, body: KeyBody, _: None = Depends(require_local)) -> dict:
-    info = voxa.LLM_PROVIDERS.get(provider)
-    if not info:
-        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
+    env_key = _key_env(provider)
     if not body.value.strip():
         raise HTTPException(status_code=422, detail="Key value is empty.")
-    set_env_key(info["env_key"], body.value)
-    return {"keys": read_key_status()}
+    set_env_key(env_key, body.value)
+    return all_key_status()
 
 
 @app.delete("/api/keys/{provider}")
 async def delete_key(provider: str, _: None = Depends(require_local)) -> dict:
-    info = voxa.LLM_PROVIDERS.get(provider)
-    if not info:
-        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
-    delete_env_key(info["env_key"])
-    return {"keys": read_key_status()}
+    delete_env_key(_key_env(provider))
+    if provider == "hf":
+        os.environ.pop("HUGGINGFACE_TOKEN", None)   # the other name Voxa reads it by
+    return all_key_status()
 
 
 @app.post("/api/providers/{provider}/test")
-async def post_provider_test(provider: str, _: None = Depends(require_local)) -> dict:
-    return test_provider(provider)
+def post_provider_test(provider: str, _: None = Depends(require_local)) -> dict:
+    # Not async: the test waits on the provider's answer, which would hold up every other
+    # request meanwhile.
+    return test_hf_token() if provider == "hf" else test_provider(provider)
+
+
+def os_name() -> str:
+    """"Windows 11", which Python before 3.12 calls Windows 10 (its build number tells them
+    apart); elsewhere the system and its release."""
+    import platform
+    system, release = platform.system(), platform.release()
+    if system == "Windows" and release == "10":
+        try:
+            if int(platform.version().split(".")[2]) >= 22000:
+                release = "11"
+        except (IndexError, ValueError):
+            pass
+    return f"{system} {release}"
+
+
+@app.get("/api/doctor")
+def doctor(online: bool = False) -> dict:
+    """What `voxa doctor` says, for the console's System page: each check's section, name,
+    status (ok, warn, fail, off), what it found and how to fix it, by this install's own
+    commands. With online, it also tries Google, Edge and Hugging Face. Not async: it runs
+    ffmpeg and asks Ollama and PyPI. Never --deep: that loads models."""
+    import platform
+    checks = voxa.doctor_checks(online=online)
+    return {"version": app.version, "python": platform.python_version(),
+            "os": os_name(),
+            "install": voxa._install_kind(), "sections": list(voxa.DOCTOR_SECTIONS),
+            "checks": [check._asdict() for check in checks],
+            "ready": not any(check.status == "fail" for check in checks)}
 
 
 @app.post("/api/upload")

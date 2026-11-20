@@ -25,7 +25,7 @@ import { SITE } from "@/lib/site";
 import { keyLabel } from "@/lib/shortcuts";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { GithubIcon } from "@/components/icons/github";
-import { APP_NAV, SETTINGS_NAV } from "@/components/app/nav-items";
+import { APP_NAV, SETTINGS_NAV, SYSTEM_NAV } from "@/components/app/nav-items";
 import { toggleSidebar } from "./sidebar-state";
 
 const LANGUAGE_NAMES: Record<string, string> = { en: "English", az: "Azərbaycanca", tr: "Türkçe" };
@@ -126,6 +126,9 @@ export function CommandPalette({
                 shortcut={keyLabel(["Mod", ","])}
               >
                 <SETTINGS_NAV.icon /> {t("nav.settings")}
+              </Item>
+              <Item onSelect={run(() => router.push(SYSTEM_NAV.href))}>
+                <SYSTEM_NAV.icon /> {t("nav.system")}
               </Item>
             </Command.Group>
 

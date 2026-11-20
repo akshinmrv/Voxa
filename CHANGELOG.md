@@ -124,6 +124,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **API:** `POST /api/jobs/{id}/reveal?file=video|srt|folder`, and `canReveal` in
     `/api/health`.
 
+- **System: what this Voxa can do, and how to fix what it can't.** A page with `voxa doctor`'s
+  checks: FFmpeg, the GPU, each translator and voice, the extras, disk space and updates.
+  - **Each check:** what it found, and the fix in this install's own commands, copied with
+    one click.
+  - **Fixes in the console:** where the console fixes something itself, the check leads there
+    instead (a key to Settings, an engine to Engines).
+  - **The online services** (Google, Edge, Hugging Face) are tried when asked for. The deep
+    checks, which load models, stay in the command line.
+  - **Where it opens from:** Settings › About, the status bar's About and the command palette.
+  - **API:** `GET /api/doctor?online=`.
+- **Settings in seven sections:** General, Translation, Speech, Speakers, Performance, About
+  and Reset, with a search over every setting's name and description.
+  - **Finding a setting:** a result opens its section, then lights and focuses the setting.
+  - **Saving:** changes made anywhere are counted in one bar and saved together (Ctrl+S) or
+    discarded. A section with changes not saved has a dot.
+  - **Leaving:** a link away, or another language, asks first. The section is in the address
+    (`?section=`), so other pages link to one.
+  - **Keys:** each is saved on its own and shown only masked, with where it comes from: the
+    `.env` Settings writes, or the environment Voxa was started in. Removing one asks first,
+    and for one set in the environment says it is back at the next start.
+  - **About** has the version and whether a newer one is out, the window's own versions, the
+    log folder and the licences.
+- **The Hugging Face token pyannote needs (Settings › Speakers).** It is kept like the API keys,
+  with the steps to get one: both models' terms, then a token that can read. Its test asks
+  Hugging Face whose token it is, and whether each of the two models can be downloaded with
+  it.
+  - **Through the API:** `PUT`/`DELETE /api/keys/hf` and `POST /api/providers/hf/test`.
+  - **Key sources:** `GET /api/keys` adds the token and says where every key comes from.
+- **Engines, with what each licence allows first.** Chatterbox, Demucs and VoxCPM2 each show
+  their licence and whether commercial use is allowed, with credit, not allowed or unclear,
+  by icon and word.
+  - **Installing:** the button says the download size, and the install's log follows its
+    newest line.
+  - **Asking first:** removing an engine, or installing one for non-commercial use only,
+    asks in a dialog.
+  - **Engines built in:** each carries what `voxa doctor` says about it here: running or
+    not, a key missing (with the way to Settings), not installed (with the command).
+- **Voices in two tabs.**
+  - **The catalogue:** a language found by typing, Edge, Piper or OpenAI, and the voices to
+    hear. "Use in the Studio" opens the Studio with that language, engine and voice.
+  - **My voices:** clips to clone from, added by dropping a file (named after it until named
+    otherwise), heard, and deleted after asking. The Studio links straight to it
+    (`?tab=mine`).
+
 ### Changed
 
 - **The console's sections are now Studio, Dubs, Voices, Engines and Settings** (they were New
@@ -149,6 +193,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A VoxaSetup install was told to use a uv it doesn't have.** `voxa doctor` and the console
+  gave `uv tool install …` to add an extra. Setup keeps its own uv in its folder, off PATH, and
+  tells it where Voxa lives; that command would have installed a second Voxa, or nothing.
+  - **The hints now:** in a Setup install, they run Setup's uv with Setup's settings, in
+    PowerShell, and keep to this version.
+  - **Upgrades keep extras:** running Setup again, to upgrade, now keeps the extras added
+    since; before, it went back to its own two and dropped the rest.
+  - **Checked by CI:** it adds an extra with the command Voxa gives, runs Setup again, and
+    checks the extra is still there.
+- **Engines installed in a VoxaSetup install used the wrong Python.** Voxa didn't find
+  Setup's uv, so it installed an engine with venv and pip in Setup's Python 3.12, not the
+  Python 3.11 the engine asks for. It now uses Setup's uv.
+- **Testing a key no longer holds up the console.** The test waited on the provider's answer
+  while the server answered nothing else. It now runs in a thread of its own, as
+  `/api/doctor` does.
+- **System said "Windows 10" on Windows 11**, as Python before 3.12 does. The build number
+  now tells them apart.
+- **Settings in Azerbaijani** had English words left in (Cloud engine-lər, rate limit, Timing,
+  Presetlər); they are Azerbaijani now. Settings' own Save buttons on each card are gone with
+  the cards.
 - **The console no longer waits for the server on its first page.** The first time the console
   asked for its options, the server imported pyannote to see whether it was installed. That
   took 10.7 s, and nothing else was answered meanwhile: the health check, settings and updates

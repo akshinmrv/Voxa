@@ -136,6 +136,83 @@ def test_a_uv_tool_install_keeps_its_extras(monkeypatch, tmp_path):
         'uv tool install --upgrade --torch-backend auto "voxa-dub[serve]"'
 
 
+def _setup_install(monkeypatch, tmp_path):
+    """Voxa as VoxaSetup.exe installs it: a uv tool environment in <folder>\tools\voxa-dub,
+    the uninstaller beside it. The folder's name has a space and a quote, as a user's may."""
+    root = tmp_path / "Programs" / "O'Neil Voxa"
+    prefix = root / "tools" / "voxa-dub"
+    prefix.mkdir(parents=True)
+    (prefix / "uv-receipt.toml").write_text(
+        '[tool]\nrequirements = [{ name = "voxa-dub", extras = ["serve", "studio"], '
+        'specifier = "==1.18.0" }]\n', encoding="utf-8")
+    (root / "Uninstall Voxa.exe").write_bytes(b"")
+    monkeypatch.setattr(voxa, "_in_container", lambda: False)
+    monkeypatch.setattr(sys, "prefix", str(prefix))
+    return root
+
+
+def test_a_voxa_setup_install_is_told_to_use_setups_own_uv(monkeypatch, tmp_path):
+    # Its uv isn't on PATH, and uv on its own would install a second Voxa elsewhere: the hint
+    # runs Setup's uv with Setup's settings, keeps the extras, and stays on this version (the
+    # next Setup upgrades it and keeps them).
+    root = _setup_install(monkeypatch, tmp_path)
+    assert voxa._install_kind() == "setup"
+
+    def q(path):
+        return "'" + str(path).replace("'", "''") + "'"
+
+    python = f"{sys.version_info.major}.{sys.version_info.minor}"
+    settings = (f"$env:UV_TOOL_DIR={q(root / 'tools')}; $env:UV_TOOL_BIN_DIR={q(root / 'bin')}; "
+                f"$env:UV_PYTHON_INSTALL_DIR={q(root / 'python')}; "
+                "$env:UV_PYTHON_PREFERENCE='only-managed'; $env:UV_NO_CACHE='1'; "
+                "$env:UV_NO_CONFIG='1'; ")
+    uv = f"& {q(root / 'uv.exe')} tool install"
+    tail = f'--torch-backend auto --python {python}'
+    assert voxa._install_hint("url") == \
+        f'{settings}{uv} --upgrade {tail} "voxa-dub[serve,studio,url]=={voxa.__version__}"'
+    assert voxa._reinstall_hint() == \
+        f'{settings}{uv} --reinstall {tail} "voxa-dub[serve,studio]=={voxa.__version__}"'
+    # An update is Setup's own job: it downloads the new one.
+    assert voxa.update_hint()["command"] is None
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="PowerShell runs these hints, on Windows")
+def test_powershell_reads_the_setup_hint_as_meant(monkeypatch, tmp_path):
+    """PowerShell's own parser: no errors, the settings as given, and uv called by its path
+    with each argument whole (the quote in the folder's name included)."""
+    import subprocess
+    root = _setup_install(monkeypatch, tmp_path)
+    hint_file = tmp_path / "hint.txt"
+    hint_file.write_text(voxa._install_hint("url"), encoding="utf-8")
+    script = r"""
+using namespace System.Management.Automation.Language
+$hint = Get-Content -Raw -Encoding UTF8 'HINT_FILE'
+$tokens = $null; $errors = $null
+$ast = [Parser]::ParseInput($hint, [ref]$tokens, [ref]$errors)
+"errors=$($errors.Count)"
+foreach ($a in $ast.FindAll({ $args[0] -is [AssignmentStatementAst] }, $true)) {
+  "set " + $a.Left.Extent.Text + "=" + $a.Right.Extent.Text.Trim("'").Replace("''", "'")
+}
+$call = $ast.Find({ $args[0] -is [CommandAst] }, $true)
+"call " + $call.InvocationOperator
+foreach ($e in $call.CommandElements) {
+  if ($e -is [StringConstantExpressionAst]) { "arg " + $e.Value }
+  else { "arg " + $e.Extent.Text }
+}
+"""
+    script = script.replace("HINT_FILE", str(hint_file).replace("'", "''"))
+    out = subprocess.run(["powershell", "-NoProfile", "-Command", script],
+                         capture_output=True, text=True, encoding="utf-8").stdout.splitlines()
+    assert "errors=0" in out
+    assert f"set $env:UV_TOOL_DIR={root / 'tools'}" in out
+    assert f"set $env:UV_PYTHON_INSTALL_DIR={root / 'python'}" in out
+    assert "call Ampersand" in out
+    args = [line[4:] for line in out if line.startswith("arg ")]
+    assert args[0] == str(root / "uv.exe")
+    assert args[1:5] == ["tool", "install", "--upgrade", "--torch-backend"]
+    assert args[-1] == f"voxa-dub[serve,studio,url]=={voxa.__version__}"
+
+
 def test_find_piper_next_to_python_when_it_isnt_on_path(monkeypatch, tmp_path):
     # pipx doesn't put a dependency's scripts on PATH, and on Windows the file is piper.exe.
     scripts = tmp_path / "Scripts"

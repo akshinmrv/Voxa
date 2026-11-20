@@ -532,7 +532,7 @@ export function Composer() {
                 <p className="text-ui-small text-muted-foreground">
                   {tn.rich("voiceSampleHint", {
                     voices: (chunks) => (
-                      <Link href="/app/voices" className="text-primary hover:underline">
+                      <Link href="/app/voices?tab=mine" className="text-primary hover:underline">
                         {chunks}
                       </Link>
                     ),

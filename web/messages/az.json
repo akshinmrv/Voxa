@@ -229,7 +229,8 @@
       "models": "Mühərriklər",
       "settings": "Ayarlar",
       "docs": "Sənədlər",
-      "backToSite": "Sayta qayıt"
+      "backToSite": "Sayta qayıt",
+      "system": "Sistem"
     },
     "shell": {
       "nav": "Əsas menyu",
@@ -255,7 +256,8 @@
         "openLogs": "Loq qovluğunu aç",
         "docs": "Sənədlər",
         "website": "Voxa-nın saytı",
-        "github": "GitHub-da Voxa"
+        "github": "GitHub-da Voxa",
+        "system": "Sistem yoxlaması"
       },
       "shortcuts": {
         "title": "Klaviatura qısayolları",
@@ -272,7 +274,7 @@
         "nextLine": "Əvvəlki və ya növbəti sətir (sətirlər)",
         "playLine": "Sətri oynat (sətirlər)",
         "toggleSource": "Orijinal və ya dublyaj (sətirlər)",
-        "save": "Sətirləri yadda saxla",
+        "save": "Sətirləri və ya Ayarları yadda saxla",
         "search": "Dublyajlarda axtar (Dublyajlar)",
         "moveRow": "Əvvəlki və ya növbəti dublyaj (Dublyajlar)",
         "removeRow": "Dublyajı siyahıdan çıxar (Dublyajlar)"
@@ -489,10 +491,9 @@
       "install": "Quraşdır",
       "installing": "Quraşdırılır…",
       "remove": "Sil",
-      "removeConfirm": "{label} silinsin? Mühiti silinir; endirilmiş model faylları Hugging Face keşində qalır.",
+      "removeConfirm": "Onun mühiti silinir. Yüklədiyi model faylları Hugging Face keşində qalır.",
       "installed": "Quraşdırılıb",
       "installFailed": "Quraşdırma alınmadı",
-      "download": "≈{gb} GB endirmə",
       "languages": "{count} dil",
       "anyLanguage": "İstənilən dil",
       "homepage": "Layihə səhifəsi",
@@ -502,22 +503,27 @@
         "no": "qeyri-kommersiya",
         "unknown": "lisenziya aydın deyil"
       },
-      "ncConfirm": "{label} yalnız qeyri-kommersiya istifadəsi üçün lisenziyalıdır. Yenə də quraşdırılsın?"
+      "ncConfirm": "{label} yalnız qeyri-kommersiya istifadəsi üçün lisenziyalıdır. Yenə də quraşdırılsın?",
+      "installSize": "Quraşdır · təxminən {gb} GB",
+      "licence": "Lisenziya",
+      "log": "Quraşdırma loqu",
+      "removeTitle": "{label} silinsin?",
+      "ncTitle": "{label} quraşdırılsın?",
+      "builtIn": "Daxili",
+      "whisper": "Whisper nitqi mətnə çevirir. Model nə qədər böyükdürsə, bir o qədər dəqiq və yavaşdır. Hər biri ilk istifadədə yüklənir.",
+      "addKey": "Açarı Ayarlarda əlavə et"
     },
     "settings": {
       "title": "Ayarlar",
-      "subtitle": "Provider-lər, API açarları və görünüş.",
+      "subtitle": "Dublyaj başqa bir şey deməyəndə istifadə olunanlar, açarlarınız və Voxa-nın özü.",
       "providers": {
-        "title": "Provider-lər",
         "desc": "İş ayrıca dəyər göstərməyəndə istifadə olunan defolt mühərriklər.",
         "translator": "Defolt tərcüməçi",
-        "tts": "Defolt səs mühərriki",
-        "save": "Dəyişiklikləri saxla",
-        "saved": "Saxlanıldı"
+        "tts": "Defolt səs mühərriki"
       },
       "keys": {
-        "title": "API provider-lər",
-        "desc": "Tərcümə üçün OpenAI və ya Anthropic istifadə etmək üçün açar əlavə et. Açarlar lokal .env faylında saxlanılır və bu maşından heç vaxt çıxmır.",
+        "title": "API provayderləri",
+        "desc": "OpenAI, Anthropic və ya OpenRouter ilə tərcümə etmək üçün açar əlavə edin. Açarlar yerli .env faylında saxlanır və bu kompüterdən çıxmır.",
         "notSet": "Təyin edilməyib",
         "keyLabel": "API açarı",
         "keyPlaceholderSet": "Saxlanılıb — dəyişmək üçün yeni açar daxil et",
@@ -527,31 +533,40 @@
         "saveKey": "Açarı saxla",
         "deleteKey": "Sil",
         "modelLabel": "Defolt model",
-        "saveModel": "Saxla",
         "test": "Bağlantını yoxla",
         "testing": "Yoxlanılır…",
         "testOk": "Qoşuldu",
-        "testFail": "Bağlantı alınmadı"
+        "testFail": "Bağlantı alınmadı",
+        "source": {
+          "file": ".env faylında",
+          "environment": "mühit dəyişənindən"
+        },
+        "sourceEnvHint": "Voxa işə salınan yerdə {name} kimi qurulub.",
+        "replace": "Dəyiş",
+        "keyFor": "{label} açarı",
+        "testOkUser": "Hugging Face {user} hesabının tokenini qəbul edir",
+        "removeTitle": "{label} açarı silinsin?",
+        "removeBody": "Voxa-nın .env faylından silinir. Ona ehtiyacı olan dublyajlar yeni açar əlavə olunana qədər işləməyəcək.",
+        "removeBodyEnv": "Bu açar Voxa işə salınan yerdə {name} kimi qurulub, ona görə Voxa növbəti dəfə açılanda geri qayıdacaq. Həmişəlik silmək üçün onu orada silin. Burada yalnız o vaxta qədər silinir.",
+        "access": "yüklənə bilir",
+        "noAccess": "bu hesab üçün şərtləri qəbul olunmayıb",
+        "accessUnknown": "yoxlamaq alınmadı",
+        "acceptTerms": "Şərtləri qəbul et"
       },
       "translation": {
         "title": "Tərcümə üslubu",
-        "desc": "LLM tərcüməçilər (OpenAI, Anthropic) üçün built-in prompt-un üstünə əlavə təlimat. Output formatı, sətir sayı və timing qaydaları həmişə məcbur qalır.",
+        "desc": "LLM tərcüməçiləri (OpenAI, Anthropic, OpenRouter) üçün Voxa-nın öz təlimatının üstünə əlavə olunan göstəriş. Çıxışın forması, sətir sayı və vaxt qaydaları həmişə qorunur.",
         "placeholder": "məs. Tibbi auditoriya üçün rəsmi üslub. Terminologiyanı dəqiq saxla. Brend səsi: isti və yığcam.",
-        "hint": "Yalnız OpenAI/Anthropic tərcüməsinə tətbiq olunur. Defolt davranış üçün boş burax.",
-        "save": "Üslubu saxla",
-        "reset": "Defolta qaytar",
-        "saved": "Saxlanıldı"
+        "hint": "Yalnız OpenAI/Anthropic tərcüməsinə tətbiq olunur. Defolt davranış üçün boş burax."
       },
       "speech": {
         "title": "Nitq üslubu",
-        "desc": "OpenAI TTS ilə dublyaj səsi necə səslənməlidir. Presetləri birləşdir, öz təlimatını əlavə et və ya hər ikisi.",
-        "presetsLabel": "Presetlər",
+        "desc": "OpenAI nitqi ilə dublyajın səsi necə səslənməlidir. Hazır üslubları birləşdirin, öz göstərişinizi əlavə edin, ya da hər ikisini.",
+        "presetsLabel": "Hazır üslublar",
         "textLabel": "Öz təlimatın",
         "placeholder": "məs. Təbiət sənədli filminin diktoru kimi. Əmin, amma tələsmədən.",
-        "guard": "Timing həmişə məcburdur: Voxa sabit, təbii temp və əlavə pauzasız danışıq üçün kilidli təlimat əlavə edir. Üslub səsin NECƏ səsləndiyini dəyişir — sətrin nə qədər çəkdiyini yox, ona görə dublyaj sinxron qalır.",
-        "save": "Üslubu saxla",
-        "reset": "Defolta qaytar",
-        "saved": "Saxlanıldı"
+        "guard": "Vaxt həmişə qorunur: Voxa sabit, təbii temp və əlavə pauzasız danışıq üçün dəyişməz bir göstəriş əlavə edir. Üslub səsin necə səsləndiyini dəyişir, sətrin nə qədər çəkdiyini yox, ona görə dublyaj sinxron qalır.",
+        "notInstalled": "quraşdırılmayıb"
       },
       "advanced": {
         "deviceLabel": "Modellər harada işləsin",
@@ -563,27 +578,24 @@
         "deviceMps": "Apple GPU (MPS), eksperimental",
         "deviceMissing": "bu kompüterdə yoxdur",
         "title": "Ətraflı",
-        "desc": "Təcrübəli istifadəçilər üçün etibarlılıq və timing ayarları. Defolt dəyərlər tövsiyə olunur.",
+        "desc": "Təcrübəli istifadəçilər üçün etibarlılıq və vaxt ayarları. Defolt dəyərlər tövsiyə olunur.",
         "fallbackLabel": "Ehtiyat tərcüməçi",
         "fallbackHint": "Əsas LLM tərcüməçi sətirlərin çoxunda uğursuz olsa (kəsinti və ya səhv açar), həmin sətirlər bununla yenidən tərcümə olunur.",
         "fallbackNone": "Yoxdur",
         "rateLabel": "Danışıq sürəti (simvol/saniyə)",
         "rateHint": "Saniyədə nə qədər tərcümə mətni büdcələnir. Defolt 15; aralıq 8–30. Aşağı daha çox sıxır, yuxarı tələsdirir.",
         "workersLabel": "Paralel nitq sorğuları",
-        "workersHint": "Cloud engine-lər (OpenAI, Edge) eyni anda neçə seqment sintez edir. Defolt 4; aralıq 1–16. Yuxarı daha sürətlidir, amma API rate limit-inə çata bilər. Offline engine-lər nəzərə almır.",
+        "workersHint": "Bulud mühərrikləri (OpenAI, Edge) eyni anda neçə sətri səsləndirir. Defolt 4; aralıq 1–16. Çox olanda daha sürətlidir, amma API-nin sorğu limitinə çata bilər. Oflayn mühərriklər bunu nəzərə almır.",
         "concurrentLabel": "Eyni anda dublyaj olunan videolar",
-        "concurrentHint": "Neçə iş növbəyə durmadan paralel işləyir. Defolt 1; aralıq 1–4. Artırmaq mühərriklər şəbəkəni gözləyəndə (cloud tərcümə və nitq) kömək edir, gözləməyəndə yaddaş aparır — hər iş öz Whisper modelini yükləyir. Eyni videonun iki dublyajı həmişə ardıcıl işləyir.",
-        "save": "Ətraflını saxla",
-        "saved": "Saxlanıldı",
-        "qualityGateLabel": "Keyfiyyət nəzarəti (skorla və yenidən sintez et)",
-        "qualityGateHint": "Hər sintez olunmuş sətri skorlaşdırır və pozulmuşu neytral üslubla yenidən render edir. Daha yavaş, OpenAI TTS. Defolt söndürülü.",
+        "concurrentHint": "Neçə iş növbə gözləmədən paralel işləyir. Defolt 1; aralıq 1–4. Mühərriklər şəbəkəni gözləyəndə (buludda tərcümə və nitq) artırmaq kömək edir, gözləməyəndə isə yaddaş aparır: hər iş öz Whisper modelini yükləyir. Eyni videonun iki dublyajı həmişə bir-birinin ardınca işləyir.",
+        "qualityGateLabel": "Keyfiyyət nəzarəti (qiymətləndir və yenidən səsləndir)",
+        "qualityGateHint": "Səsləndirilən hər sətri qiymətləndirir, pozulmuş sətri neytral danışıqla yenidən səsləndirir. Daha yavaşdır, OpenAI nitqi ilə işləyir. Defolt olaraq söndürülüb.",
         "autoDownloadLabel": "Hər dublyajı avtomatik yadda saxla",
         "autoDownloadHint": "İş bitəndə video Endir düyməsinə basmadan endirmələr qovluğuna yazılır. Yalnız konsol açıq olanda işləyir və brauzer bir neçə faylı eyni anda saxlamazdan əvvəl icazə soruşa bilər.",
         "checkUpdatesLabel": "Yeniləmələri yoxla",
         "checkUpdatesHint": "Voxa gündə bir dəfə PyPI-dan voxa-dub-ın ən yeni versiyasını soruşur və sizinkindən yenisi çıxanda burada xəbər verir. PyPI istənilən yükləmədə gördüyünü (IP ünvanınızı) və bu Voxa-nın versiyasını görür; videolarınız və ayarlarınız haqqında heç nə göndərilmir. VOXA_NO_UPDATE_CHECK=1 onu komanda sətri üçün də söndürür."
       },
       "appearance": {
-        "title": "Görünüş",
         "theme": "Tema",
         "language": "Dil"
       },
@@ -591,7 +603,70 @@
         "title": "Təhlükə zonası",
         "desc": "Bütün ayarları defolt dəyərlərə sıfırla. API açarlarına təsir etmir.",
         "reset": "Ayarları sıfırla",
-        "confirm": "Bütün ayarları defolt dəyərlərə sıfırlamaq?"
+        "confirm": "Bütün ayarları defolt dəyərlərə sıfırlamaq?",
+        "resetBody": "Bütün ayarlar defolt dəyərinə qayıdır. API açarlarınız və Hugging Face tokeni qalır."
+      },
+      "search": "Ayarlarda axtar",
+      "results": "Nəticələr",
+      "noResults": "Ayarlarda uyğun heç nə yoxdur.",
+      "sections": {
+        "general": "Ümumi",
+        "translation": "Tərcümə",
+        "speech": "Səs",
+        "speakers": "Danışanlar",
+        "performance": "Performans",
+        "about": "Haqqında",
+        "reset": "Sıfırla"
+      },
+      "sectionDesc": {
+        "general": "Dil, tema və Voxa-nın özü etdikləri.",
+        "translation": "Dublyajın tərcüməçisi, onun açarları və tərcümə üslubu.",
+        "speech": "Dublyajın səsi və necə danışdığı.",
+        "speakers": "Danışanları ayırmaq ki, hər birinin öz səsi olsun.",
+        "performance": "Modellərin harada işlədiyi və eyni anda nə qədər iş getdiyi.",
+        "about": "Bu Voxa və daha çox məlumatın harada olduğu.",
+        "reset": "Bütün ayarlar defolt dəyərinə qayıdır."
+      },
+      "unsavedHere": "Burada saxlanmamış dəyişiklik var",
+      "unsaved": "Saxlanmamış dəyişikliklər",
+      "changes": "{count, plural, other {# dəyişiklik saxlanmayıb}}",
+      "discard": "Ləğv et",
+      "saveChanges": "Yadda saxla",
+      "savedNote": "Ayarlar yadda saxlanıldı.",
+      "leaveTitle": "Saxlamadan çıxılsın?",
+      "leaveBody": "{count, plural, other {Ayarlarda # dəyişiklik saxlanmayıb. Onlar itəcək.}}",
+      "stay": "Qal",
+      "leave": "Saxlamadan çıx",
+      "speakers": {
+        "token": "Hugging Face tokeni",
+        "desc": "Danışanları ayırmaq (Studio-da Danışanlar) pyannote-un iki modeli ilə olur. Modellər Hugging Face-dən yüklənir. Hər biri pulsuz hesabdan öz şərtlərini qəbul etməyi istəyir, Voxa isə onları həmin hesabın tokeni ilə yükləyir.",
+        "step1": "Tokeni götürəcəyiniz hesabla hər iki modelin şərtlərini qəbul edin:",
+        "step2": "Oxuma icazəsi olan token yaradın:",
+        "step3": "Onu bura yapışdırın və yoxlayın: hər iki model yüklənə bildiyini deməlidir.",
+        "notInstalled": "Danışanları ayırmaq üçün pyannote lazımdır, bu Voxa-da isə o yoxdur. Onu əlavə edən əmr Sistem səhifəsindədir.",
+        "openSystem": "Sistemi aç",
+        "paste": "Tokeninizi yapışdırın"
+      },
+      "about": {
+        "version": "Versiya",
+        "newest": "ən yenisidir",
+        "newer": "{latest} çıxıb",
+        "pypiNewest": "PyPI-da ən yenisi {latest}",
+        "updateOff": "yeniləmələr yoxlanmır",
+        "updateUnknown": "ən yeni versiyanı PyPI-dan soruşmaq alınmadı",
+        "updateSearch": "yeniləmə, versiya, ən yeni",
+        "notes": "Nə yenilik var",
+        "window": "Pəncərə",
+        "system": "Sistem yoxlaması",
+        "systemHint": "Bu Voxa nə edə bilir, edə bilmədiyini düzəldən əmrlər.",
+        "openSystem": "Sistemi aç",
+        "logs": "Loq qovluğu",
+        "logsHint": "Voxa-nın loqları, dublyajları və ayarları (.voxa_serve).",
+        "openLogs": "Loq qovluğunu aç",
+        "links": "Keçidlər",
+        "docs": "Sənədlər",
+        "website": "Sayt",
+        "licences": "Lisenziyalar (NOTICE)"
       }
     },
     "status": {
@@ -740,12 +815,24 @@
       "libraryEmpty": "Hələ səs yoxdur.",
       "listen": "Dinlə",
       "delete": "Sil",
-      "deleteConfirm": "{name} silinsin? Onu istifadə edən dublyajlar əvəzində səsi öz videosundan kəsəcək.",
+      "deleteConfirm": "Onu istifadə edən dublyajlar əvəzində səsi öz videolarından kəsəcək.",
       "male": "kişi",
       "female": "qadın",
       "notDownloaded": "ilk istifadədə yüklənir",
       "seconds": "{n} s",
-      "loadFailed": "Səslər yüklənmədi: {error}"
+      "loadFailed": "Səslər yüklənmədi: {error}",
+      "catalogue": "Kataloq",
+      "engine": "Mühərrik",
+      "chooseLanguage": "Dili yazın",
+      "noLanguage": "Uyğun dil yoxdur.",
+      "findVoice": "Səs tap",
+      "count": "{count} səs",
+      "styles": "üslublarla danışır",
+      "useInStudio": "Studio-da istifadə et",
+      "drop": "Audio və ya video faylı bura atın",
+      "choose": "Fayl seç",
+      "chooseAnother": "Başqasını seç",
+      "deleteTitle": "{name} silinsin?"
     },
     "localOnly": {
       "title": "Operator konsolu öz maşınında işləyir",
@@ -756,6 +843,45 @@
       "serve": "voxa studio",
       "backHome": "Ana səhifəyə qayıt",
       "viewGithub": "GitHub-da bax"
+    },
+    "system": {
+      "subtitle": "Bu Voxa nə edə bilir, edə bilmədiyini necə düzəltmək olar.",
+      "ready": "Dublyaja hazırdır",
+      "notReady": "{count, plural, other {# problem Voxa-nın dublyaj etməsinə mane olur}}",
+      "warnings": "{count, plural, other {# xəbərdarlıq}}",
+      "about": "Voxa {version} · Python {python} · {os} · {install}",
+      "install": {
+        "setup": "VoxaSetup ilə quraşdırılıb",
+        "uv": "uv ilə quraşdırılıb",
+        "pipx": "pipx ilə quraşdırılıb",
+        "pip": "pip ilə quraşdırılıb",
+        "source": "git nüsxəsindən",
+        "container": "konteynerdə"
+      },
+      "again": "Yenidən yoxla",
+      "online": "Onlayn xidmətləri də yoxla",
+      "copyFix": "Əmri kopyala",
+      "fixIn": {
+        "settings": "Açarı Ayarlarda əlavə et",
+        "speakers": "Tokeni Ayarlarda əlavə et",
+        "engines": "Mühərriklərdə quraşdır"
+      },
+      "deepHint": "voxa doctor --deep XTTS və pyannote-u da yükləyib işlədiklərini yoxlayır. Bu uzun çəkir, ona görə komanda sətrində qalır. Yoxlamaların tapdıqları ingiliscə yazılır.",
+      "sections": {
+        "Required": "Vacib",
+        "Speed": "Sürət",
+        "Translation": "Tərcümə",
+        "Speech": "Nitq",
+        "Extras": "Əlavələr",
+        "Disk": "Disk",
+        "Updates": "Yeniləmələr"
+      },
+      "status": {
+        "ok": "İşləyir",
+        "warn": "İşləyir, amma qeyd var",
+        "fail": "İşləmir",
+        "off": "Qurulmayıb (istəyə bağlı)"
+      }
     }
   }
 }

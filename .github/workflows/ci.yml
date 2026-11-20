@@ -189,6 +189,9 @@ jobs:
       - name: Get NSIS
         shell: pwsh
         run: installer/windows/get_nsis.ps1
+      - name: An upgrade keeps the extras an install had
+        shell: pwsh
+        run: installer/windows/test_extras.ps1
       - name: Build VoxaSetup.exe with this commit's wheel
         shell: pwsh
         run: |
@@ -198,7 +201,7 @@ jobs:
           "VERSION=$version" >> $env:GITHUB_ENV
       - name: Install, check and uninstall it
         shell: pwsh
-        run: installer/windows/test_install.ps1 -Installer "dist\VoxaSetup-$env:VERSION.exe" -Version $env:VERSION
+        run: installer/windows/test_install.ps1 -Installer "dist\VoxaSetup-$env:VERSION.exe" -Version $env:VERSION -Wheel (Get-Item dist\*.whl).FullName
 
   docker:
     name: docker (image + console)

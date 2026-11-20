@@ -173,7 +173,11 @@ def catalogue() -> List[dict]:
 # ── Installing and removing ──────────────────────────────
 
 def find_uv() -> Optional[str]:
-    """uv: on PATH, from the `uv` package on PyPI, or where its installer puts it."""
+    """uv: VoxaSetup.exe's own (beside its uninstaller; not on PATH), on PATH, from the `uv`
+    package on PyPI, or where its installer puts it."""
+    setup = Path(sys.prefix).parent.parent
+    if (setup / "Uninstall Voxa.exe").is_file() and (setup / "uv.exe").is_file():
+        return str(setup / "uv.exe")
     found = shutil.which("uv")
     if found:
         return found

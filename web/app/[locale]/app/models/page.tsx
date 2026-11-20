@@ -1,6 +1,6 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AppPageHeader } from "@/components/app/app-page-header";
-import { ModelsView } from "@/components/app/models-view";
+import { EnginesView } from "@/components/engines/engines-view";
 
 export default async function ModelsPage({
   params,
@@ -14,7 +14,7 @@ export default async function ModelsPage({
   return (
     <>
       <AppPageHeader subtitle={t("subtitle")} />
-      <ModelsView />
+      <EnginesView />
     </>
   );
 }

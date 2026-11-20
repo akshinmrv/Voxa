@@ -229,7 +229,8 @@
       "models": "Motorlar",
       "settings": "Ayarlar",
       "docs": "Belgeler",
-      "backToSite": "Siteye dön"
+      "backToSite": "Siteye dön",
+      "system": "Sistem"
     },
     "shell": {
       "nav": "Ana menü",
@@ -255,7 +256,8 @@
         "openLogs": "Günlük klasörünü aç",
         "docs": "Belgeler",
         "website": "Voxa'nın sitesi",
-        "github": "GitHub'da Voxa"
+        "github": "GitHub'da Voxa",
+        "system": "Sistem denetimi"
       },
       "shortcuts": {
         "title": "Klavye kısayolları",
@@ -272,7 +274,7 @@
         "nextLine": "Önceki veya sonraki satır (satırlar)",
         "playLine": "Satırı çal (satırlar)",
         "toggleSource": "Orijinal veya dublaj (satırlar)",
-        "save": "Satırları kaydet",
+        "save": "Satırları veya Ayarları kaydet",
         "search": "Dublajlarda ara (Dublajlar)",
         "moveRow": "Önceki veya sonraki dublaj (Dublajlar)",
         "removeRow": "Dublajı listeden kaldır (Dublajlar)"
@@ -489,10 +491,9 @@
       "install": "Kur",
       "installing": "Kuruluyor…",
       "remove": "Kaldır",
-      "removeConfirm": "{label} kaldırılsın mı? Ortamı silinir; indirilen model dosyaları Hugging Face önbelleğinde kalır.",
+      "removeConfirm": "Ortamı silinir. İndirdiği model dosyaları Hugging Face önbelleğinde kalır.",
       "installed": "Kurulu",
       "installFailed": "Kurulum başarısız",
-      "download": "≈{gb} GB indirme",
       "languages": "{count} dil",
       "anyLanguage": "Her dil",
       "homepage": "Proje sayfası",
@@ -502,22 +503,27 @@
         "no": "ticari olmayan",
         "unknown": "lisans belirsiz"
       },
-      "ncConfirm": "{label} yalnızca ticari olmayan kullanım için lisanslıdır. Yine de kurulsun mu?"
+      "ncConfirm": "{label} yalnızca ticari olmayan kullanım için lisanslıdır. Yine de kurulsun mu?",
+      "installSize": "Kur · yaklaşık {gb} GB",
+      "licence": "Lisans",
+      "log": "Kurulum günlüğü",
+      "removeTitle": "{label} kaldırılsın mı?",
+      "ncTitle": "{label} kurulsun mu?",
+      "builtIn": "Yerleşik",
+      "whisper": "Whisper konuşmayı metne çevirir. Model büyüdükçe daha doğru ve daha yavaştır; her biri ilk kullanıldığında iner.",
+      "addKey": "Anahtarı Ayarlar'da ekleyin"
     },
     "settings": {
       "title": "Ayarlar",
-      "subtitle": "Sağlayıcılar, API anahtarları ve görünüm.",
+      "subtitle": "Dublaj aksini söylemediğinde kullanılanlar, anahtarlarınız ve Voxa'nın kendisi.",
       "providers": {
-        "title": "Sağlayıcılar",
         "desc": "Bir iş bunları geçersiz kılmadığında kullanılan varsayılan motorlar.",
         "translator": "Varsayılan çevirmen",
-        "tts": "Varsayılan konuşma motoru",
-        "save": "Değişiklikleri kaydet",
-        "saved": "Kaydedildi"
+        "tts": "Varsayılan konuşma motoru"
       },
       "keys": {
         "title": "API sağlayıcıları",
-        "desc": "Çeviri için OpenAI veya Anthropic kullanmak üzere bir anahtar ekle. Anahtarlar yerel .env dosyanda saklanır ve bu makineden asla çıkmaz.",
+        "desc": "OpenAI, Anthropic veya OpenRouter ile çevirmek için bir anahtar ekleyin. Anahtarlar yerel .env dosyanızda tutulur ve bu bilgisayardan çıkmaz.",
         "notSet": "Ayarlanmadı",
         "keyLabel": "API anahtarı",
         "keyPlaceholderSet": "Kaydedildi — değiştirmek için yeni anahtar gir",
@@ -527,20 +533,31 @@
         "saveKey": "Anahtarı kaydet",
         "deleteKey": "Kaldır",
         "modelLabel": "Varsayılan model",
-        "saveModel": "Kaydet",
         "test": "Bağlantıyı test et",
         "testing": "Test ediliyor…",
         "testOk": "Bağlandı",
-        "testFail": "Bağlantı başarısız"
+        "testFail": "Bağlantı başarısız",
+        "source": {
+          "file": ".env dosyasında",
+          "environment": "ortam değişkeninden"
+        },
+        "sourceEnvHint": "Voxa'nın başlatıldığı yerde {name} olarak ayarlandı.",
+        "replace": "Değiştir",
+        "keyFor": "{label} anahtarı",
+        "testOkUser": "Hugging Face, {user} hesabının belirtecini kabul ediyor",
+        "removeTitle": "{label} anahtarı kaldırılsın mı?",
+        "removeBody": "Voxa'nın .env dosyasından silinir. Ona ihtiyaç duyan dublajlar yeni bir anahtar eklenene kadar çalışmaz.",
+        "removeBodyEnv": "Bu anahtar Voxa'nın başlatıldığı yerde {name} olarak ayarlandı, bu yüzden Voxa bir sonraki açılışta geri gelir. Kalıcı olarak kaldırmak için orada silin; burada yalnızca o zamana kadar kaldırılır.",
+        "access": "indirilebilir",
+        "noAccess": "bu hesap için koşulları kabul edilmedi",
+        "accessUnknown": "denetlenemedi",
+        "acceptTerms": "Koşulları kabul et"
       },
       "translation": {
         "title": "Çeviri stili",
         "desc": "LLM çevirmenler (OpenAI, Anthropic) için yerleşik prompt'un üzerine eklenen ek yönlendirme. Çıktı formatı, satır sayısı ve zamanlama kuralları her zaman korunur.",
         "placeholder": "örn. Tıbbi bir kitle için resmi kayıt. Terminolojiyi kesin tut. Marka sesi: sıcak ve öz.",
-        "hint": "Yalnızca OpenAI/Anthropic çevirisine uygulanır. Varsayılan davranış için boş bırak.",
-        "save": "Stili kaydet",
-        "reset": "Varsayılana döndür",
-        "saved": "Kaydedildi"
+        "hint": "Yalnızca OpenAI/Anthropic çevirisine uygulanır. Varsayılan davranış için boş bırak."
       },
       "speech": {
         "title": "Konuşma stili",
@@ -549,9 +566,7 @@
         "textLabel": "Kendi yönlendirmen",
         "placeholder": "örn. Bir doğa belgeseli anlatıcısı gibi. Kendinden emin, asla aceleci değil.",
         "guard": "Zamanlama her zaman korunur: Voxa, sabit ve doğal tempo ile ek duraklama olmaması için kilitli bir talimat ekler. Stil sesin NASIL duyulduğunu değiştirir — bir satırın ne kadar sürdüğünü değil, böylece dublaj senkronda kalır.",
-        "save": "Stili kaydet",
-        "reset": "Varsayılana döndür",
-        "saved": "Kaydedildi"
+        "notInstalled": "kurulu değil"
       },
       "advanced": {
         "deviceLabel": "Modeller nerede çalışsın",
@@ -573,8 +588,6 @@
         "workersHint": "Bulut motorlar (OpenAI, Edge) aynı anda kaç segment sentezler. Varsayılan 4; aralık 1–16. Yüksek daha hızlıdır ama API oran sınırına takılabilir. Çevrimdışı motorlar dikkate almaz.",
         "concurrentLabel": "Aynı anda dublajlanan videolar",
         "concurrentHint": "Kaç iş sıraya girmeden paralel çalışır. Varsayılan 1; aralık 1–4. Artırmak, motorlar ağı beklerken (bulut çeviri ve konuşma) yardımcı olur; beklemediklerinde bellek harcar — her iş kendi Whisper modelini yükler. Aynı videonun iki dublajı her zaman arka arkaya çalışır.",
-        "save": "Gelişmişi kaydet",
-        "saved": "Kaydedildi",
         "qualityGateLabel": "Kalite denetimi (puanla ve konuşmayı yeniden dene)",
         "qualityGateHint": "Her sentezlenen satırı puanlar ve bozuk olanı nötr üslupla yeniden oluşturur. Daha yavaş, OpenAI TTS. Varsayılan kapalı.",
         "autoDownloadLabel": "Her dublajı otomatik kaydet",
@@ -583,7 +596,6 @@
         "checkUpdatesHint": "Voxa günde bir kez PyPI'a en yeni voxa-dub sürümünü sorar ve sizinkinden yenisi çıktığında burada haber verir. PyPI her indirmede gördüğünü (IP adresinizi) ve bu Voxa'nın sürümünü görür; videolarınız ve ayarlarınız hakkında hiçbir şey gönderilmez. VOXA_NO_UPDATE_CHECK=1 bunu komut satırı için de kapatır."
       },
       "appearance": {
-        "title": "Görünüm",
         "theme": "Tema",
         "language": "Dil"
       },
@@ -591,7 +603,70 @@
         "title": "Tehlike bölgesi",
         "desc": "Tüm ayarları varsayılanlarına sıfırla. API anahtarların etkilenmez.",
         "reset": "Ayarları sıfırla",
-        "confirm": "Tüm ayarlar varsayılanlarına sıfırlansın mı?"
+        "confirm": "Tüm ayarlar varsayılanlarına sıfırlansın mı?",
+        "resetBody": "Tüm ayarlar varsayılanına döner. API anahtarlarınız ve Hugging Face belirteci kalır."
+      },
+      "search": "Ayarlarda ara",
+      "results": "Sonuçlar",
+      "noResults": "Ayarlarda eşleşen bir şey yok.",
+      "sections": {
+        "general": "Genel",
+        "translation": "Çeviri",
+        "speech": "Ses",
+        "speakers": "Konuşmacılar",
+        "performance": "Performans",
+        "about": "Hakkında",
+        "reset": "Sıfırla"
+      },
+      "sectionDesc": {
+        "general": "Dil, tema ve Voxa'nın kendiliğinden yaptıkları.",
+        "translation": "Dublajın çevirmeni, anahtarları ve çeviri üslubu.",
+        "speech": "Dublajın sesi ve nasıl konuştuğu.",
+        "speakers": "Her biri kendi sesini korusun diye konuşmacıları ayırmak.",
+        "performance": "Modellerin nerede çalıştığı ve aynı anda ne kadar iş yürüdüğü.",
+        "about": "Bu Voxa ve daha fazlasının nerede olduğu.",
+        "reset": "Tüm ayarlar varsayılanına döner."
+      },
+      "unsavedHere": "Burada kaydedilmemiş değişiklik var",
+      "unsaved": "Kaydedilmemiş değişiklikler",
+      "changes": "{count, plural, other {# değişiklik kaydedilmedi}}",
+      "discard": "Vazgeç",
+      "saveChanges": "Kaydet",
+      "savedNote": "Ayarlar kaydedildi.",
+      "leaveTitle": "Kaydetmeden çıkılsın mı?",
+      "leaveBody": "{count, plural, other {Ayarlarda # değişiklik kaydedilmedi. Kaybolacaklar.}}",
+      "stay": "Kal",
+      "leave": "Kaydetmeden çık",
+      "speakers": {
+        "token": "Hugging Face belirteci",
+        "desc": "Konuşmacıları ayırmak (Stüdyo'da Konuşmacılar) pyannote'un iki modeliyle olur. Modeller Hugging Face'ten iner. Her biri ücretsiz bir hesaptan koşullarını kabul etmesini ister; Voxa da onları o hesabın belirteciyle indirir.",
+        "step1": "Belirteci alacağınız hesapla iki modelin de koşullarını kabul edin:",
+        "step2": "Okuma izni olan bir belirteç oluşturun:",
+        "step3": "Buraya yapıştırıp deneyin: iki model de indirilebileceğini söylemeli.",
+        "notInstalled": "Konuşmacıları ayırmak pyannote gerektirir; bu Voxa'da yok. Onu ekleyen komut Sistem sayfasında.",
+        "openSystem": "Sistemi aç",
+        "paste": "Belirtecinizi yapıştırın"
+      },
+      "about": {
+        "version": "Sürüm",
+        "newest": "en yenisi",
+        "newer": "{latest} çıktı",
+        "pypiNewest": "PyPI'deki en yeni {latest}",
+        "updateOff": "güncellemeler denetlenmiyor",
+        "updateUnknown": "en yeni sürüm PyPI'ye sorulamadı",
+        "updateSearch": "güncelleme, sürüm, en yeni",
+        "notes": "Yenilikler",
+        "window": "Pencere",
+        "system": "Sistem denetimi",
+        "systemHint": "Bu Voxa neler yapabiliyor, yapamadıklarını düzelten komutlar.",
+        "openSystem": "Sistemi aç",
+        "logs": "Günlük klasörü",
+        "logsHint": "Voxa'nın günlükleri, dublajları ve ayarları (.voxa_serve).",
+        "openLogs": "Günlük klasörünü aç",
+        "links": "Bağlantılar",
+        "docs": "Belgeler",
+        "website": "Web sitesi",
+        "licences": "Lisanslar (NOTICE)"
       }
     },
     "status": {
@@ -740,12 +815,24 @@
       "libraryEmpty": "Henüz ses yok.",
       "listen": "Dinle",
       "delete": "Sil",
-      "deleteConfirm": "{name} silinsin mi? Onu kullanan dublajlar bunun yerine sesi kendi videosundan keser.",
+      "deleteConfirm": "Onu kullanan dublajlar bunun yerine sesi kendi videolarından keser.",
       "male": "erkek",
       "female": "kadın",
       "notDownloaded": "ilk kullanımda indirilir",
       "seconds": "{n} sn",
-      "loadFailed": "Sesler yüklenemedi: {error}"
+      "loadFailed": "Sesler yüklenemedi: {error}",
+      "catalogue": "Katalog",
+      "engine": "Motor",
+      "chooseLanguage": "Bir dil yazın",
+      "noLanguage": "Eşleşen dil yok.",
+      "findVoice": "Ses bul",
+      "count": "{count} ses",
+      "styles": "üsluplarla konuşur",
+      "useInStudio": "Stüdyo'da kullan",
+      "drop": "Bir ses veya video dosyasını buraya bırakın",
+      "choose": "Dosya seç",
+      "chooseAnother": "Başkasını seç",
+      "deleteTitle": "{name} silinsin mi?"
     },
     "localOnly": {
       "title": "Operatör konsolu kendi makinende çalışır",
@@ -756,6 +843,45 @@
       "serve": "voxa studio",
       "backHome": "Ana sayfaya dön",
       "viewGithub": "GitHub'da görüntüle"
+    },
+    "system": {
+      "subtitle": "Bu Voxa neler yapabiliyor, yapamadıklarını nasıl düzeltirsiniz.",
+      "ready": "Dublaja hazır",
+      "notReady": "{count, plural, other {# sorun Voxa'nın dublaj yapmasını engelliyor}}",
+      "warnings": "{count, plural, other {# uyarı}}",
+      "about": "Voxa {version} · Python {python} · {os} · {install}",
+      "install": {
+        "setup": "VoxaSetup ile kuruldu",
+        "uv": "uv ile kuruldu",
+        "pipx": "pipx ile kuruldu",
+        "pip": "pip ile kuruldu",
+        "source": "git kopyasından",
+        "container": "konteynerde"
+      },
+      "again": "Yeniden denetle",
+      "online": "Çevrimiçi hizmetleri de dene",
+      "copyFix": "Komutu kopyala",
+      "fixIn": {
+        "settings": "Anahtarı Ayarlar'da ekleyin",
+        "speakers": "Belirteci Ayarlar'da ekleyin",
+        "engines": "Motorlar'da kurun"
+      },
+      "deepHint": "voxa doctor --deep, XTTS ve pyannote'u da yükleyip çalıştıklarını denetler. Uzun sürdüğü için komut satırında kalıyor. Denetimlerin bulguları İngilizce yazılır.",
+      "sections": {
+        "Required": "Gerekli",
+        "Speed": "Hız",
+        "Translation": "Çeviri",
+        "Speech": "Konuşma",
+        "Extras": "Ekstralar",
+        "Disk": "Disk",
+        "Updates": "Güncellemeler"
+      },
+      "status": {
+        "ok": "Çalışıyor",
+        "warn": "Çalışıyor, bir uyarıyla",
+        "fail": "Çalışmıyor",
+        "off": "Kurulu değil (isteğe bağlı)"
+      }
     }
   }
 }

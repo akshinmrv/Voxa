@@ -235,13 +235,57 @@ export type UpdateStatus = {
   notes: string | null;
 };
 
+/**
+ * Where a key that is set comes from: "file", the .env Settings writes (removed there for
+ * good), or "environment", set where Voxa was started (back with the next start).
+ */
+export type KeySource = "file" | "environment";
+
 /** Masked API-key status for one provider (the raw key never reaches the browser). */
 export type ProviderKeyStatus = {
   provider: string;
   envKey: string;
   hasKey: boolean;
   masked: string | null;
+  source: KeySource | null;
 };
 
+/** The Hugging Face token pyannote downloads its models with (diarization). */
+export type HfTokenStatus = Omit<ProviderKeyStatus, "provider"> & {
+  /** The models' pages, where each account accepts their terms. */
+  models: string[];
+};
+
+export type KeysStatus = { keys: ProviderKeyStatus[]; hf: HfTokenStatus };
+
 /** Result of POST /api/providers/{id}/test — a cheap key/reachability check. */
-export type ProviderTestResult = { ok: boolean; error?: string; latencyMs?: number };
+export type ProviderTestResult = {
+  ok: boolean;
+  error?: string;
+  latencyMs?: number;
+  /** Hugging Face: whose token it is, and which of pyannote's models it may download. */
+  user?: string | null;
+  models?: { id: string; url: string; access: boolean | null }[];
+};
+
+/** One of `voxa doctor`'s checks (GET /api/doctor). */
+export type DoctorCheck = {
+  section: string;
+  name: string;
+  /** "off": an optional part that isn't set up. */
+  status: "ok" | "warn" | "fail" | "off";
+  detail: string;
+  /** How to fix it, in this install's own commands. */
+  fix: string;
+};
+
+export type DoctorReport = {
+  version: string;
+  python: string;
+  os: string;
+  install: "container" | "setup" | "source" | "uv" | "pipx" | "pip";
+  sections: string[];
+  checks: DoctorCheck[];
+  /** Nothing failed: Voxa can dub. */
+  ready: boolean;
+};

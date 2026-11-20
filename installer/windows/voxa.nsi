@@ -15,6 +15,7 @@ Unicode true
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
+!include "extras.nsh"
 
 !ifndef VERSION | UV | OUTFILE
   !error "build it with scripts/build_windows_installer.py"
@@ -84,8 +85,6 @@ LangString StudioOpen ${LANG_TURKISH} "Voxa Studio açık. Kapatıp Tamam'a bas�
 LangString Kept ${LANG_ENGLISH} "Your dubs, settings and API keys in $PROFILE\Voxa were kept, as were engines in $PROFILE\.voxa."
 LangString Kept ${LANG_TURKISH} "$PROFILE\Voxa içindeki dublajlarınız, ayarlarınız ve API anahtarlarınız ile $PROFILE\.voxa içindeki motorlar korundu."
 
-!define SPEC_RELEASE "voxa-dub[serve,studio]==${VERSION}"
-
 ; uv's settings for this install: everything inside $INSTDIR, Python included, nothing cached.
 !macro UvEnvironment
   System::Call 'Kernel32::SetEnvironmentVariable(t "UV_TOOL_DIR", t "$INSTDIR\tools")'
@@ -126,11 +125,13 @@ Section "$(SecVoxa)" SecVoxa
   File "/oname=voxa.ico" "..\..\voxa_ui\icons\voxa.ico"
   !insertmacro UvEnvironment
 
+  ; serve and studio, and on an upgrade any extras added since (extras.nsh).
+  Call KeptExtras
   !ifdef WHEEL
     File "${WHEEL}"
-    StrCpy $1 "voxa-dub[serve,studio] @ $INSTDIR\${WHEEL_NAME}"
+    StrCpy $1 "voxa-dub[$Extras] @ $INSTDIR\${WHEEL_NAME}"
   !else
-    StrCpy $1 "${SPEC_RELEASE}"
+    StrCpy $1 "voxa-dub[$Extras]==${VERSION}"
   !endif
 
   DetailPrint "$(Downloading)"

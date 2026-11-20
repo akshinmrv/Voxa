@@ -1,10 +1,18 @@
-import { AudioLines, Boxes, Clapperboard, ListVideo, Settings, type LucideIcon } from "lucide-react";
+import {
+  Activity,
+  AudioLines,
+  Boxes,
+  Clapperboard,
+  ListVideo,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 
 export type AppNavItem = {
   href: string;
   icon: LucideIcon;
   /** key under the App.nav namespace */
-  key: "newJob" | "jobs" | "voices" | "models" | "settings";
+  key: "newJob" | "jobs" | "voices" | "models" | "settings" | "system";
   /** exact match for active state (only the index route) */
   exact?: boolean;
 };
@@ -19,6 +27,9 @@ export const APP_NAV: AppNavItem[] = [
 
 export const SETTINGS_NAV: AppNavItem = { href: "/app/settings", icon: Settings, key: "settings" };
 
+/** Not in the sidebar: opened from Settings › About, the status bar and the palette. */
+export const SYSTEM_NAV: AppNavItem = { href: "/app/system", icon: Activity, key: "system" };
+
 export function isActive(pathname: string, item: AppNavItem): boolean {
   // The console is exported with trailing slashes: /app/ is /app.
   const path = pathname.replace(/\/+$/, "") || "/";
@@ -27,5 +38,5 @@ export function isActive(pathname: string, item: AppNavItem): boolean {
 
 /** The section a page belongs to, for the header's title. */
 export function sectionOf(pathname: string): AppNavItem | undefined {
-  return [...APP_NAV, SETTINGS_NAV].find((item) => isActive(pathname, item));
+  return [...APP_NAV, SETTINGS_NAV, SYSTEM_NAV].find((item) => isActive(pathname, item));
 }
