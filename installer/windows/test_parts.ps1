@@ -1,13 +1,15 @@
-# Builds test_extras.nsi and runs it on sample uv receipts: an upgrade keeps the extras an
+# Builds test_parts.nsi and runs it on sample uv receipts: an upgrade keeps the extras an
 # install had (Setup's serve and studio first), and with no receipt, or a broken one, it
-# installs Setup's own. Needs MAKENSIS (get_nsis.ps1 sets it).
+# installs Setup's own. It also says whether WebView2 is installed, which it is on Windows 11
+# and on GitHub's Windows runners: found there, or the check is broken. Needs MAKENSIS
+# (get_nsis.ps1 sets it).
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$work = Join-Path ([IO.Path]::GetTempPath()) "voxa-extras-$PID"
+$work = Join-Path ([IO.Path]::GetTempPath()) "voxa-parts-$PID"
 New-Item -ItemType Directory -Force $work | Out-Null
-$exe = Join-Path $work 'test_extras.exe'
-& $env:MAKENSIS -V2 "-DOUTFILE=$exe" (Join-Path $here 'test_extras.nsi')
-if ($LASTEXITCODE -ne 0) { throw 'test_extras.nsi did not build' }
+$exe = Join-Path $work 'test_parts.exe'
+& $env:MAKENSIS -V2 "-DOUTFILE=$exe" (Join-Path $here 'test_parts.nsi')
+if ($LASTEXITCODE -ne 0) { throw 'test_parts.nsi did not build' }
 
 $cases = [ordered]@{
     # As uv writes it after Setup, and after `voxa doctor`'s command added url.
@@ -33,5 +35,8 @@ foreach ($name in $cases.Keys) {
     if (-not $ok) { $failed++ }
     '{0} {1}: {2}' -f ($(if ($ok) { 'PASS' } else { 'FAIL' })), $name, $got
 }
+$webview2 = [IO.File]::ReadAllText((Join-Path (Join-Path $work 'setup') 'webview2.txt'))
+if ($webview2 -ne '1') { $failed++ }
+'{0} WebView2 found: {1}' -f ($(if ($webview2 -eq '1') { 'PASS' } else { 'FAIL' })), $webview2
 Remove-Item -Recurse -Force $work
 if ($failed) { throw "$failed case(s) failed" }

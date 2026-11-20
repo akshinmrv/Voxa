@@ -3,19 +3,10 @@
 import { useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import {
-  ArrowUpCircle,
-  BookOpen,
-  Cpu,
-  Download,
-  ExternalLink,
-  FolderOpen,
-  Globe,
-  Keyboard,
-  Loader2,
-} from "lucide-react";
+import { ArrowUpCircle, BookOpen, Cpu, FolderOpen, Globe, Keyboard, Loader2 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { SYSTEM_NAV } from "@/components/app/nav-items";
+import { UpdateDetails } from "@/components/app/update-details";
 import { getHealth, getOptions, getSettings } from "@/lib/api";
 import { useUpdateStatus } from "@/lib/use-update";
 import { countJobs, useJobs } from "@/lib/use-jobs";
@@ -23,7 +14,6 @@ import { useDesktop } from "@/lib/desktop";
 import { SITE } from "@/lib/site";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip } from "@/components/ui/tooltip";
-import { TerminalBlock } from "@/components/patterns/terminal-block";
 import { GithubIcon } from "@/components/icons/github";
 import { cn } from "@/lib/utils";
 import { useShell } from "./shell-context";
@@ -67,7 +57,11 @@ export function StatusBar() {
   // "auto" uses an NVIDIA GPU when there is one, else the CPU; it never picks Apple's.
   const chosen = settings.data?.advanced?.device ?? "auto";
   const device =
-    chosen === "auto" ? (options.data?.gpu?.cuda ? "cuda" : "cpu") : (chosen as "cpu" | "cuda" | "mps");
+    chosen === "auto"
+      ? options.data?.gpu?.cuda
+        ? "cuda"
+        : "cpu"
+      : (chosen as "cpu" | "cuda" | "mps");
 
   const going = [
     count.running ? t("running", { count: count.running }) : null,
@@ -96,7 +90,9 @@ export function StatusBar() {
       </Tooltip>
 
       <Link href="/app/jobs" className={item}>
-        {count.running > 0 && <Loader2 className="size-3.5 animate-spin text-primary" aria-hidden />}
+        {count.running > 0 && (
+          <Loader2 className="size-3.5 animate-spin text-primary" aria-hidden />
+        )}
         {going.length ? going.join(" · ") : t("idle")}
       </Link>
 
@@ -122,42 +118,11 @@ function UpdateItem() {
       <PopoverContent side="top" align="end" className="w-96 space-y-3">
         <div>
           <p className="text-ui-section">{tu("title", { latest: update.latest })}</p>
-          <p className="text-ui-small text-muted-foreground">{tu("current", { current: update.current })}</p>
+          <p className="text-ui-small text-muted-foreground">
+            {tu("current", { current: update.current })}
+          </p>
         </div>
-        {update.download ? (
-          <>
-            <a
-              href={update.download}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-8 items-center gap-2 rounded-sm bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              <Download className="size-4" /> {tu("download")}
-            </a>
-            <p className="text-ui-small text-muted-foreground">{tu("setupHint")}</p>
-          </>
-        ) : update.command ? (
-          <>
-            <p className="text-ui-small text-muted-foreground">
-              {update.kind === "container"
-                ? tu("containerHint")
-                : update.kind === "source"
-                  ? tu("sourceHint")
-                  : tu("commandHint")}
-            </p>
-            <TerminalBlock label={tu("terminal")} command={update.command} />
-          </>
-        ) : null}
-        {update.notes && (
-          <a
-            href={update.notes}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-ui-small text-primary hover:underline"
-          >
-            {tu("whatsNew")} <ExternalLink className="size-3.5" />
-          </a>
-        )}
+        <UpdateDetails update={update} />
       </PopoverContent>
     </Popover>
   );

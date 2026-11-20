@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { cancelJob, deleteJob, getHealth, revealFile } from "@/lib/api";
+import { cancelJob, deleteJob, getHealth, retryJob, revealFile } from "@/lib/api";
 import { useDesktop } from "@/lib/desktop";
 import { STUDIO_CHOICE_KEY, choiceFromJob } from "@/lib/job-config";
 import { toast } from "@/lib/toast";
@@ -52,6 +52,21 @@ export function useReveal() {
       return revealFile(id, file);
     },
     onError: (error) => toast(t("revealFailed", { reason: (error as Error).message }), "error"),
+  });
+}
+
+/** Run a failed or stopped dub again, in place; then `onStarted`, to follow its run. */
+export function useRetry(onStarted?: (id: string) => void) {
+  const t = useTranslations("App.library");
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => retryJob(id),
+    onSuccess: (job) => {
+      queryClient.setQueryData(["job", job.id], job);
+      void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      onStarted?.(job.id);
+    },
+    onError: (error) => toast(t("retryFailed", { reason: (error as Error).message }), "error"),
   });
 }
 
@@ -121,6 +136,7 @@ export function useJobDialogs({
             : removedFiles.length
               ? tl("removedWithFiles", { name, count: removedFiles.length })
               : tl("removedKeptFiles", { name }),
+        "success",
       );
       onRemoved?.(job.id);
     },

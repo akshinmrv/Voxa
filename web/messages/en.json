@@ -476,7 +476,8 @@
       "stoppedAt": "Stopped · {when}",
       "doneAt": "{when} · {took}",
       "stepShort": "{n}/7 · {name}",
-      "moreFor": "More for {name}"
+      "moreFor": "More for {name}",
+      "retryFailed": "Couldn't run it again: {reason}"
     },
     "models": {
       "title": "Engines",
@@ -666,7 +667,10 @@
         "links": "Links",
         "docs": "Documentation",
         "website": "Website",
-        "licences": "Licences (NOTICE)"
+        "licences": "Licences (NOTICE)",
+        "welcome": "Welcome",
+        "welcomeHint": "The first-run steps: language, theme, this computer, a first dub.",
+        "showWelcome": "Show the welcome again"
       }
     },
     "status": {
@@ -732,14 +736,14 @@
       "videoFile": "Dubbed video",
       "subtitlesFile": "Subtitles",
       "settings": "Settings",
-      "waitingReview": "Waiting for you to check the translation."
+      "waitingReview": "Waiting for you to check the translation.",
+      "retry": "Try again",
+      "runAgain": "Run again"
     },
     "update": {
       "title": "Voxa {latest} is out",
       "current": "You have {current}.",
       "whatsNew": "What's new",
-      "howTo": "How to update",
-      "hide": "Not now",
       "download": "Download VoxaSetup.exe",
       "setupHint": "Close Voxa Studio, then run it: it updates this install and keeps your dubs and settings.",
       "commandHint": "Close Voxa (the Studio window, or voxa serve), run this in a terminal, then start it again:",
@@ -882,6 +886,38 @@
         "fail": "Doesn't work",
         "off": "Not set up (optional)"
       }
+    },
+    "notices": {
+      "done": "{name} is dubbed.",
+      "subtitled": "Subtitles for {name} are ready.",
+      "review": "{name}: the translation is ready to check.",
+      "failed": "{name} failed: {reason}",
+      "open": "Open",
+      "check": "Check it",
+      "update": "Voxa {latest} is out.",
+      "howToUpdate": "How to update"
+    },
+    "welcome": {
+      "step": "Step {n} of {total}",
+      "title": "Welcome to Voxa Studio",
+      "intro": "Voxa dubs a video into another language and keeps every line where it was spoken. Three things first; each can be skipped.",
+      "language": "Language",
+      "theme": "Theme",
+      "systemTitle": "What this computer can do",
+      "checking": "Checking…",
+      "noCheck": "Voxa's server didn't answer the check. System, under Settings › About, can try again.",
+      "ready": "Ready to dub.",
+      "notReady": "Something has to be fixed before Voxa can dub:",
+      "systemMore": "Everything else (keys, engines, extras) is under Settings › About › System.",
+      "dubTitle": "Your first dub",
+      "dubIntro": "Start small: a preview dubs only the first 20 seconds, so you hear how it sounds before dubbing it all.",
+      "dub1": "Drop a short video into the Studio.",
+      "dub2": "Choose the language to dub it into.",
+      "dub3": "Press “Preview the first 20 s”.",
+      "skip": "Skip",
+      "back": "Back",
+      "next": "Next",
+      "start": "Go to the Studio"
     }
   }
 }

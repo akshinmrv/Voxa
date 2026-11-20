@@ -476,7 +476,8 @@
       "stoppedAt": "Durduruldu · {when}",
       "doneAt": "{when} · {took}",
       "stepShort": "{n}/7 · {name}",
-      "moreFor": "{name}: diğer işlemler"
+      "moreFor": "{name}: diğer işlemler",
+      "retryFailed": "Yeniden başlatılamadı: {reason}"
     },
     "models": {
       "title": "Motorlar",
@@ -666,7 +667,10 @@
         "links": "Bağlantılar",
         "docs": "Belgeler",
         "website": "Web sitesi",
-        "licences": "Lisanslar (NOTICE)"
+        "licences": "Lisanslar (NOTICE)",
+        "welcome": "Hoş geldiniz",
+        "welcomeHint": "İlk açılış adımları: dil, tema, bu bilgisayar, ilk dublaj.",
+        "showWelcome": "Karşılamayı yeniden göster"
       }
     },
     "status": {
@@ -732,14 +736,14 @@
       "videoFile": "Dublajlı video",
       "subtitlesFile": "Altyazı",
       "settings": "Ayarlar",
-      "waitingReview": "Çeviriyi kontrol etmenizi bekliyor."
+      "waitingReview": "Çeviriyi kontrol etmenizi bekliyor.",
+      "retry": "Yeniden dene",
+      "runAgain": "Yeniden başlat"
     },
     "update": {
       "title": "Voxa {latest} çıktı",
       "current": "Sizdeki sürüm: {current}.",
       "whatsNew": "Yenilikler",
-      "howTo": "Nasıl güncellenir",
-      "hide": "Sonra",
       "download": "VoxaSetup.exe'yi indir",
       "setupHint": "Voxa Studio'yu kapatın, sonra çalıştırın: bu kurulumu günceller, dublajlarınız ve ayarlarınız kalır.",
       "commandHint": "Voxa'yı kapatın (Studio penceresini veya voxa serve'ü), bu komutu bir terminalde çalıştırın, sonra Voxa'yı yeniden açın:",
@@ -882,6 +886,38 @@
         "fail": "Çalışmıyor",
         "off": "Kurulu değil (isteğe bağlı)"
       }
+    },
+    "notices": {
+      "done": "{name} dublajlandı.",
+      "subtitled": "{name} için altyazılar hazır.",
+      "review": "{name}: çeviri kontrole hazır.",
+      "failed": "{name} başarısız oldu: {reason}",
+      "open": "Aç",
+      "check": "Kontrol et",
+      "update": "Voxa {latest} çıktı.",
+      "howToUpdate": "Nasıl güncellenir"
+    },
+    "welcome": {
+      "step": "Adım {n} / {total}",
+      "title": "Voxa Studio'ya hoş geldiniz",
+      "intro": "Voxa bir videoyu başka bir dile dublajlar ve her satırı söylendiği yerde tutar. Önce üç şey; her biri atlanabilir.",
+      "language": "Dil",
+      "theme": "Tema",
+      "systemTitle": "Bu bilgisayar neler yapabilir",
+      "checking": "Denetleniyor…",
+      "noCheck": "Voxa'nın sunucusu denetime yanıt vermedi. Ayarlar › Hakkında altındaki Sistem sayfası yeniden deneyebilir.",
+      "ready": "Dublaja hazır.",
+      "notReady": "Voxa dublaj yapmadan önce bunun düzeltilmesi gerekiyor:",
+      "systemMore": "Geri kalan her şey (anahtarlar, motorlar, ekstralar) Ayarlar › Hakkında › Sistem altında.",
+      "dubTitle": "İlk dublajınız",
+      "dubIntro": "Küçük başlayın: önizleme yalnızca ilk 20 saniyeyi dublajlar; hepsini dublajlamadan önce nasıl duyulduğunu dinlersiniz.",
+      "dub1": "Stüdyo'ya kısa bir video bırakın.",
+      "dub2": "Hangi dile dublajlanacağını seçin.",
+      "dub3": "“İlk 20 sn'yi önizle” düğmesine basın.",
+      "skip": "Atla",
+      "back": "Geri",
+      "next": "İleri",
+      "start": "Stüdyo'ya git"
     }
   }
 }

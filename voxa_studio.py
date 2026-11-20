@@ -15,11 +15,12 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 import webbrowser
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 TITLE = "Voxa Studio"
 LOG_LIMIT = 5 * 1024 * 1024          # studio.log is started afresh past this
@@ -427,6 +428,148 @@ def paint_window(window, theme: str) -> bool:
     return paint_title_bar(hwnd, theme)
 
 
+# ── The taskbar button: a dub's progress, and a call back when one needs you ─
+# The window watches the dubs the server lists (VOXA_DESIGN_PLAN.md §7.5), so the console's
+# page takes no part and a browser is untouched.
+
+TASKBAR_EVERY = 2.0                     # seconds between two looks at the dubs
+_PROGRESS = {"none": 0, "indeterminate": 1, "normal": 2, "error": 4, "paused": 8}
+GOING = ("queued", "running")
+
+
+def fetch_jobs(url: str) -> Optional[List[dict]]:
+    try:
+        with urllib.request.urlopen(f"{url}/api/jobs", timeout=2) as response:
+            return json.load(response)["jobs"]
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def taskbar_state(jobs: List[dict]) -> Tuple[str, float]:
+    """What the button shows: the running dub's step out of seven (the oldest, when several
+    run); something moving while dubs only wait in the queue; nothing otherwise."""
+    running = [job for job in jobs if job.get("status") == "running"]
+    if running:
+        step = min(max(int(running[0].get("step") or 1), 1), 7)
+        return "normal", step / 7
+    if any(job.get("status") == "queued" for job in jobs):
+        return "indeterminate", 0.0
+    return "none", 0.0
+
+
+def calls_back(before: Dict[str, str], jobs: List[dict]) -> List[str]:
+    """The dubs that, since the last look, finished, failed, or stopped to have their lines
+    checked: each a reason to call the user back. One the user stopped isn't."""
+    out = []
+    for job in jobs:
+        if before.get(job.get("id")) not in GOING:
+            continue
+        status = job.get("status")
+        if status in ("done", "review") or (status == "failed" and not job.get("cancelled")):
+            out.append(job["id"])
+    return out
+
+
+class Taskbar:
+    """The window's taskbar button, on Windows: its progress (ITaskbarList3, through COM) and
+    a flash until the window is brought forward (FlashWindowEx). Made and used on one thread,
+    which COM is started on. Anywhere else, or if Windows refuses, each call does nothing."""
+
+    CLSID = "{56FDF344-FD6D-11d0-958A-006097C9A090}"        # TaskbarList
+    IID = "{EA1AFB91-9E28-4B86-90E9-9E9F8A5EEFAF}"          # ITaskbarList3
+
+    def __init__(self, hwnd: int) -> None:
+        self.hwnd = hwnd
+        self._list = None
+        self._shown: Optional[Tuple[str, float]] = None
+        if os.name != "nt" or not hwnd:
+            return
+        import ctypes
+        from ctypes import wintypes
+        self._ctypes = ctypes
+        self._user32 = ctypes.WinDLL("user32")
+        ole32 = ctypes.WinDLL("ole32")
+        try:
+            ole32.CoInitializeEx(None, 0x2)                 # COINIT_APARTMENTTHREADED
+
+            class GUID(ctypes.Structure):
+                _fields_ = [("a", wintypes.DWORD), ("b", wintypes.WORD), ("c", wintypes.WORD),
+                            ("d", ctypes.c_ubyte * 8)]
+
+            def guid(text: str) -> GUID:
+                g = GUID()
+                ole32.CLSIDFromString(ctypes.c_wchar_p(text), ctypes.byref(g))
+                return g
+
+            pointer = ctypes.c_void_p()
+            if ole32.CoCreateInstance(ctypes.byref(guid(self.CLSID)), None, 0x1,  # INPROC
+                                      ctypes.byref(guid(self.IID)), ctypes.byref(pointer)):
+                return
+            table = ctypes.cast(pointer, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)))[0]
+            hresult = ctypes.c_long
+            self._init = ctypes.WINFUNCTYPE(hresult, ctypes.c_void_p)(table[3])
+            self._value = ctypes.WINFUNCTYPE(hresult, ctypes.c_void_p, wintypes.HWND,
+                                             ctypes.c_ulonglong, ctypes.c_ulonglong)(table[9])
+            self._state = ctypes.WINFUNCTYPE(hresult, ctypes.c_void_p, wintypes.HWND,
+                                             ctypes.c_int)(table[10])
+            if self._init(pointer) == 0:                    # HrInit
+                self._list = pointer
+        except Exception:
+            self._list = None
+
+    def progress(self, state: str, value: float = 0.0) -> bool:
+        """The button's bar: "normal" filled to value (0-1), "indeterminate", "none"…
+        Asked again with what it shows already, it does nothing."""
+        if self._list is None or self._shown == (state, value):
+            return False
+        hwnd = self._ctypes.c_void_p(self.hwnd)
+        ok = self._state(self._list, hwnd, _PROGRESS[state]) == 0
+        if state in ("normal", "paused", "error"):
+            ok = self._value(self._list, hwnd, int(value * 1000), 1000) == 0 and ok
+        self._shown = (state, value)
+        return ok
+
+    def in_front(self) -> bool:
+        if os.name != "nt" or not self.hwnd:
+            return True
+        return int(self._user32.GetForegroundWindow() or 0) == self.hwnd
+
+    def flash(self) -> bool:
+        """Flash the button until the window is brought forward."""
+        if os.name != "nt" or not self.hwnd:
+            return False
+        ctypes = self._ctypes
+        from ctypes import wintypes
+
+        class FLASHWINFO(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.UINT), ("hwnd", wintypes.HWND),
+                        ("dwFlags", wintypes.DWORD), ("uCount", wintypes.UINT),
+                        ("dwTimeout", wintypes.DWORD)]
+
+        info = FLASHWINFO(ctypes.sizeof(FLASHWINFO), self.hwnd, 0x2 | 0xC, 0, 0)  # TRAY|TIMERNOFG
+        self._user32.FlashWindowEx(ctypes.byref(info))
+        return True
+
+
+def watch_jobs(url: str, hwnd: int, stop: threading.Event,
+               taskbar: Callable[[int], "Taskbar"] = Taskbar,
+               fetch: Callable[[str], Optional[List[dict]]] = fetch_jobs,
+               every: float = TASKBAR_EVERY) -> None:
+    """Until stop is set: the running dub's progress on the button, and a flash when a dub
+    finishes, fails or waits for review while the window is behind others."""
+    button = taskbar(hwnd)
+    before: Optional[Dict[str, str]] = None
+    while not stop.wait(every):
+        jobs = fetch(url)
+        if jobs is None:                    # the server isn't up yet, or is busy
+            continue
+        button.progress(*taskbar_state(jobs))
+        if before is not None and calls_back(before, jobs) and not button.in_front():
+            button.flash()
+        before = {job.get("id"): job.get("status") for job in jobs}
+    button.progress("none")
+
+
 def follow_system_theme(repaint: Callable[[], None]) -> None:
     """pywebview paints the title bar for Windows' theme again whenever that changes; paint it
     for the console's after it (handlers run in the order they were added)."""
@@ -584,7 +727,7 @@ def window_icon(windows: Optional[bool] = None) -> Optional[str]:
 
 def open_window(url: Optional[str], storage: Path, may_close_now: Callable[["object"], bool],
                 when_shown: Optional[Callable[["object"], None]] = None,
-                waiting: str = "") -> bool:
+                waiting: str = "", jobs_url: Optional[str] = None) -> bool:
     """Show a window and return once it is closed: on `url`, or on a page saying `waiting`
     while `when_shown` (run in a thread of its own once the window is up) gets it there.
     False when no window could be opened, so the caller falls back to the browser."""
@@ -619,9 +762,18 @@ def open_window(url: Optional[str], storage: Path, may_close_now: Callable[["obj
             api._renderer = renderer
             return renderer != "mshtml"
 
+        watching = threading.Event()
+
         def shown() -> None:
             paint_window(window, api._theme)
             follow_system_theme(lambda: paint_window(window, api._theme))
+            if jobs_url and os.name == "nt":
+                try:
+                    hwnd = int(window.native.Handle.ToInt64())
+                except Exception:
+                    return
+                threading.Thread(target=watch_jobs, args=(jobs_url, hwnd, watching),
+                                 name="voxa-taskbar", daemon=True).start()
 
         def loaded() -> None:
             # WebView2 is ready once a page has loaded (the splash, first).
@@ -636,6 +788,7 @@ def open_window(url: Optional[str], storage: Path, may_close_now: Callable[["obj
                                state["now"])
             except Exception:
                 pass
+            watching.set()
             return True
 
         window.events.initialized += initialized
@@ -710,7 +863,7 @@ def run(argv: Optional[List[str]] = None, hidden: bool = False) -> int:
     try:
         shown = not args.browser and open_window(
             None if server else url, workspace / "webview", may_close_now,
-            when_shown if server else None, STARTING[language])
+            when_shown if server else None, STARTING[language], jobs_url=url)
         if not shown:
             if not ready():
                 print("❌ Voxa's server didn't start" + (f"; see {log}" if hidden else ""),

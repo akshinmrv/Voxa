@@ -149,8 +149,8 @@ def test_the_window_shows_at_once_and_moves_to_the_console_when_ready(launch, mo
     workspace, browser = launch
     seen = {}
 
-    def window(url, storage, may_close_now, when_shown, waiting):
-        seen.update(url=url, storage=storage, waiting=waiting)
+    def window(url, storage, may_close_now, when_shown, waiting, jobs_url=None):
+        seen.update(url=url, storage=storage, waiting=waiting, jobs_url=jobs_url)
         win = FakeWindow()
         when_shown(win)                                       # pywebview runs it once shown
         seen["loaded"] = win.loaded
@@ -163,20 +163,21 @@ def test_the_window_shows_at_once_and_moves_to_the_console_when_ready(launch, mo
     assert seen["url"] is None and seen["waiting"] == "Başlayır…"     # its own page first
     assert seen["loaded"] == [("url", "http://127.0.0.1:8123/")]
     assert seen["storage"] == workspace / "webview" and seen["marker"] == "http://127.0.0.1:8123"
+    assert seen["jobs_url"] == "http://127.0.0.1:8123"       # the taskbar watches its dubs
     assert FakeServer.instances[0].stopped and browser == []
     assert not (workspace / "studio.json").exists()
 
 
 def test_without_a_window_the_browser_opens(launch, monkeypatch):
     workspace, browser = launch
-    monkeypatch.setattr(studio, "open_window", lambda *a: False)
+    monkeypatch.setattr(studio, "open_window", lambda *a, **k: False)
     assert studio.run([]) == 0
     assert browser == ["http://127.0.0.1:8123/"] and FakeServer.instances[0].stopped
 
 
 def test_browser_asks_for_no_window(launch, monkeypatch):
     workspace, browser = launch
-    monkeypatch.setattr(studio, "open_window", lambda *a: pytest.fail("no window asked for"))
+    monkeypatch.setattr(studio, "open_window", lambda *a, **k: pytest.fail("no window asked for"))
     assert studio.run(["--browser"]) == 0 and browser == ["http://127.0.0.1:8123/"]
 
 
@@ -185,7 +186,7 @@ def test_a_second_launch_opens_a_window_on_the_first_ones_server(launch, monkeyp
     monkeypatch.setattr(studio, "running_studio", lambda ws: "http://127.0.0.1:8000")
     calls = []
     monkeypatch.setattr(studio, "open_window",
-                        lambda url, storage, may, when_shown, waiting:
+                        lambda url, storage, may, when_shown, waiting, jobs_url=None:
                         calls.append((url, when_shown)) or True)
     assert studio.run([]) == 0
     assert calls == [("http://127.0.0.1:8000", None)] and FakeServer.instances == []
@@ -202,7 +203,7 @@ def test_a_server_that_wont_start_says_so_in_the_window(launch, monkeypatch):
     monkeypatch.setattr(studio, "system_language", lambda: "en")
     pages = []
 
-    def window(url, storage, may_close_now, when_shown, waiting):
+    def window(url, storage, may_close_now, when_shown, waiting, jobs_url=None):
         win = FakeWindow()
         when_shown(win)
         pages.extend(win.loaded)
@@ -217,7 +218,7 @@ def test_a_server_that_wont_start_says_so_in_the_window(launch, monkeypatch):
 
 def test_a_server_that_wont_start_is_reported_without_a_window(launch, monkeypatch, capsys):
     monkeypatch.setattr(studio, "Server", Broken)
-    monkeypatch.setattr(studio, "open_window", lambda *a: False)
+    monkeypatch.setattr(studio, "open_window", lambda *a, **k: False)
     assert studio.run([]) == 1
     assert "didn't start" in capsys.readouterr().err and FakeServer.instances[0].stopped
 
@@ -496,7 +497,7 @@ def test_the_failure_page_offers_the_log_folder(launch, monkeypatch):
     monkeypatch.setattr(studio, "system_language", lambda: "az")
     pages = []
 
-    def window(url, storage, may_close_now, when_shown, waiting):
+    def window(url, storage, may_close_now, when_shown, waiting, jobs_url=None):
         win = FakeWindow()
         when_shown(win)
         pages.extend(win.loaded)
@@ -525,3 +526,86 @@ def test_only_voxas_own_server_may_read_the_clipboard():
 
 def test_without_webview2s_assembly_the_clipboard_rule_is_skipped():
     assert studio.allow_clipboard_read(object()) is False
+
+
+# ── The taskbar button (S7) ──
+
+def test_the_button_shows_the_running_dubs_step():
+    assert studio.taskbar_state([{"status": "running", "step": 3}]) == ("normal", 3 / 7)
+    # Several running: the oldest, which the server lists first. A step not yet said: 1.
+    assert studio.taskbar_state([{"status": "done"}, {"status": "running", "step": 0},
+                                 {"status": "running", "step": 6}]) == ("normal", 1 / 7)
+    assert studio.taskbar_state([{"status": "queued"}, {"status": "done"}]) == \
+        ("indeterminate", 0.0)
+    assert studio.taskbar_state([{"status": "done"}, {"status": "review"}]) == ("none", 0.0)
+
+
+def test_who_calls_the_user_back():
+    before = {"a": "running", "b": "running", "c": "queued", "d": "running", "e": "done"}
+    jobs = [{"id": "a", "status": "done"}, {"id": "b", "status": "review"},
+            {"id": "c", "status": "failed"}, {"id": "d", "status": "failed", "cancelled": True},
+            {"id": "e", "status": "done"}, {"id": "f", "status": "done"}]
+    # Finished, waiting for review, failed: yes. Stopped by the user, done before, new: no.
+    assert studio.calls_back(before, jobs) == ["a", "b", "c"]
+
+
+class _Button:
+    def __init__(self, hwnd, front=False):
+        self.hwnd, self.front, self.shown, self.flashes = hwnd, front, [], 0
+
+    def progress(self, state, value=0.0):
+        self.shown.append((state, round(value, 3)))
+
+    def in_front(self):
+        return self.front
+
+    def flash(self):
+        self.flashes += 1
+
+
+def _watch(answers, front=False):
+    """Run watch_jobs over a list of answers from the server, one per look."""
+    import threading
+    stop, made = threading.Event(), []
+    answers = list(answers)
+
+    def fetch(url):
+        if not answers:
+            stop.set()
+            return None
+        return answers.pop(0)
+
+    def taskbar(hwnd):
+        made.append(_Button(hwnd, front))
+        return made[-1]
+
+    studio.watch_jobs("http://127.0.0.1:1", 42, stop, taskbar, fetch, every=0.001)
+    return made[0]
+
+
+def test_watching_the_dubs_moves_the_bar_and_flashes_once_done():
+    button = _watch([
+        [{"id": "a", "status": "queued", "step": 0}],
+        None,                                           # the server busy: nothing changes
+        [{"id": "a", "status": "running", "step": 3}],
+        [{"id": "a", "status": "done", "step": 7}],
+        [{"id": "a", "status": "done", "step": 7}],
+    ])
+    assert button.hwnd == 42
+    assert button.shown == [("indeterminate", 0.0), ("normal", 0.429), ("none", 0.0),
+                            ("none", 0.0), ("none", 0.0)]
+    assert button.flashes == 1                          # once, when it finished
+
+
+def test_no_flash_while_the_window_is_in_front():
+    button = _watch([[{"id": "a", "status": "running", "step": 5}],
+                     [{"id": "a", "status": "failed", "step": 5}]], front=True)
+    assert button.flashes == 0
+
+
+@pytest.mark.skipif(os.name != "nt", reason="the taskbar is Windows'")
+def test_windows_gives_the_taskbar_list():
+    import ctypes
+    button = studio.Taskbar(ctypes.windll.user32.GetDesktopWindow())
+    assert button._list is not None                     # ITaskbarList3, HrInit S_OK
+    assert studio.Taskbar(0)._list is None              # no window: nothing to do

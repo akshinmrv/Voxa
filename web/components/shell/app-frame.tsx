@@ -5,7 +5,8 @@ import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
-import { UpdateBanner } from "@/components/app/update-banner";
+import { Notices } from "./notices";
+import { FirstRun } from "./first-run";
 import { APP_NAV, SETTINGS_NAV } from "@/components/app/nav-items";
 import { useDesktop } from "@/lib/desktop";
 import { isTyping } from "@/lib/shortcuts";
@@ -92,7 +93,6 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
             <Sidebar />
             <div className="flex min-w-0 flex-1 flex-col">
               <Header />
-              <UpdateBanner />
               <TextMenu enabled={!!desktop}>
                 <main
                   id="main-content"
@@ -114,6 +114,8 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         />
         <ShortcutsDialog open={shortcuts} onOpenChange={setShortcuts} />
         <Toaster />
+        <Notices />
+        <FirstRun />
       </TooltipProvider>
     </ShellContext.Provider>
   );

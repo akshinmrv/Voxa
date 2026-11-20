@@ -235,6 +235,12 @@ export function Composer() {
   const langName = (code: string) =>
     names(code, options.languages.find((l) => l.code === code)?.name ?? code);
   const toggleLang = (code: string) => {
+    // Until one is chosen, the language shown is only Voxa's default: the first one chosen
+    // takes its place, rather than joining it as a second dub.
+    if (!choice.targetLangs?.length) {
+      set({ targetLangs: [code] });
+      return;
+    }
     const now = config.targetLangs;
     // The last language stays: a dub needs one.
     if (now.includes(code) && now.length === 1) return;

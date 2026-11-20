@@ -476,7 +476,8 @@
       "stoppedAt": "Dayandırılıb · {when}",
       "doneAt": "{when} · {took}",
       "stepShort": "{n}/7 · {name}",
-      "moreFor": "{name}: digər əməllər"
+      "moreFor": "{name}: digər əməllər",
+      "retryFailed": "Yenidən başlatmaq alınmadı: {reason}"
     },
     "models": {
       "title": "Mühərriklər",
@@ -666,7 +667,10 @@
         "links": "Keçidlər",
         "docs": "Sənədlər",
         "website": "Sayt",
-        "licences": "Lisenziyalar (NOTICE)"
+        "licences": "Lisenziyalar (NOTICE)",
+        "welcome": "Xoş gəldiniz",
+        "welcomeHint": "İlk açılış addımları: dil, tema, bu kompüter, ilk dublyaj.",
+        "showWelcome": "Xoş gəldin ekranını yenidən göstər"
       }
     },
     "status": {
@@ -732,14 +736,14 @@
       "videoFile": "Dublyaj olunmuş video",
       "subtitlesFile": "Altyazı",
       "settings": "Ayarlar",
-      "waitingReview": "Tərcüməni yoxlamağınızı gözləyir."
+      "waitingReview": "Tərcüməni yoxlamağınızı gözləyir.",
+      "retry": "Yenidən cəhd et",
+      "runAgain": "Yenidən başlat"
     },
     "update": {
       "title": "Voxa {latest} çıxıb",
       "current": "Sizdəki versiya: {current}.",
       "whatsNew": "Nə yenilik var",
-      "howTo": "Necə yeniləmək olar",
-      "hide": "Sonra",
       "download": "VoxaSetup.exe-ni endir",
       "setupHint": "Voxa Studio-nu bağlayın, sonra onu işə salın: bu quraşdırmanı yeniləyir, dublyajlarınız və ayarlarınız qalır.",
       "commandHint": "Voxa-nı bağlayın (Studio pəncərəsini və ya voxa serve-i), bu əmri terminalda işə salın, sonra Voxa-nı yenidən açın:",
@@ -882,6 +886,38 @@
         "fail": "İşləmir",
         "off": "Qurulmayıb (istəyə bağlı)"
       }
+    },
+    "notices": {
+      "done": "{name} dublyaj olundu.",
+      "subtitled": "{name} üçün altyazılar hazırdır.",
+      "review": "{name}: tərcümə yoxlamaya hazırdır.",
+      "failed": "{name} alınmadı: {reason}",
+      "open": "Aç",
+      "check": "Yoxla",
+      "update": "Voxa {latest} çıxıb.",
+      "howToUpdate": "Necə yeniləmək olar"
+    },
+    "welcome": {
+      "step": "{total} addımdan {n}-ci",
+      "title": "Voxa Studio-ya xoş gəldiniz",
+      "intro": "Voxa videonu başqa dilə dublyaj edir və hər sətri danışıldığı yerdə saxlayır. Əvvəlcə üç şey; hər birini keçmək olar.",
+      "language": "Dil",
+      "theme": "Tema",
+      "systemTitle": "Bu kompüter nə edə bilir",
+      "checking": "Yoxlanılır…",
+      "noCheck": "Voxa-nın serveri yoxlamaya cavab vermədi. Ayarlar › Haqqında bölməsindəki Sistem səhifəsi yenidən yoxlaya bilər.",
+      "ready": "Dublyaja hazırdır.",
+      "notReady": "Voxa dublyaj etməzdən əvvəl bunu düzəltmək lazımdır:",
+      "systemMore": "Qalan hər şey (açarlar, mühərriklər, əlavələr) Ayarlar › Haqqında › Sistem bölməsindədir.",
+      "dubTitle": "İlk dublyajınız",
+      "dubIntro": "Kiçikdən başlayın: önizləmə yalnız ilk 20 saniyəni dublyaj edir, hamısını dublyaj etməzdən əvvəl necə səsləndiyini eşidirsiniz.",
+      "dub1": "Qısa bir videonu Studio-ya atın.",
+      "dub2": "Hansı dilə dublyaj ediləcəyini seçin.",
+      "dub3": "“İlk 20 s-ə önizləmə” düyməsini basın.",
+      "skip": "Keç",
+      "back": "Geri",
+      "next": "Növbəti",
+      "start": "Studio-ya keç"
     }
   }
 }

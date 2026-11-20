@@ -1926,6 +1926,31 @@ async def voice_job(job_id: str) -> dict:
     return job.summary()
 
 
+@app.post("/api/jobs/{job_id}/retry")
+async def retry_job(job_id: str) -> dict:
+    """Run a dub that failed, was stopped, or was cut short by Voxa closing, again: the same
+    video from its folder, the same settings, the same page. What its last run finished stays
+    in the video's work dir and is reused (the transcription first; lines it kept are voiced as
+    they are), so it picks up where that run stopped."""
+    job = _job_or_404(job_id)
+    if job.status != "failed":
+        raise HTTPException(status_code=409,
+                            detail="Only a dub that failed or was stopped can be run again.")
+    if not job.source_url and not (job.work_dir / job.file_name).exists():
+        raise HTTPException(status_code=409, detail=(
+            "The video isn't in its folder any more: choose it again in the Studio."))
+    problem = engine_problem(job.config)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
+    job.status, job.error, job.step = "queued", None, 0
+    job.started_at = job.finished_at = None
+    job.cancelled = False
+    await _emit(job, {"type": "status", "status": "queued"})
+    save_job(job)
+    _start_job(job)
+    return job.summary()
+
+
 @app.post("/api/jobs/{job_id}/cancel")
 async def cancel_job(job_id: str) -> dict:
     """Stop a dub that is queued or running. Its voxa process ends with everything it started

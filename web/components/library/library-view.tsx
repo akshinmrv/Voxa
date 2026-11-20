@@ -36,6 +36,7 @@ import {
   useCanReveal,
   useJobDialogs,
   useOpenInStudio,
+  useRetry,
   useReveal,
   type RevealKind,
 } from "./job-actions";
@@ -98,6 +99,9 @@ export function LibraryView() {
   const canReveal = useCanReveal();
   const reveal = useReveal();
   const openInStudio = useOpenInStudio();
+  const retry = useRetry();
+  const retryJobNow = retry.mutate;
+  const retryingId = retry.isPending ? (retry.variables ?? null) : null;
   const { askStop, stopNow, askRemove, stoppingId, dialogs } = useJobDialogs();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -120,10 +124,22 @@ export function LibraryView() {
       askStop,
       stopNow,
       askRemove,
+      retry: retryJobNow,
+      retryingId,
       reveal: revealIt,
       openInStudio: studioWith,
     }),
-    [canReveal, stoppingId, askStop, stopNow, askRemove, revealIt, studioWith],
+    [
+      canReveal,
+      stoppingId,
+      askStop,
+      stopNow,
+      askRemove,
+      retryJobNow,
+      retryingId,
+      revealIt,
+      studioWith,
+    ],
   );
 
   // Saves a dub the moment it finishes, if the operator asked for that in Settings.

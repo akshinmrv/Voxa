@@ -4,7 +4,7 @@
 ; quietly take those away. uv records them in the tool's receipt, on one line:
 ;   requirements = [{ name = "voxa-dub", extras = ["serve", "studio", "url"], ... }]
 ; KeptExtras leaves them in $Extras: Setup's two first, then the others as they were.
-; installer/windows/test_extras.nsi checks it on sample receipts.
+; installer/windows/test_parts.nsi checks it on sample receipts.
 
 !include "LogicLib.nsh"
 !include "StrFunc.nsh"

@@ -554,9 +554,9 @@ operatör arka ucu sunar — tek tasarım sistemi, iki yüzey:
   (SSE) ve sonucu indir. Hiçbir şey sunucuya yüklenmez — kendi makinende çalışır.
 
 <div align="center">
-<img src="docs/assets/app-tr.png" alt="Voxa konsolu: hazır bir dublaj ve değiştirmek için açılmış çevirisi" width="820">
+<img src="docs/assets/app-tr.png" alt="Voxa Studio: hazır bir dublajın satırları videonun yanında, her biri söylendiği anda" width="820">
 <br>
-<sub>Hazır bir dublaj: izleyin, altyazısıyla indirin, istediğiniz satırı değiştirin. Yalnızca değiştirdiğiniz satırlar yeniden seslendirilir.</sub>
+<sub>Voxa Studio'da hazır bir dublaj: her satır videonun yanında, söylendiği anda, süresine ne kadar sığdığıyla. Bir satırı değiştirin: yalnızca değiştirdiğiniz satırlar yeniden seslendirilir.</sub>
 </div>
 
 ```bash

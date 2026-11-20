@@ -16,6 +16,7 @@ Unicode true
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
 !include "extras.nsh"
+!include "webview2.nsh"
 
 !ifndef VERSION | UV | OUTFILE
   !error "build it with scripts/build_windows_installer.py"
@@ -45,6 +46,13 @@ VIAddVersionKey "CompanyName" "${PUBLISHER}"
 VIAddVersionKey "LegalCopyright" "MIT License"
 
 !define MUI_ICON "..\..\voxa_ui\icons\voxa.ico"
+; Drawn by scripts/make_installer_art.py from Voxa's mark.
+!define MUI_WELCOMEFINISHPAGE_BITMAP "welcome.bmp"
+!define MUI_UNWELCOMEFINISHPAGE_BITMAP "welcome.bmp"
+!define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_RIGHT
+!define MUI_HEADERIMAGE_BITMAP "header.bmp"
+!define MUI_HEADERIMAGE_UNBITMAP "header.bmp"
 !define MUI_UNICON "..\..\voxa_ui\icons\voxa.ico"
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN
@@ -82,6 +90,8 @@ LangString RunStudio ${LANG_ENGLISH} "Open Voxa Studio"
 LangString RunStudio ${LANG_TURKISH} "Voxa Studio'yu aç"
 LangString StudioOpen ${LANG_ENGLISH} "Voxa Studio is open. Close it, then press OK."
 LangString StudioOpen ${LANG_TURKISH} "Voxa Studio açık. Kapatıp Tamam'a basın."
+LangString NoWebView2 ${LANG_ENGLISH} "Voxa Studio draws its window with Microsoft Edge WebView2, which this computer doesn't have. Voxa installs anyway, and its console will open in your browser instead. To have Voxa's own window, install WebView2 from https://developer.microsoft.com/microsoft-edge/webview2/ and open Voxa Studio again."
+LangString NoWebView2 ${LANG_TURKISH} "Voxa Studio penceresini Microsoft Edge WebView2 ile çizer; bu bilgisayarda yok. Voxa yine de kurulur ve konsolu bunun yerine tarayıcınızda açılır. Voxa'nın kendi penceresi için WebView2'yi https://developer.microsoft.com/microsoft-edge/webview2/ adresinden kurup Voxa Studio'yu yeniden açın."
 LangString Kept ${LANG_ENGLISH} "Your dubs, settings and API keys in $PROFILE\Voxa were kept, as were engines in $PROFILE\.voxa."
 LangString Kept ${LANG_TURKISH} "$PROFILE\Voxa içindeki dublajlarınız, ayarlarınız ve API anahtarlarınız ile $PROFILE\.voxa içindeki motorlar korundu."
 
@@ -112,6 +122,11 @@ LangString Kept ${LANG_TURKISH} "$PROFILE\Voxa içindeki dublajlarınız, ayarla
 
 Function .onInit
   !insertmacro WaitForStudioClosed
+  ; Voxa installs either way; without WebView2 its console opens in the browser.
+  Call HasWebView2
+  ${If} $WebView2 == "0"
+    MessageBox MB_OK|MB_ICONINFORMATION "$(NoWebView2)" /SD IDOK
+  ${EndIf}
 FunctionEnd
 
 Function un.onInit

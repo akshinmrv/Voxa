@@ -314,3 +314,33 @@ def test_the_log_gets_one_line_per_progress_bar(ws, monkeypatch):
     asyncio.run(srv._run_job(job))
     logs = [e["line"] for e in job.events if e["type"] == "log"]
     assert logs == ["100%|#####| 9/9"]
+
+
+# ── BE-8: run a failed or stopped dub again ──
+
+def test_a_failed_or_stopped_dub_runs_again_in_place(ws, monkeypatch):
+    started = []
+    monkeypatch.setattr(srv, "_start_job", started.append)
+    job = _job(ws, "j1", status="failed")
+    (job.work_dir / job.file_name).write_bytes(b"video")
+    job.error, job.step, job.cancelled = srv.CANCELLED, 4, True
+    job.started_at, job.finished_at = 10.0, 20.0
+    client = TestClient(srv.app)
+    body = client.post("/api/jobs/j1/retry").json()
+    assert body["status"] == "queued" and body["error"] is None and body["step"] == 0
+    assert body["cancelled"] is False and body["startedAt"] is None
+    assert started == [job] and list(srv.JOBS) == ["j1"]          # the same dub, not a new one
+    saved = json.loads((ws / "history" / "j1.json").read_text(encoding="utf-8"))
+    assert saved["status"] == "queued"
+
+
+def test_only_a_failed_dub_with_its_video_runs_again(ws, monkeypatch):
+    monkeypatch.setattr(srv, "_start_job", lambda job: None)
+    client = TestClient(srv.app)
+    _job(ws, "done1", status="done")
+    assert client.post("/api/jobs/done1/retry").status_code == 409
+    gone = _job(ws, "gone1", status="failed", work="fedcba9876543210")
+    assert not (gone.work_dir / gone.file_name).exists()
+    r = client.post("/api/jobs/gone1/retry")
+    assert r.status_code == 409 and "isn't in its folder" in r.json()["detail"]
+    assert client.post("/api/jobs/nope/retry").status_code == 404

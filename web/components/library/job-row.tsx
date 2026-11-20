@@ -7,6 +7,7 @@ import {
   Download,
   FolderOpen,
   MoreHorizontal,
+  RotateCcw,
   SlidersHorizontal,
   Square,
   Trash2,
@@ -42,6 +43,9 @@ export type RowActions = {
   stoppingId: string | null;
   askStop: (id: string) => void;
   stopNow: (id: string) => void;
+  /** Run a failed or stopped dub again. */
+  retry: (id: string) => void;
+  retryingId: string | null;
   askRemove: (job: JobSummary) => void;
   reveal: (id: string, file: RevealKind) => void;
   openInStudio: (job: JobSummary) => void;
@@ -135,6 +139,18 @@ export const JobRow = memo(function JobRow({
       return (
         <Button asChild size="xs" variant="secondary">
           <Link href={jobHref(job.id)}>{t("review")}</Link>
+        </Button>
+      );
+    if (job.status === "failed")
+      return (
+        <Button
+          size="xs"
+          variant="ghost"
+          onClick={() => actions.retry(job.id)}
+          loading={actions.retryingId === job.id}
+        >
+          {actions.retryingId !== job.id && <RotateCcw />}
+          <span className="truncate">{job.cancelled ? tw("runAgain") : tw("retry")}</span>
         </Button>
       );
     if (job.status === "done" && actions.canReveal === null) return null;
@@ -282,6 +298,11 @@ function JobMenuItems({
           <a href={resultVideoUrl(job.id)} download>
             <Download /> {tw("download")}
           </a>
+        </Item>
+      )}
+      {job.status === "failed" && (
+        <Item onSelect={() => actions.retry(job.id)}>
+          <RotateCcw /> {job.cancelled ? tw("runAgain") : tw("retry")}
         </Item>
       )}
       <Item onSelect={() => actions.openInStudio(job)}>

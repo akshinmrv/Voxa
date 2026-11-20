@@ -552,9 +552,9 @@ backend təqdim edir — bir dizayn sistemi, iki səth:
   izlə (SSE) və nəticəni yüklə. Heç nə serverə yüklənmir — öz maşınında işləyir.
 
 <div align="center">
-<img src="docs/assets/app-az.png" alt="Voxa konsolu: hazır dublyaj və dəyişmək üçün açılmış tərcüməsi" width="820">
+<img src="docs/assets/app-az.png" alt="Voxa Studio: hazır dublyajın sətirləri videonun yanında, hər biri danışıldığı anda" width="820">
 <br>
-<sub>Hazır dublyaj: baxın, altyazısı ilə endirin, istənilən sətri dəyişin. Yalnız dəyişdiyiniz sətirlər yenidən səsləndirilir.</sub>
+<sub>Voxa Studio-da hazır dublyaj: hər sətir videonun yanında, danışıldığı anda, vaxtına nə qədər sığdığı ilə. Sətri dəyişin: yalnız dəyişdiyiniz sətirlər yenidən səsləndirilir.</sub>
 </div>
 
 ```bash

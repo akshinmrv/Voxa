@@ -113,6 +113,7 @@ const FIELDS: { id: string; section: SectionId; label: string; hint?: string }[]
   { id: "version", section: "about", label: "about.version", hint: "about.updateSearch" },
   { id: "systemCheck", section: "about", label: "about.system", hint: "about.systemHint" },
   { id: "logs", section: "about", label: "about.logs", hint: "about.logsHint" },
+  { id: "welcome", section: "about", label: "about.welcome", hint: "about.welcomeHint" },
   { id: "links", section: "about", label: "about.links", hint: "about.licences" },
   { id: "reset", section: "reset", label: "danger.reset", hint: "danger.desc" },
 ];
@@ -176,7 +177,7 @@ export function SettingsView() {
       // The update banner follows "Check for updates" at once, not hours later.
       if (changed.includes("checkUpdates")) void qc.invalidateQueries({ queryKey: ["update"] });
       setDraft({});
-      toast(t("savedNote"));
+      toast(t("savedNote"), "success");
     },
   });
 

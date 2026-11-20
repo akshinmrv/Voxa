@@ -11,6 +11,7 @@ import {
   Film,
   FolderOpen,
   MoreHorizontal,
+  RotateCcw,
   SlidersHorizontal,
   Square,
   Trash2,
@@ -45,6 +46,7 @@ import { usePlannedSteps } from "@/components/studio/signal-path";
 import {
   revealTarget,
   useCanReveal,
+  useRetry,
   useJobDialogs,
   useOpenInStudio,
   useReveal,
@@ -159,6 +161,7 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
   const canReveal = useCanReveal();
   const reveal = useReveal();
   const openWithSettings = useOpenInStudio();
+  const retry = useRetry(() => followVoicing());
   // A preview leads to the whole video: a job of its own, with the same settings.
   const whole = useMutation({
     mutationFn: () => dubWholeVideo(jobId),
@@ -307,6 +310,9 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
           </>
         )}
         <div className="flex flex-wrap gap-2 pt-1">
+          <Button size="sm" onClick={() => retry.mutate(jobId)} loading={retry.isPending}>
+            {!retry.isPending && <RotateCcw />} {cancelled ? t("runAgain") : t("retry")}
+          </Button>
           <Button size="sm" variant="secondary" onClick={openInStudio}>
             <SlidersHorizontal /> {t("useSettings")}
           </Button>

@@ -63,6 +63,11 @@ export async function getJob(id: string): Promise<JobSummary> {
   return asJson(await fetch(`${API_BASE}/api/jobs/${id}`));
 }
 
+/** Run a failed or stopped dub again, in place: it picks up where its last run stopped. */
+export async function retryJob(id: string): Promise<JobSummary> {
+  return asJson(await fetch(`${API_BASE}/api/jobs/${id}/retry`, { method: "POST" }));
+}
+
 /** Stop a queued or running dub (it ends as failed, `cancelled`). */
 export async function cancelJob(id: string): Promise<JobSummary> {
   return asJson(await fetch(`${API_BASE}/api/jobs/${id}/cancel`, { method: "POST" }));
@@ -73,9 +78,7 @@ export async function deleteJob(
   id: string,
   files: boolean,
 ): Promise<{ deleted: string; removedFiles: string[] }> {
-  return asJson(
-    await fetch(`${API_BASE}/api/jobs/${id}?files=${files}`, { method: "DELETE" }),
-  );
+  return asJson(await fetch(`${API_BASE}/api/jobs/${id}?files=${files}`, { method: "DELETE" }));
 }
 
 export async function listJobs(): Promise<{ jobs: JobSummary[] }> {
@@ -199,9 +202,7 @@ export async function deleteKey(provider: string): Promise<KeysStatus> {
 }
 
 export async function testProvider(provider: string): Promise<ProviderTestResult> {
-  return asJson(
-    await fetch(`${API_BASE}/api/providers/${provider}/test`, { method: "POST" }),
-  );
+  return asJson(await fetch(`${API_BASE}/api/providers/${provider}/test`, { method: "POST" }));
 }
 
 // ── Engines installed into environments of their own ──────────────────────────
@@ -223,9 +224,7 @@ export async function revealFile(
   id: string,
   file: "video" | "srt" | "folder",
 ): Promise<{ shown: string }> {
-  return asJson(
-    await fetch(`${API_BASE}/api/jobs/${id}/reveal?file=${file}`, { method: "POST" }),
-  );
+  return asJson(await fetch(`${API_BASE}/api/jobs/${id}/reveal?file=${file}`, { method: "POST" }));
 }
 
 /** What `voxa doctor` says; with online, Google, Edge and Hugging Face are tried too. */
@@ -253,9 +252,7 @@ export const jobEventsUrl = (id: string) => `${API_BASE}/api/jobs/${id}/events`;
 /** The original video, to play beside the dub or under the lines being checked. */
 export const sourceVideoUrl = (id: string) => `${API_BASE}/api/jobs/${id}/source`;
 
-export const resultVideoUrl = (id: string) =>
-  `${API_BASE}/api/jobs/${id}/result/video`;
+export const resultVideoUrl = (id: string) => `${API_BASE}/api/jobs/${id}/result/video`;
 /** The subtitles as WebVTT, for the browser's video player. */
 export const resultVttUrl = (id: string) => `${API_BASE}/api/jobs/${id}/result/vtt`;
-export const resultSrtUrl = (id: string) =>
-  `${API_BASE}/api/jobs/${id}/result/srt`;
+export const resultSrtUrl = (id: string) => `${API_BASE}/api/jobs/${id}/result/srt`;

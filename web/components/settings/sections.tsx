@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
-import { Activity, ExternalLink, FolderOpen, Lock, RotateCcw } from "lucide-react";
+import { Activity, ExternalLink, FolderOpen, Lock, RotateCcw, Sparkles } from "lucide-react";
 import { getHealth, resetSettings } from "@/lib/api";
 import { useDesktop } from "@/lib/desktop";
 import { useUpdateStatus } from "@/lib/use-update";
@@ -28,6 +28,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ThemeChoice } from "@/components/shell/theme-choice";
+import { WELCOME_EVENT } from "@/components/shell/first-run";
+import { UpdateDetails } from "@/components/app/update-details";
 import { cn } from "@/lib/utils";
 import type { Draft, Values } from "./draft";
 import { KeyField } from "./key-field";
@@ -455,15 +457,10 @@ export function AboutSection() {
           <span className="font-mono text-ui-mono">Voxa {version}</span>
           {status && <span className="text-muted-foreground"> · {status}</span>}
         </p>
-        {update?.newer && update.notes && (
-          <a
-            className={cn(link, "mt-1")}
-            href={update.notes}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {t("notes")} <ExternalLink className="size-3.5" aria-hidden />
-          </a>
+        {update?.newer && (
+          <div className="mt-3">
+            <UpdateDetails update={update} />
+          </div>
         )}
       </Row>
       {desktop && info.data && (
@@ -493,6 +490,15 @@ export function AboutSection() {
           </Button>
         </Row>
       )}
+      <Row id="welcome" label={t("welcome")} hint={t("welcomeHint")}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => window.dispatchEvent(new Event(WELCOME_EVENT))}
+        >
+          <Sparkles /> {t("showWelcome")}
+        </Button>
+      </Row>
       <Row id="links" label={t("links")}>
         <div className="flex flex-wrap gap-x-5 gap-y-1.5">
           {[

@@ -168,6 +168,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     otherwise), heard, and deleted after asking. The Studio links straight to it
     (`?tab=mine`).
 
+- **Voxa Studio's taskbar button follows your dubs.** It shows the running dub's step as a
+  progress bar, and something moving while dubs only wait in the queue. When a dub finishes,
+  fails, or stops to have its lines checked while the window is behind others, the button
+  flashes until you bring the window back. The window watches the dubs itself, so a browser is
+  untouched.
+- **Notes when a dub needs you.** In the console, a note in the corner says that a dub is done,
+  waiting for its translation to be checked, or has failed, each with the way to it. A failure
+  stays until you close it. A dub you are looking at isn't announced on its own page.
+- **A welcome the first time.** It has three steps, each skippable: a language and a theme;
+  what this computer can do (FFmpeg, the GPU, Edge); and the way to a first dub, a 20-second
+  preview. Settings › About shows it again.
+- **Try again.** A dub that failed, was stopped, or was cut short by Voxa closing runs again
+  from its page or its row in Dubs. It is the same dub, picking up where its last run stopped.
+  Through the API: `POST /api/jobs/{id}/retry`.
+- **VoxaSetup.exe:**
+  - **Its own pictures:** a panel with Voxa's mark on the welcome and finish pages, and the
+    mark in the header. `scripts/make_installer_art.py` draws them.
+  - **WebView2:** Setup checks for Microsoft Edge WebView2, as Microsoft advises. Without it,
+    Setup says that Voxa installs anyway and opens its console in the browser.
+
 ### Changed
 
 - **The console's sections are now Studio, Dubs, Voices, Engines and Settings** (they were New
@@ -191,8 +211,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - the style guide (`/en/style-guide`), rebuilt into a catalogue of all of them in both themes
     and three languages.
 
+- **A newer Voxa is told about in the status bar, not a banner.**
+  - **Once:** a note says so, once per release.
+  - **How to update:** the status bar's item and Settings › About say how (the new
+    VoxaSetup.exe, or this install's command).
+  - **No banner:** the banner across the top of every page is gone.
+- **The README's console pictures** show the new Studio in each README's language: a finished
+  dub's lines beside its video. They are made from Voxa's own demo video.
+
 ### Fixed
 
+- **Choosing a language in the Studio made a second dub.** Until one was chosen, the Studio
+  showed its default (the first language it lists, Russian) as chosen. A click on another
+  language added it to the default, so two dubs started. The first language chosen now takes
+  the default's place.
 - **A VoxaSetup install was told to use a uv it doesn't have.** `voxa doctor` and the console
   gave `uv tool install …` to add an extra. Setup keeps its own uv in its folder, off PATH, and
   tells it where Voxa lives; that command would have installed a second Voxa, or nothing.
