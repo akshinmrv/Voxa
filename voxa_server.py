@@ -1259,8 +1259,9 @@ app.add_middleware(AccessGuard)
 
 
 @app.get("/api/health")
-async def health() -> dict:
-    return {"status": "ok", "version": app.version}
+async def health(request: Request) -> dict:
+    # canReveal: "Show in folder" works for this console (POST /api/jobs/{id}/reveal).
+    return {"status": "ok", "version": app.version, "canReveal": can_reveal(request)}
 
 
 def checks_updates() -> bool:
@@ -1284,7 +1285,9 @@ def _say_if_newer() -> None:
 
 
 @app.get("/api/options")
-async def options() -> dict:
+def options() -> dict:
+    # Not async: the first call imports pyannote to see whether it's there, ~10 s on a
+    # laptop. Run in a worker thread, it doesn't hold up every other request meanwhile.
     return build_options()
 
 
@@ -1905,6 +1908,104 @@ async def job_source(job_id: str) -> FileResponse:
     if path is None:
         raise HTTPException(status_code=404, detail="The video isn't in its folder any more.")
     return FileResponse(str(path), filename=path.name, content_disposition_type="inline")
+
+
+# --------------------------------------------------------------------------- #
+# Show in folder: the file manager of the machine Voxa runs on, for a console on it
+# --------------------------------------------------------------------------- #
+
+def _desktop_opener() -> Optional[str]:
+    """The program that shows a file in this machine's file manager, or None where there is
+    no desktop to show it on: in a container, or on Linux without a display."""
+    if voxa._in_container():
+        return None
+    if sys.platform == "win32":
+        # By its full path: a bare name is looked for in the current folder first.
+        path = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "explorer.exe"
+        return str(path) if path.is_file() else None
+    if sys.platform == "darwin":
+        return shutil.which("open")
+    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        return None
+    return shutil.which("xdg-open")
+
+
+def can_reveal(request: Request) -> bool:
+    """Whether "Show in folder" works for this caller: asked from the machine Voxa runs on,
+    which has a desktop. From elsewhere, even with the token, a window would open on the
+    server's screen, not the caller's."""
+    host = request.client.host if request.client else ""
+    return host in _LOCAL_HOSTS and _desktop_opener() is not None
+
+
+def reveal_command(opener: str, path: Path, platform: str = sys.platform):
+    """What shows path: a file selected in its folder, or a folder opened. Never a file on
+    its own, which would open (or run) it."""
+    if platform == "win32":
+        # explorer reads its command line itself and wants /select,"<path>" as one piece,
+        # which subprocess's quoting would break up. A Windows path can't hold a quote.
+        return f'"{opener}" /select,"{path}"' if path.is_file() else f'"{opener}" "{path}"'
+    if platform == "darwin":
+        return [opener, "-R", str(path)] if path.is_file() else [opener, str(path)]
+    # xdg-open has no "select": the folder the file is in.
+    return [opener, str(path if path.is_dir() else path.parent)]
+
+
+def let_explorer_front() -> bool:
+    """Let File Explorer's window come to the front. Windows lets a process bring a window
+    forward only when the one in front allows it, and that may be passed on: Voxa Studio's
+    window, in front when its button was clicked, started this server, which passes it to
+    Explorer's own process (the desktop's shell), the one that shows the file. From a server
+    a browser talks to, this is refused, and Explorer may open behind."""
+    if sys.platform != "win32":
+        return False
+    import ctypes
+    user32 = ctypes.windll.user32
+    pid = ctypes.c_ulong()
+    shell = user32.GetShellWindow()
+    if not shell or not user32.GetWindowThreadProcessId(shell, ctypes.byref(pid)):
+        return False
+    return bool(user32.AllowSetForegroundWindow(pid.value))
+
+
+def _launch(command) -> None:
+    """Start it and let it go: explorer hands over to the desktop's own and exits, open and
+    xdg-open once the file manager has it. Waited for in a thread, so no zombie stays."""
+    let_explorer_front()
+    extra = {} if sys.platform == "win32" else {"start_new_session": True}
+    proc = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, **extra)
+    threading.Thread(target=proc.wait, daemon=True).start()
+
+
+def _inside(path: Path, folder: Path) -> bool:
+    try:
+        return path.resolve().is_relative_to(folder.resolve())
+    except OSError:
+        return False
+
+
+@app.post("/api/jobs/{job_id}/reveal")
+async def reveal(job_id: str, request: Request,
+                 file: Literal["video", "srt", "folder"] = "video") -> dict:
+    """Show a dub's video or subtitles selected in the file manager, or open the folder its
+    files are in, on the machine Voxa runs on. The console says which; the server knows the
+    path, and shows nothing outside the dub's own folder."""
+    job = _job_or_404(job_id)
+    if not can_reveal(request):
+        raise HTTPException(status_code=409, detail=(
+            "Voxa can show its files in a folder only on the computer it runs on, with a "
+            "desktop: not in a container, nor for a console on another machine."))
+    path = {"video": job.result_video, "srt": job.result_srt, "folder": job.work_dir}[file]
+    wanted = path is not None and (path.is_dir() if file == "folder" else path.is_file())
+    if not wanted or not _inside(path, job.work_dir):
+        raise HTTPException(status_code=404, detail="That file isn't in the dub's folder.")
+    opener = _desktop_opener()
+    try:
+        _launch(reveal_command(opener, path))
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"The file manager didn't open: {exc}")
+    return {"shown": path.name}
 
 
 def _result(job_id: str, kind: str) -> FileResponse:

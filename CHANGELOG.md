@@ -98,6 +98,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ranges so the player can seek, and `hasSource` in a job's summary. For a dub from a link,
   it is the video yt-dlp fetched, told apart from what Voxa made.
 
+- **The Dubs page, a library of every dub.**
+  - **Groups.** Dubs going and queued come first, then today's, then earlier ones, each with
+    its state as an icon and a word, its file, language and engine.
+  - **What each row says.** A running dub's step, a queued one's place, how long a finished one
+    took, a failure's reason.
+  - **Finding a dub.** Search by file name (`/` goes there) and filters by state and language.
+  - **Row actions.** Each row does what its dub needs next: stop it, cancel it if it is still
+    queued, check its translation, show its file. Everything else is in its ⋯ menu or on a
+    right click: open, show in folder, save the video, use its settings in the Studio, remove.
+  - **Keys.** ↑/↓ move along the rows; Delete removes a dub, after asking.
+  - **Removing.** The question names the file. It offers to delete the files only when there
+    are some. A note then says what happened, including when files were kept because another
+    dub made the same ones.
+  - **Many dubs.** Measured with 400: drawn in about 0.6 s, and a dub's progress updates only
+    its own row.
+- **Show in folder.** On a dub's row, its page and its files, Voxa opens File Explorer with the
+  dub selected (a failed dub: the folder it worked in). On macOS it uses Finder's `open -R`; on
+  Linux, the folder.
+  - **Where it works.** The server shows only files in the dub's own folder, and the console
+    names which, never a path. It works only for a console on the computer Voxa runs on: in a
+    container, or for a console elsewhere, the button isn't there.
+  - **In front.** Voxa Studio's window lets Explorer's window come in front of it, which
+    Windows allows only if the window in front permits it.
+  - **API:** `POST /api/jobs/{id}/reveal?file=video|srt|folder`, and `canReveal` in
+    `/api/health`.
+
 ### Changed
 
 - **The console's sections are now Studio, Dubs, Voices, Engines and Settings** (they were New
@@ -123,6 +149,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The console no longer waits for the server on its first page.** The first time the console
+  asked for its options, the server imported pyannote to see whether it was installed. That
+  took 10.7 s, and nothing else was answered meanwhile: the health check, settings and updates
+  all waited behind it. The options are now worked out in a thread of their own. Measured: the
+  other answers now come in 4 ms.
+- **Dates in the Azerbaijani console.** The browser has no Azerbaijani month names and wrote
+  "2026 M11 16". The console now writes "16 noy 2026" itself where the browser can't, on a
+  dub's page and in the list.
 - **A progress bar no longer turns a dub's log into one long line.** A Whisper model
   downloading, or Demucs, redraws its bar with carriage returns. The log got every state of it
   run together, and colour codes with it. Now each bar leaves only its last state.

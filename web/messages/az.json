@@ -210,6 +210,7 @@
     "licenseLink": "Lisenziya"
   },
   "Common": {
+    "months": ["yan", "fev", "mar", "apr", "may", "iyn", "iyl", "avq", "sen", "okt", "noy", "dek"],
     "languageLabel": "Dil",
     "themeLabel": "Temanı dəyiş",
     "copy": "Kopyala",
@@ -271,7 +272,10 @@
         "nextLine": "Əvvəlki və ya növbəti sətir (sətirlər)",
         "playLine": "Sətri oynat (sətirlər)",
         "toggleSource": "Orijinal və ya dublyaj (sətirlər)",
-        "save": "Sətirləri yadda saxla"
+        "save": "Sətirləri yadda saxla",
+        "search": "Dublyajlarda axtar (Dublyajlar)",
+        "moveRow": "Əvvəlki və ya növbəti dublyaj (Dublyajlar)",
+        "removeRow": "Dublyajı siyahıdan çıxar (Dublyajlar)"
       },
       "status": {
         "label": "Vəziyyət",
@@ -437,6 +441,40 @@
       "emptyTitle": "Hələ dublyaj yoxdur",
       "emptyBody": "Burada görmək üçün dublyaja başlayın.",
       "emptyCta": "Yeni dublyaj"
+    },
+    "library": {
+      "going": "Gedir və növbədə",
+      "today": "Bu gün",
+      "earlier": "Daha əvvəl",
+      "search": "Fayl adı ilə axtar",
+      "status": "Status",
+      "statusAll": "Hamısı",
+      "statusGoing": "Gedir",
+      "language": "Dil",
+      "languageAll": "Bütün dillər",
+      "newDub": "Yeni dublyaj",
+      "count": "{total} dublyaj",
+      "countOf": "{total} dublyajdan {shown}",
+      "noMatch": "Bu süzgəclərə uyğun dublyaj yoxdur.",
+      "clearFilters": "Süzgəcləri təmizlə",
+      "open": "Aç",
+      "review": "Yoxla",
+      "cancel": "Ləğv et",
+      "save": "Saxla",
+      "showInFolder": "Qovluqda göstər",
+      "revealFailed": "Qovluqda göstərmək alınmadı: {reason}",
+      "stopFailed": "Dayandırmaq alınmadı: {reason}",
+      "removed": "{name} siyahıdan çıxarıldı. Faylları Voxa qovluğunda qalır.",
+      "removedOnly": "{name} siyahıdan çıxarıldı.",
+      "removedWithFiles": "{name} siyahıdan çıxarıldı, {count} faylı silindi.",
+      "removedKeptFiles": "{name} siyahıdan çıxarıldı. Faylları saxlanıldı: eyni faylları siyahıdakı başqa dublyaj da yaradıb, ya da onlar artıq yox idi.",
+      "removeBodyNoFiles": "Onun səhifəsi və loqu silinir. Silinəcək videosu və ya altyazısı yoxdur.",
+      "waitingReview": "Tərcüməni yoxlayın",
+      "failedAt": "{when} · Uğursuz: {reason}",
+      "stoppedAt": "Dayandırılıb · {when}",
+      "doneAt": "{when} · {took}",
+      "stepShort": "{n}/7 · {name}",
+      "moreFor": "{name}: digər əməllər"
     },
     "models": {
       "title": "Mühərriklər",

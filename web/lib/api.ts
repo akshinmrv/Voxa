@@ -206,9 +206,27 @@ export async function testProvider(provider: string): Promise<ProviderTestResult
 }
 
 // ── Engines installed into environments of their own ──────────────────────────
-/** Whether the server answers, and its version (the status bar asks every few seconds). */
-export async function getHealth(): Promise<{ status: string; version: string }> {
+/**
+ * Whether the server answers, and its version (the status bar asks every few seconds).
+ * canReveal: it can show a dub's files in a folder for this console (same machine, a
+ * desktop; never in a container or from elsewhere).
+ */
+export async function getHealth(): Promise<{
+  status: string;
+  version: string;
+  canReveal?: boolean;
+}> {
   return asJson(await fetch(`${API_BASE}/api/health`, { cache: "no-store" }));
+}
+
+/** Show a dub's video or subtitles selected in the file manager, or open its folder. */
+export async function revealFile(
+  id: string,
+  file: "video" | "srt" | "folder",
+): Promise<{ shown: string }> {
+  return asJson(
+    await fetch(`${API_BASE}/api/jobs/${id}/reveal?file=${file}`, { method: "POST" }),
+  );
 }
 
 export async function getUpdate(): Promise<UpdateStatus> {

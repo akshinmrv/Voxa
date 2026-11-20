@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import {
   Check,
   ChevronDown,
@@ -21,6 +21,7 @@ import {
   type ConfigChoice,
 } from "@/lib/job-config";
 import { keyLabel } from "@/lib/shortcuts";
+import { useLanguageNames } from "@/lib/use-language-names";
 import { Link, useRouter } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -118,7 +119,6 @@ function Row({
 export function Composer() {
   const tn = useTranslations("App.newJob");
   const ts = useTranslations("App.studio");
-  const locale = useLocale();
   const router = useRouter();
   const optionsQuery = useQuery({ queryKey: ["options"], queryFn: getOptions });
   const settingsQuery = useQuery({
@@ -149,22 +149,7 @@ export function Composer() {
     }
   }, [choice]);
 
-  // The languages' names: Voxa's own for the ones it lists (Edge's ICU has no Azerbaijani
-  // names, and gave "Ru", "Tr"), the browser's for any other the server adds, else its English.
-  const names = useMemo(() => {
-    let display: Intl.DisplayNames | null = null;
-    try {
-      display = new Intl.DisplayNames([locale], { type: "language" });
-    } catch {
-      /* an old engine */
-    }
-    return (code: string, fallback: string) => {
-      if (ts.has(`langNames.${code}`)) return ts(`langNames.${code}` as "langNames.en");
-      const shown = display?.of(code);
-      const name = shown && shown.toLowerCase() !== code.toLowerCase() ? shown : fallback;
-      return name.charAt(0).toLocaleUpperCase(locale) + name.slice(1);
-    };
-  }, [locale, ts]);
+  const names = useLanguageNames();
 
   const options = optionsQuery.data;
   const config = options ? effectiveConfig(choice, options, settingsQuery.data) : null;

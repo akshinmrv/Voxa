@@ -13,6 +13,11 @@ export interface VoxaDesktop {
   /** Open the folder with Voxa's logs (.voxa_serve) in Explorer. */
   open_logs(): Promise<boolean>;
   app_info(): Promise<{ shell: string | null; renderer: string | null; os: string }>;
+  /**
+   * Let File Explorer's window come to the front, asked just before the server shows a
+   * dub's file in it: Windows lets only the app in front pass that on.
+   */
+  let_explorer_front?(): Promise<boolean>;
 }
 
 declare global {

@@ -1,6 +1,6 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AppPageHeader } from "@/components/app/app-page-header";
-import { JobsView } from "@/components/app/jobs-view";
+import { LibraryView } from "@/components/library/library-view";
 
 export default async function JobsPage({
   params,
@@ -14,7 +14,7 @@ export default async function JobsPage({
   return (
     <>
       <AppPageHeader subtitle={t("subtitle")} />
-      <JobsView />
+      <LibraryView />
     </>
   );
 }

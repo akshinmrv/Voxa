@@ -210,6 +210,7 @@
     "licenseLink": "Lisans"
   },
   "Common": {
+    "months": ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"],
     "languageLabel": "Dil",
     "themeLabel": "Temayı değiştir",
     "copy": "Kopyala",
@@ -271,7 +272,10 @@
         "nextLine": "Önceki veya sonraki satır (satırlar)",
         "playLine": "Satırı çal (satırlar)",
         "toggleSource": "Orijinal veya dublaj (satırlar)",
-        "save": "Satırları kaydet"
+        "save": "Satırları kaydet",
+        "search": "Dublajlarda ara (Dublajlar)",
+        "moveRow": "Önceki veya sonraki dublaj (Dublajlar)",
+        "removeRow": "Dublajı listeden kaldır (Dublajlar)"
       },
       "status": {
         "label": "Durum",
@@ -437,6 +441,40 @@
       "emptyTitle": "Henüz dublaj yok",
       "emptyBody": "Burada görmek için bir dublaj başlat.",
       "emptyCta": "Yeni dublaj"
+    },
+    "library": {
+      "going": "Devam eden ve sıradaki",
+      "today": "Bugün",
+      "earlier": "Daha önce",
+      "search": "Dosya adıyla ara",
+      "status": "Durum",
+      "statusAll": "Tümü",
+      "statusGoing": "Devam eden",
+      "language": "Dil",
+      "languageAll": "Tüm diller",
+      "newDub": "Yeni dublaj",
+      "count": "{total} dublaj",
+      "countOf": "{total} dublajdan {shown}",
+      "noMatch": "Bu filtrelere uyan dublaj yok.",
+      "clearFilters": "Filtreleri temizle",
+      "open": "Aç",
+      "review": "İncele",
+      "cancel": "İptal et",
+      "save": "Kaydet",
+      "showInFolder": "Klasörde göster",
+      "revealFailed": "Klasörde gösterilemedi: {reason}",
+      "stopFailed": "Durdurulamadı: {reason}",
+      "removed": "{name} listeden kaldırıldı. Dosyaları Voxa klasöründe kalıyor.",
+      "removedOnly": "{name} listeden kaldırıldı.",
+      "removedWithFiles": "{name} listeden kaldırıldı ve {count} dosyası silindi.",
+      "removedKeptFiles": "{name} listeden kaldırıldı. Dosyaları korundu: aynı dosyaları listedeki başka bir dublaj da yaptı ya da zaten yoktular.",
+      "removeBodyNoFiles": "Sayfası ve günlüğü silinir. Silinecek videosu veya altyazısı yok.",
+      "waitingReview": "Çeviriyi kontrol edin",
+      "failedAt": "{when} · Başarısız: {reason}",
+      "stoppedAt": "Durduruldu · {when}",
+      "doneAt": "{when} · {took}",
+      "stepShort": "{n}/7 · {name}",
+      "moreFor": "{name}: diğer işlemler"
     },
     "models": {
       "title": "Motorlar",

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/toaster";
 import { UpdateBanner } from "@/components/app/update-banner";
 import { APP_NAV, SETTINGS_NAV } from "@/components/app/nav-items";
 import { useDesktop } from "@/lib/desktop";
@@ -112,6 +113,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           onShortcuts={() => setShortcuts(true)}
         />
         <ShortcutsDialog open={shortcuts} onOpenChange={setShortcuts} />
+        <Toaster />
       </TooltipProvider>
     </ShellContext.Provider>
   );

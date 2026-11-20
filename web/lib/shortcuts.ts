@@ -15,7 +15,10 @@ export type ShortcutId =
   | "nextLine"
   | "playLine"
   | "toggleSource"
-  | "save";
+  | "save"
+  | "search"
+  | "moveRow"
+  | "removeRow";
 
 export type Shortcut = {
   id: ShortcutId;
@@ -41,6 +44,10 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "playLine", keys: ["Alt", "P"] },
   { id: "toggleSource", keys: ["Alt", "O"] },
   { id: "save", keys: ["Mod", "S"] },
+  // The Dubs page's (components/library handles them).
+  { id: "search", keys: ["/"] },
+  { id: "moveRow", keys: ["↑↓"] },
+  { id: "removeRow", keys: ["Del"] },
 ];
 
 export function isMac(): boolean {

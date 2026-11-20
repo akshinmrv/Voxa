@@ -210,6 +210,7 @@
     "licenseLink": "License"
   },
   "Common": {
+    "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     "languageLabel": "Language",
     "themeLabel": "Toggle theme",
     "copy": "Copy",
@@ -271,7 +272,10 @@
         "nextLine": "Previous or next line (the lines)",
         "playLine": "Play the line (the lines)",
         "toggleSource": "Original or dub (the lines)",
-        "save": "Save the lines"
+        "save": "Save the lines",
+        "search": "Search the dubs (Dubs)",
+        "moveRow": "Previous or next dub (Dubs)",
+        "removeRow": "Remove the dub (Dubs)"
       },
       "status": {
         "label": "Status",
@@ -437,6 +441,40 @@
       "emptyTitle": "No dubs yet",
       "emptyBody": "Start a dub to see it here.",
       "emptyCta": "New dub"
+    },
+    "library": {
+      "going": "Going and queued",
+      "today": "Today",
+      "earlier": "Earlier",
+      "search": "Search by file name",
+      "status": "Status",
+      "statusAll": "All",
+      "statusGoing": "Going",
+      "language": "Language",
+      "languageAll": "All languages",
+      "newDub": "New dub",
+      "count": "{total, plural, one {# dub} other {# dubs}}",
+      "countOf": "{shown} of {total}",
+      "noMatch": "No dubs match these filters.",
+      "clearFilters": "Clear the filters",
+      "open": "Open",
+      "review": "Check",
+      "cancel": "Cancel",
+      "save": "Save",
+      "showInFolder": "Show in folder",
+      "revealFailed": "Couldn't show it in a folder: {reason}",
+      "stopFailed": "Couldn't stop it: {reason}",
+      "removed": "{name} is off the list. Its files stay in the Voxa folder.",
+      "removedOnly": "{name} is off the list.",
+      "removedWithFiles": "{name} is off the list, and {count, plural, one {# file was} other {# files were}} deleted.",
+      "removedKeptFiles": "{name} is off the list. Its files were kept: another dub on the list made the same ones, or they were gone already.",
+      "removeBodyNoFiles": "Its page and log go. It made no video or subtitles to delete.",
+      "waitingReview": "Check the translation",
+      "failedAt": "{when} · Failed: {reason}",
+      "stoppedAt": "Stopped · {when}",
+      "doneAt": "{when} · {took}",
+      "stepShort": "{n}/7 · {name}",
+      "moreFor": "More for {name}"
     },
     "models": {
       "title": "Engines",

@@ -497,9 +497,25 @@ def _shell_version() -> Optional[str]:
         return None
 
 
+def let_explorer_front() -> bool:
+    """Pass on the right to come to the front, which Windows gives the app in front, to File
+    Explorer's own process (the desktop's shell): its window shows a dub's file. The same as
+    voxa_server.let_explorer_front, which this process doesn't import."""
+    if sys.platform != "win32":
+        return False
+    import ctypes
+    user32 = ctypes.windll.user32
+    pid = ctypes.c_ulong()
+    shell = user32.GetShellWindow()
+    if not shell or not user32.GetWindowThreadProcessId(shell, ctypes.byref(pid)):
+        return False
+    return bool(user32.AllowSetForegroundWindow(pid.value))
+
+
 class StudioApi:
     """What the console may ask of the window it is in, as window.pywebview.api.*: paint the
-    title bar for its theme, open the log folder, say what it runs on. None of it takes a path
+    title bar for its theme, open the log folder, say what it runs on, let Explorer's window
+    come to the front. None of it takes a path
     or a command, so no page can make it open anything else. pywebview hands the page public
     methods only, so the state is kept in private attributes."""
 
@@ -534,6 +550,12 @@ class StudioApi:
     def app_info(self) -> dict:
         import platform
         return {"shell": _shell_version(), "renderer": self._renderer, "os": platform.platform()}
+
+    def let_explorer_front(self) -> bool:
+        """Asked just before the server shows a dub's file: this window, in front because its
+        button was clicked, lets File Explorer's window come to the front over it. Opens
+        nothing itself."""
+        return self._from_voxa() and let_explorer_front()
 
 
 def say_no_webview2(language: str) -> None:

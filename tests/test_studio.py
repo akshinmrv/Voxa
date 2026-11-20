@@ -458,8 +458,25 @@ def test_the_bridge_opens_only_voxas_own_folder(monkeypatch, tmp_path):
     assert api.open_logs() is False and opened == [tmp_path]
     # pywebview hands the page public methods only: what it keeps stays out of reach.
     public = {n for n in dir(api) if not n.startswith("_")}
-    assert public == {"set_chrome", "open_logs", "app_info"}
+    assert public == {"set_chrome", "open_logs", "app_info", "let_explorer_front"}
     assert set(api.app_info()) == {"shell", "renderer", "os"}
+
+
+def test_only_voxas_page_lets_explorer_to_the_front(monkeypatch, tmp_path):
+    asked = []
+    monkeypatch.setattr(studio, "let_explorer_front", lambda: asked.append(1) or True)
+    api = studio.StudioApi(tmp_path)
+    api._window = type("W", (), {"get_current_url": lambda self: "https://example.com/"})()
+    assert api.let_explorer_front() is False and asked == []
+    api._window = type("W", (), {"get_current_url": lambda self: "http://127.0.0.1:8000/en/app/"})()
+    assert api.let_explorer_front() is True and asked == [1]
+
+
+def test_letting_explorer_forward_is_windows_only_and_never_raises(monkeypatch):
+    # From a process that isn't in front (as here), Windows refuses it: False, no error.
+    assert studio.let_explorer_front() in (True, False)
+    monkeypatch.setattr(studio.sys, "platform", "linux")
+    assert studio.let_explorer_front() is False
 
 
 def test_the_starting_page_explains_a_long_wait_and_stays_still_if_asked():

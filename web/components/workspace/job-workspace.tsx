@@ -3,12 +3,13 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import {
   AlertTriangle,
   Download,
   FileText,
   Film,
+  FolderOpen,
   MoreHorizontal,
   SlidersHorizontal,
   Square,
@@ -16,8 +17,6 @@ import {
 } from "lucide-react";
 import type { JobEvent, JobStatus, JobSummary } from "@/lib/types";
 import {
-  cancelJob,
-  deleteJob,
   dubWholeVideo,
   getJob,
   getSettings,
@@ -27,21 +26,11 @@ import {
   resultVttUrl,
 } from "@/lib/api";
 import { useAutoDownload } from "@/lib/use-auto-download";
-import { STUDIO_CHOICE_KEY, choiceFromJob } from "@/lib/job-config";
+import { useDates } from "@/lib/dates";
 import { useRouter } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,6 +42,13 @@ import { StatusBadge } from "@/components/app/status-badge";
 import { BackendError, Loading } from "@/components/app/query-states";
 import { formatDuration } from "@/components/studio/source-picker";
 import { usePlannedSteps } from "@/components/studio/signal-path";
+import {
+  revealTarget,
+  useCanReveal,
+  useJobDialogs,
+  useOpenInStudio,
+  useReveal,
+} from "@/components/library/job-actions";
 import { LivePath } from "./live-path";
 import { LogPanel } from "./log-panel";
 import { LinesView } from "./lines-view";
@@ -124,8 +120,9 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
   const t = useTranslations("App.job");
   const tn = useTranslations("App.newJob");
   const ts = useTranslations("App.studio");
+  const tl = useTranslations("App.library");
   const common = useTranslations("Common");
-  const locale = useLocale();
+  const dates = useDates();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -142,9 +139,6 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
     meta.refetch();
     queryClient.invalidateQueries({ queryKey: ["jobs"] });
   });
-  const [askStop, setAskStop] = useState(false);
-  const [askRemove, setAskRemove] = useState(false);
-  const [withFiles, setWithFiles] = useState(false);
   const [tab, setTab] = useState<string | null>(null);
 
   const job: JobSummary | undefined = meta.data;
@@ -159,17 +153,12 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
     settingsQuery.data?.advanced?.autoDownload ?? false,
   );
 
-  const stop = useMutation({
-    mutationFn: () => cancelJob(jobId),
-    onSettled: () => meta.refetch(),
+  const { askStop, askRemove, stoppingId, dialogs } = useJobDialogs({
+    onRemoved: () => router.replace("/app/jobs"),
   });
-  const remove = useMutation({
-    mutationFn: () => deleteJob(jobId, withFiles),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      router.replace("/app/jobs");
-    },
-  });
+  const canReveal = useCanReveal();
+  const reveal = useReveal();
+  const openWithSettings = useOpenInStudio();
   // A preview leads to the whole video: a job of its own, with the same settings.
   const whole = useMutation({
     mutationFn: () => dubWholeVideo(jobId),
@@ -194,7 +183,6 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
   const preview = config.preview ?? null;
   const canEdit =
     (status === "done" || status === "failed" || status === "review") && !!job.hasTranslation;
-  const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
   const took =
     job.startedAt && job.finishedAt && !going
       ? formatDuration(job.finishedAt - job.startedAt)
@@ -205,14 +193,10 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
       : null;
 
   // The job's settings as the Studio's choices, to make another dub from.
-  function openInStudio() {
-    try {
-      window.sessionStorage.setItem(STUDIO_CHOICE_KEY, JSON.stringify(choiceFromJob(config)));
-    } catch {
-      /* the Studio opens with its own defaults */
-    }
-    router.push("/app");
-  }
+  const openInStudio = () => openWithSettings(config);
+  const stopping = stoppingId === jobId;
+  const showInFolder = (file = revealTarget({ status, hasVideo, hasSrt })) =>
+    reveal.mutate({ id: jobId, file });
 
   // Voiced (again): the page follows the new run's stream.
   function followVoicing() {
@@ -246,18 +230,13 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
       </span>
       {job.createdAt ? (
         <span className="text-ui-small text-fg-subtle">
-          · {t("made", { date: dateFormat.format(new Date(job.createdAt * 1000)) })}
+          · {t("made", { date: dates.dateTime(new Date(job.createdAt * 1000)) })}
         </span>
       ) : null}
       <span className="flex-1" />
       {going && (
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setAskStop(true)}
-          loading={stop.isPending}
-        >
-          <Square className="fill-current" /> {stop.isPending ? t("stopping") : t("stop")}
+        <Button size="sm" variant="outline" onClick={() => askStop(jobId)} loading={stopping}>
+          <Square className="fill-current" /> {stopping ? t("stopping") : t("stop")}
         </Button>
       )}
       <DropdownMenu>
@@ -267,11 +246,22 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
+          {canReveal && (
+            <DropdownMenuItem onSelect={() => showInFolder()}>
+              <FolderOpen /> {tl("showInFolder")}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={openInStudio}>
             <SlidersHorizontal /> {t("useSettings")}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem destructive disabled={going} onSelect={() => setAskRemove(true)}>
+          <DropdownMenuItem
+            destructive
+            disabled={going}
+            onSelect={() =>
+              askRemove({ id: jobId, fileName: job.fileName, status, hasVideo, hasSrt })
+            }
+          >
             <Trash2 /> {t("remove")}
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -374,6 +364,11 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
                 <a href={resultSrtUrl(jobId)} download>
                   <Download /> {t("downloadSrt")}
                 </a>
+              </Button>
+            )}
+            {canReveal && (
+              <Button size="sm" variant="ghost" onClick={() => showInFolder()}>
+                <FolderOpen /> {tl("showInFolder")}
               </Button>
             )}
           </div>
@@ -481,59 +476,7 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
       {header}
       {body}
 
-      <AlertDialog open={askStop} onOpenChange={setAskStop}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("stopTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("stopBody")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{common("cancel")}</AlertDialogCancel>
-            <AlertDialogAction destructive onClick={() => stop.mutate()}>
-              {t("stop")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={askRemove}
-        onOpenChange={(open) => {
-          setAskRemove(open);
-          if (!open) setWithFiles(false);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("removeTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("removeBody")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <label className="flex items-center gap-2.5 text-ui-body">
-            <input
-              type="checkbox"
-              checked={withFiles}
-              onChange={(e) => setWithFiles(e.target.checked)}
-              className="size-4 accent-[var(--destructive)]"
-            />
-            {t("removeFiles")}
-          </label>
-          {remove.isError && (
-            <p className="text-ui-small text-danger">{(remove.error as Error).message}</p>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel>{common("cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              destructive
-              onClick={(e) => {
-                e.preventDefault(); // stays open until it's done, to show an error
-                remove.mutate();
-              }}
-            >
-              {t("removeConfirm")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {dialogs}
     </div>
   );
 }
