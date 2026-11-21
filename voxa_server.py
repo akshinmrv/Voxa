@@ -148,10 +148,11 @@ def build_options() -> dict:
         "openaiVoices": [{"id": v, "label": v} for v in OPENAI_VOICES],
         "speechPresets": [{"id": k, "label": k.capitalize()}
                           for k in SPEECH_STYLE_PRESETS],
-        # So the job form can offer diarization only when the optional extra is installed.
-        "diarizeAvailable": voxa._pyannote_available(),
-        # So the job form can offer a URL source only when the yt-dlp extra is installed.
-        "urlAvailable": voxa._ytdlp_available(),
+        # So the job form can offer diarization, or a URL source, only when the optional extra
+        # is installed. Found, not imported: importing pyannote took 10 s, and the Studio
+        # waited on it the first time it opened. A job checks it imports before it runs.
+        "diarizeAvailable": voxa._has_module("pyannote.audio"),
+        "urlAvailable": voxa._has_module("yt_dlp"),
         # So the job form can offer keeping the background only once Demucs is installed.
         "separateAvailable": voxa_engines.is_installed("demucs"),
         # So Settings can offer the GPUs this machine has: CUDA, or Apple's (MPS).
@@ -2279,7 +2280,8 @@ def segment_payload_path(path: str) -> Optional[str]:
 
 class ConsoleFiles(StaticFiles):
     """Serves the bundled console. The static build has no page at the bare root, so "/"
-    redirects to the console in the visitor's language."""
+    redirects to the console in the visitor's language; nor at a bare /<locale>/ (the site's
+    landing page isn't bundled), which goes to the console in that language."""
 
     async def get_response(self, path: str, scope) -> Response:
         if path in ("", "."):
@@ -2287,6 +2289,8 @@ class ConsoleFiles(StaticFiles):
             locale = console_locale(request.cookies.get("NEXT_LOCALE", ""),
                                     request.headers.get("accept-language", ""))
             return RedirectResponse(f"/{locale}/app/")
+        if path.strip("/") in CONSOLE_LOCALES:
+            return RedirectResponse(f"/{path.strip('/')}/app/")
         nested = segment_payload_path(path)
         if nested is not None and self.lookup_path(nested)[1] is not None:
             path = nested

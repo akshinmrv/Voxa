@@ -4,7 +4,9 @@
 //
 // The console calls the API on the same origin, so NEXT_PUBLIC_VOXA_API is empty. The
 // landing page's demo videos, the site-verification files and the installers the site
-// hands out stay out of the package.
+// hands out stay out of the package, as do the pages the console never shows: the site's
+// landing page and the style guide (about 2 MB over three languages). `voxa serve` sends a
+// bare /<locale>/ to the console.
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, rmSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
@@ -16,6 +18,19 @@ const target = join(web, "..", "voxa_ui", "static");
 
 const SKIP_DIRS = new Set(["demo", "tts-samples"]);
 const SKIP_FILE = /^(BingSiteAuth\.xml|google[0-9a-f]+\.html|install\.(sh|ps1))$/;
+const LOCALES = new Set(["en", "az", "tr"]);
+
+/** The site's own pages under a locale: its landing page (and that page's payloads), the
+ *  style guide. The console's pages, under <locale>/app/, carry their own payloads. */
+function siteOnly(parts) {
+  if (!LOCALES.has(parts[0]) || parts.length < 2) return false;
+  const [, page] = parts;
+  if (page === "style-guide" || page === "__next.$d$locale") return true;
+  return (
+    parts.length === 2 &&
+    (page === "index.html" || page === "index.txt" || page.startsWith("__next."))
+  );
+}
 
 const build = spawnSync(
   process.execPath,
@@ -39,7 +54,8 @@ cpSync(out, target, {
   filter: (src) => {
     const rel = relative(out, src);
     if (!rel) return true;
-    if (SKIP_DIRS.has(rel.split(sep)[0])) return false;
+    const parts = rel.split(sep);
+    if (SKIP_DIRS.has(parts[0]) || siteOnly(parts)) return false;
     return !SKIP_FILE.test(basename(src));
   },
 });

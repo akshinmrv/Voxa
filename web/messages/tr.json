@@ -428,7 +428,7 @@
       "runHintUrl": "Etkinleştirmek için bir video URL'si yapıştır.",
       "sourceFile": "Dosya yükle",
       "sourceUrl": "URL'den",
-      "urlLabel": "Video URL",
+      "urlLabel": "Video bağlantısı",
       "urlHint": "yt-dlp'nin indirebileceği bir bağlantı (YouTube, Vimeo, doğrudan .mp4, …).",
       "urlTos": "Bu içeriğe hakkınızın olması sizin sorumluluğunuzdadır; indirme, kaynak platformun Kullanım Şartları'nı ihlal edebilir.",
       "queuedTitle": "İş sıraya alındı (demo)",
@@ -760,7 +760,6 @@
       "title": "Çeviriyi kontrol edin",
       "voices": "Sesler",
       "voicesHint": "Bir sesi değiştirmek onun tüm satırlarını yeniden seslendirir.",
-      "voice": "Ses",
       "speaker": "Konuşan {n}",
       "voxaVoice": "Voxa seçsin",
       "fromVideo": "Kendi sesi, videodan",
@@ -841,9 +840,9 @@
     "localOnly": {
       "title": "Operatör konsolu kendi makinende çalışır",
       "body": "Voxa'nın dublaj arayüzü yerel bir araçtır — bu web sitesinde hiçbir şey yüklenmez veya işlenmez. Voxa'yı kur, ardından voxa studio çalıştır — yerel sunucuyu başlatır ve konsolu tarayıcıda açar:",
-      "installLabel": "install",
+      "installLabel": "kur",
       "install": "pipx install \"voxa-dub[serve]\"",
-      "serveLabel": "run",
+      "serveLabel": "çalıştır",
       "serve": "voxa studio",
       "backHome": "Ana sayfaya dön",
       "viewGithub": "GitHub'da görüntüle"

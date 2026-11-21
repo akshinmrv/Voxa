@@ -187,6 +187,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     mark in the header. `scripts/make_installer_art.py` draws them.
   - **WebView2:** Setup checks for Microsoft Edge WebView2, as Microsoft advises. Without it,
     Setup says that Voxa installs anyway and opens its console in the browser.
+- **The console in a browser, in CI.** A new job runs the console against the real
+  `voxa serve`, with only the dubbing pipeline faked (`tests/e2e/fake_voxa.py`):
+  - a 20 s preview made from the Studio's form, stopped for review;
+  - a line changed and saved with Ctrl+S, then voiced, then the whole video dubbed;
+  - a dub that fails says why, and Try again runs it again;
+  - the Settings search opens the setting it finds;
+  - axe-core checks every page in both themes against WCAG 2.2 AA and its best practices.
+
+  To run it locally: build the console and install Playwright, then
+  `VOXA_E2E=1 pytest tests/test_e2e.py`.
+- **A check that the three languages agree** (`npm run check:messages`, run by CI). It checks
+  that en, az and tr have:
+  - the same keys and the same arguments (`{name}`, plurals);
+  - no empty text, and no key given twice;
+  - no app text left in English in Azerbaijani or Turkish.
 
 ### Changed
 
@@ -218,6 +233,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **No banner:** the banner across the top of every page is gone.
 - **The README's console pictures** show the new Studio in each README's language: a finished
   dub's lines beside its video. They are made from Voxa's own demo video.
+- **The console in the package is 2.2 MB smaller** (8.7 MB → 6.5 MB). It no longer carries the
+  website's pages: each language's landing page and the style guide. An address like `/az/`
+  now opens the console in that language (`/az/app/`).
 
 ### Fixed
 
@@ -263,6 +281,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The sidebar never marked the first page (New job, now Studio) as the current one** in the
   console Voxa ships. That console is exported with a slash at the end of each address (`/app/`),
   and the match wanted `/app` exactly.
+- **Voxa Studio's first page opens in 0.4 s, not 9 to 10 s.** The Studio offers speakers and
+  links only when pyannote and yt-dlp are installed. To find out, the server imported them,
+  and pyannote alone took 9 s. Now the server finds them without importing them. A dub still
+  checks that they import before it runs.
+- **Screen readers in the console** (axe-core, WCAG 2.2 AA):
+  - **Names:** the search button and the version in the status bar were announced by names that
+    left out what they show. On Voices, the language picker gave its label but not the chosen
+    language.
+  - **Menus:** while a menu was open (a row's ⋯ menu, a right-click), the rest of the page was
+    hidden from screen readers but could still take the focus. Menus no longer hide the page.
+  - **Contrast:** a line's end time and its fit meter were under 4.5:1 on the highlighted line.
+  - **Headings:** the Voices panel beside a dub's lines skipped a heading level.
+  - **The log** scrolled only with a mouse. It now takes the focus and scrolls with the keys.
+- **English words left in the Azerbaijani and Turkish console:** "Offline", "Video URL", and
+  the labels of the commands to install and run Voxa.
 
 ## [1.18.0] - 2026-11-16
 

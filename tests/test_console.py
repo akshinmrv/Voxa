@@ -78,6 +78,14 @@ def test_root_prefers_the_language_picked_before(console):
     assert r.headers["location"] == "/tr/app/"
 
 
+def test_a_bare_locale_goes_to_the_console_in_it(console):
+    # The site's landing page isn't bundled: /az/ is the console in Azerbaijani.
+    for path in ("/az/", "/az"):
+        r = console.get(path, follow_redirects=False)
+        assert r.status_code == 307 and r.headers["location"] == "/az/app/", path
+    assert console.get("/de/", follow_redirects=False).status_code == 404
+
+
 def test_console_pages_are_served_and_the_api_still_wins(console):
     assert console.get("/az/app/").text == "<html>console az</html>"
     assert console.get("/az/app/jobs/").text == "<html>jobs az</html>"

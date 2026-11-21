@@ -13,7 +13,11 @@ import {
   menuShortcut,
 } from "./menu-styles";
 
-const DropdownMenu = Menu.Root;
+// Not modal: an open menu leaves the page as it is (not hidden from screen readers while its
+// buttons can still take focus, as axe found), and a click elsewhere closes it and goes through.
+function DropdownMenu({ modal = false, ...props }: React.ComponentProps<typeof Menu.Root>) {
+  return <Menu.Root modal={modal} {...props} />;
+}
 const DropdownMenuTrigger = Menu.Trigger;
 const DropdownMenuGroup = Menu.Group;
 const DropdownMenuRadioGroup = Menu.RadioGroup;

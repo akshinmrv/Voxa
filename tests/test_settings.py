@@ -626,3 +626,16 @@ def test_create_job_by_url_creates_job(client, monkeypatch, tmp_path):
     job = srv.JOBS[r.json()["jobId"]]
     assert job.source_url == url
     assert job.file_name == url
+
+
+def test_options_find_the_extras_without_importing_them(monkeypatch):
+    """Importing pyannote to see whether it's there took 10 s, and the Studio waited for it the
+    first time it opened; the form only needs to know it is installed."""
+    import voxa
+    monkeypatch.setattr(voxa, "_pyannote_available", lambda: pytest.fail("imported pyannote"))
+    monkeypatch.setattr(voxa, "_ytdlp_available", lambda: pytest.fail("imported yt-dlp"))
+    looked = []
+    monkeypatch.setattr(voxa, "_has_module", lambda name: looked.append(name) or name == "yt_dlp")
+    options = srv.build_options()
+    assert options["diarizeAvailable"] is False and options["urlAvailable"] is True
+    assert {"pyannote.audio", "yt_dlp"} <= set(looked)

@@ -138,7 +138,10 @@ function AboutItem({ version }: { version: string | null }) {
     "flex w-full items-center gap-2.5 rounded-sm px-2 py-1.5 text-left text-ui-body text-foreground transition-colors hover:bg-surface-2 [&_svg]:size-4 [&_svg]:text-muted-foreground";
   return (
     <Popover>
-      <PopoverTrigger className={item} aria-label={t("status.about")}>
+      <PopoverTrigger
+        className={item}
+        aria-label={`${version ? tu("version", { version }) : "Voxa"} — ${t("status.about")}`}
+      >
         {version ? tu("version", { version }) : "Voxa"}
       </PopoverTrigger>
       <PopoverContent side="top" align="end" className="w-64 p-1.5">

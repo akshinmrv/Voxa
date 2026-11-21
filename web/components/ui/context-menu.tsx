@@ -14,7 +14,10 @@ import {
 
 // Voxa Studio's window turns off WebView2's own right-click menu, so the console gives the
 // places that need one its own (VOXA_DESIGN_PLAN.md §7.7).
-const ContextMenu = Menu.Root;
+// Not modal, as the dropdown menus aren't (components/ui/dropdown-menu.tsx).
+function ContextMenu({ modal = false, ...props }: React.ComponentProps<typeof Menu.Root>) {
+  return <Menu.Root modal={modal} {...props} />;
+}
 const ContextMenuTrigger = Menu.Trigger;
 const ContextMenuGroup = Menu.Group;
 

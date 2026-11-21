@@ -88,11 +88,15 @@ export function Header() {
       <button
         type="button"
         onClick={openPalette}
-        aria-label={t("shell.palette.title")}
+        // Named by the words it shows, so asking for "Search" by voice finds it; too narrow
+        // to show them, they stay for a screen reader.
+        aria-keyshortcuts="Control+K Meta+K"
         className="flex h-8 shrink-0 items-center gap-2 rounded-sm border border-border bg-surface-1 px-2.5 text-ui-small text-muted-foreground transition-colors duration-(--dur-1) hover:border-border-strong hover:text-foreground sm:w-64"
       >
         <Search className="size-4 shrink-0" aria-hidden />
-        <span className="hidden flex-1 truncate text-left sm:block">{t("shell.search")}</span>
+        <span className="sr-only flex-1 truncate text-left sm:not-sr-only sm:block">
+          {t("shell.search")}
+        </span>
         <Kbd className="hidden sm:inline-flex">{keyLabel(["Mod", "K"])}</Kbd>
       </button>
     </header>

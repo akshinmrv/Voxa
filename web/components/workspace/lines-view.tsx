@@ -77,7 +77,9 @@ function FitMeter({ length, max }: { length: number; max: number }) {
           />
         )}
       </div>
-      <span className={cn("text-ui-small tabular", long ? "text-warning" : "text-fg-subtle")}>
+      <span
+        className={cn("text-ui-small tabular", long ? "text-warning" : "text-muted-foreground")}
+      >
         {length === 0
           ? t("silent")
           : long
@@ -549,9 +551,9 @@ export function LinesView({
               className="space-y-2.5 rounded-lg border border-border bg-surface-1 p-3"
             >
               <div>
-                <h3 id="voices" className="text-ui-section">
+                <h2 id="voices" className="text-ui-section">
                   {tr("voices")}
-                </h3>
+                </h2>
                 <p className="text-ui-small text-muted-foreground">{tr("voicesHint")}</p>
               </div>
               {speakers.length > 0
@@ -701,7 +703,8 @@ export function LinesView({
                           >
                             {clock(line.start)}
                           </button>
-                          <span className="block font-mono text-ui-mono tabular text-fg-subtle">
+                          {/* muted, not subtle: it must read on the playing line's tint too */}
+                          <span className="block font-mono text-ui-mono tabular text-muted-foreground">
                             {clock(line.end)}
                           </span>
                           {line.speaker && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
@@ -49,6 +49,7 @@ function LanguagePicker({
   const t = useTranslations("App.voices");
   const names = useLanguageNames();
   const [open, setOpen] = useState(false);
+  const id = useId();
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -57,10 +58,14 @@ function LanguagePicker({
           size="sm"
           role="combobox"
           aria-expanded={open}
-          aria-label={t("language")}
+          // "Language" and the one chosen, as it shows: its name says both.
+          aria-labelledby={`${id}-label ${id}-value`}
           className="w-56 justify-between"
         >
-          <span className="truncate">
+          <span id={`${id}-label`} className="sr-only">
+            {t("language")}
+          </span>
+          <span id={`${id}-value`} className="truncate">
             {names(value, languages.find((l) => l.code === value)?.name ?? value)}
             <span className="ml-1.5 font-mono text-ui-mono text-muted-foreground">{value}</span>
           </span>

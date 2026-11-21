@@ -25,6 +25,7 @@ state.json
 # ...but committed examples and demo assets are source
 !examples/**
 !docs/assets/**
+!tests/e2e/clip.mp4
 
 # Secrets / environment
 .env

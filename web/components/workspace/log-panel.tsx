@@ -114,6 +114,9 @@ export function LogPanel({
           onScroll={onScroll}
           role="log"
           aria-live="off"
+          // Focusable, so the log scrolls by keyboard too.
+          tabIndex={0}
+          aria-label={t("tabLog")}
           className="max-h-80 overflow-y-auto px-3 py-2 font-mono text-ui-mono"
         >
           {shown.length ? (
