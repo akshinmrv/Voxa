@@ -58,7 +58,9 @@ export function TerminalBlock({
           )}
         </button>
       </div>
-      <pre className="overflow-x-auto px-4 py-3">
+      {/* A long command scrolls sideways on a phone; tabIndex lets the keyboard scroll it too
+          (axe: scrollable-region-focusable). */}
+      <pre tabIndex={0} className="overflow-x-auto px-4 py-3 focus-visible:-outline-offset-2">
         <code className="type-code text-foreground">
           <span className="select-none text-brand">$ </span>
           {command}

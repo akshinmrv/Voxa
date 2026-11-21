@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **VoxaSetup.exe from the website.** voxa.servoogle.com leads with *Download for Windows*, and
+  its Installation section starts with the installer: what it does, its size (11 MB, then
+  about 1 GB as it installs), and what to do when Windows warns that it isn't signed. Both
+  buttons go to `voxa.servoogle.com/download` (also `/VoxaSetup.exe`), which redirects to
+  the newest release's VoxaSetup.exe. The one-line installers follow, for every system.
+
+### Fixed
+
+- **The website's brief for AI search engines (`/llms.txt`) said `pip install "voxa"`.** There
+  is no such package on PyPI; Voxa's is `voxa-dub`. It now lists VoxaSetup.exe, the one-line
+  installers and `pipx install "voxa-dub[serve]"`. The site's structured data said version
+  1.0.0; it gives the download link instead.
+- **A long command could only be scrolled with a mouse.** A command block (the website's
+  install lines on a phone, the update command in Settings › About) now takes the keyboard's
+  focus, so the arrow keys scroll it.
+
 ## [2.0.0] - 2026-11-21
 
 The console and Voxa Studio, redesigned as a desktop app: the Studio, the Dubs library, a

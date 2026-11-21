@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import { SETUP_EXE_URL } from "./lib/site";
 
 const withNextIntl = createNextIntlPlugin();
 
@@ -19,6 +20,16 @@ const nextConfig: NextConfig = {
           return ["/install.sh", "/install.ps1"].map((source) => ({
             source,
             headers: [{ key: "Content-Type", value: "text/plain; charset=utf-8" }],
+          }));
+        },
+        // voxa.servoogle.com/download is VoxaSetup.exe from the newest release. Redirects run
+        // before the locale proxy, which would otherwise send it to /en/download. Not
+        // permanent: browsers would keep a 308, and the link should always follow GitHub's.
+        async redirects() {
+          return ["/download", "/VoxaSetup.exe"].map((source) => ({
+            source,
+            destination: SETUP_EXE_URL,
+            permanent: false,
           }));
         },
       }),

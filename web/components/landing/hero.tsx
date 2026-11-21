@@ -1,10 +1,11 @@
 import { useTranslations } from "next-intl";
-import { ArrowRight } from "lucide-react";
+import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Waveform } from "@/components/waveform";
 import { TerminalBlock } from "@/components/patterns/terminal-block";
 import { GithubIcon } from "@/components/icons/github";
+import { DOWNLOAD_PATH } from "@/lib/site";
 
 const GITHUB_URL = "https://github.com/akshinmrv/Voxa";
 
@@ -24,9 +25,9 @@ export function Hero() {
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Button asChild size="lg">
-              <a href="#install">
-                {t("ctaPrimary")}
-                <ArrowRight />
+              <a href={DOWNLOAD_PATH}>
+                <Download />
+                {t("download")}
               </a>
             </Button>
             <Button asChild size="lg" variant="secondary">
@@ -36,6 +37,12 @@ export function Hero() {
               </a>
             </Button>
           </div>
+          <p className="type-small mt-4 text-muted-foreground">
+            {t("downloadHint")}{" "}
+            <a href="#install" className="text-primary underline underline-offset-4">
+              {t("otherSystems")}
+            </a>
+          </p>
         </div>
 
         <div className="mx-auto mt-16 max-w-2xl">

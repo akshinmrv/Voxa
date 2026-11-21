@@ -1,4 +1,4 @@
-import { SITE } from "@/lib/site";
+import { DOWNLOAD_PATH, SITE } from "@/lib/site";
 
 // llms.txt — a concise, factual brief for AI answer engines (GEO §27).
 // Extensionless-safe: `.txt` is excluded from the i18n proxy matcher.
@@ -27,8 +27,14 @@ export function GET() {
   watch progress, download)
 
 ## Install
-- pip install "voxa"
-- voxa talk.mp4 --target_lang ru
+- Windows: VoxaSetup.exe, ${SITE.url}${DOWNLOAD_PATH} (for one user, no administrator
+  rights; brings the Python it runs on, installs FFmpeg with winget if it's missing, adds
+  Voxa Studio to the Start menu)
+- Windows, one line: irm ${SITE.url}/install.ps1 | iex
+- macOS / Linux, one line: curl -fsSL ${SITE.url}/install.sh | sh
+- With Python already: pipx install "voxa-dub[serve]" (the PyPI package is voxa-dub,
+  not voxa; the command it installs is voxa)
+- Then: voxa studio (the desktop app), or voxa talk.mp4 --target_lang ru
 
 ## Languages
 Whisper covers ~100 source languages; target languages depend on the chosen TTS

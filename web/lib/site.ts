@@ -41,6 +41,14 @@ export const SITE = {
   ],
 } as const;
 
+/**
+ * VoxaSetup.exe from the newest GitHub release, and the site's own short link to it
+ * (`/download`, redirected in next.config.ts), which the landing's buttons use.
+ */
+export const SETUP_EXE_URL =
+  "https://github.com/akshinmrv/Voxa/releases/latest/download/VoxaSetup.exe";
+export const DOWNLOAD_PATH = "/download";
+
 /** Absolute URL for a locale's landing page. */
 export const localeUrl = (locale: string) => `${SITE.url}/${locale}`;
 

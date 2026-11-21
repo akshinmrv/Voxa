@@ -1,4 +1,4 @@
-import { SITE, localeUrl } from "./site";
+import { DOWNLOAD_PATH, SITE, localeUrl } from "./site";
 
 /**
  * schema.org @graph for the landing page: the Voxa software, its author
@@ -69,7 +69,7 @@ export function landingJsonLd({
         description,
         applicationCategory: "MultimediaApplication",
         operatingSystem: "Windows, macOS, Linux",
-        softwareVersion: "1.0.0",
+        downloadUrl: `${SITE.url}${DOWNLOAD_PATH}`,
         license: "https://opensource.org/licenses/MIT",
         codeRepository: SITE.repo,
         sameAs: [SITE.repo],
