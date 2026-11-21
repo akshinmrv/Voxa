@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   buttons go to `voxa.servoogle.com/download` (also `/VoxaSetup.exe`), which redirects to
   the newest release's VoxaSetup.exe. The one-line installers follow, for every system.
 
+### Changed
+
+- **The README, rewritten in English, Azerbaijani and Turkish.** It is about a quarter of its
+  old length and starts where most people do: VoxaSetup.exe and Voxa Studio, then the command
+  line. It now says what leaves your computer and what doesn't, and lists what is known not to
+  work yet. The details moved to two new pages, [docs/INSTALL.md](docs/INSTALL.md) and
+  [docs/USAGE.md](docs/USAGE.md). Out-of-date claims are gone: four speech engines (there are
+  six), per-speaker voices for XTTS "considered" (it clones each speaker), prices in a table in
+  `voxa.py` (it's `--llm-prices`), subtitles next to the dub (they are in its work folder).
+- **The demo GIF and the demo clips left the README.** They were made from someone else's
+  video. The pictures are now Voxa Studio, from Voxa's own demo video.
+- **docs/RELEASING.md** describes the release as it runs (PyPI, the container image,
+  VoxaSetup.exe); it still said Voxa wasn't on PyPI. ARCHITECTURE.md, CONTRIBUTING.md and
+  web/README.md cover the server, the Studio window, engines in their own environments and the
+  console's checks. `voxa doctor`'s GPU hint links to the GPU section of INSTALL.md.
+
 ### Fixed
 
 - **The website's brief for AI search engines (`/llms.txt`) said `pip install "voxa"`.** There

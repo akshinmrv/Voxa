@@ -1,52 +1,74 @@
 # Releasing Voxa
 
-Voxa follows [Semantic Versioning](https://semver.org/). Releases are cut from `main`.
+Voxa follows [Semantic Versioning](https://semver.org/). A release is a tag on `main`; the
+workflow in `.github/workflows/release.yml` builds and publishes everything from it.
 
-## Checklist
+## Before the tag
 
-1. **Everything green locally**
+1. **The code is ready.** `ruff check .` and `pytest` pass locally, and anything that touches
+   synthesis, timing or mixing has been tried on a real video. Tests can't hear.
 
-   ```bash
-   ruff check .
-   pytest
-   ```
+2. **The release commit.** In one commit:
+   - set `version` in `pyproject.toml`;
+   - in `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, start a new
+     empty `## [Unreleased]` above it, and add the compare link at the bottom.
 
-   Then run a real dub — the test suite cannot hear:
+   `python scripts/check_release_tag.py vX.Y.Z` checks the two agree.
 
-   ```bash
-   voxa some_video.mp4 --target_lang ru --whisper_model tiny
-   ```
+3. **Push it and wait for CI to pass on that commit.** Only then tag it.
 
-2. **Bump the version** in `pyproject.toml`.
+## The tag
 
-3. **Update `CHANGELOG.md`.** Move everything under `## [Unreleased]` into a new version
-   section with today's date, and add the comparison links at the bottom.
+Tag the release commit itself, after pulling it:
 
-4. **Commit and tag.**
+```bash
+git pull --ff-only
+git log -1 --format='%h %s'      # the release commit
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
 
-   ```bash
-   git commit -am "Release vX.Y.Z"
-   git tag -a vX.Y.Z -m "Voxa vX.Y.Z"
-   git push origin main --follow-tags
-   ```
+A tag on the wrong commit is the mistake this process has made most. The workflow's first job
+compares the tag with `pyproject.toml` and stops everything if they differ, so nothing is
+published. Move the tag to the right commit and push it again:
 
-5. **The tag does the rest.** `.github/workflows/release.yml` re-runs lint and tests against
-   the tagged commit and, only if they pass, opens the GitHub release.
+```bash
+git tag -f vX.Y.Z <release-commit> && git push --force origin vX.Y.Z
+```
 
-## Repository settings (once)
+## What the workflow does
 
-Set on GitHub, not in the repo:
+| Job | What it does |
+|---|---|
+| Check the tag | The tag must match `pyproject.toml` and have a CHANGELOG section |
+| Verify | Lint and tests on Python 3.10 to 3.14 |
+| Publish GitHub release | Creates the release with generated notes |
+| Publish to PyPI | Builds the console and the wheel, checks the wheel carries the console, publishes `voxa-dub` through trusted publishing (no token in the repository) |
+| Publish the container image | Builds `ghcr.io/akshinmrv/voxa` and tags it `X.Y.Z`, `X.Y` and `latest` |
+| Publish the Windows installer | Waits until PyPI's index serves the new version, builds VoxaSetup.exe, installs it on a Windows runner from PyPI, checks it, uninstalls it, then attaches `VoxaSetup.exe` and `VoxaSetup-X.Y.Z.exe` to the release |
 
-- **Description:** *Automatic video translation and dubbing — Whisper transcription, LLM
-  translation, four TTS engines, and a dub that stays in sync.*
-- **Topics:** `dubbing`, `video-dubbing`, `text-to-speech`, `speech-to-text`, `whisper`,
-  `translation`, `voice-cloning`, `subtitles`, `ffmpeg`, `openai`, `python`, `cli`
-- Enable **private vulnerability reporting** (Settings → Security), which `SECURITY.md`
-  points contributors at.
-- Enable **Dependabot alerts**; `.github/dependabot.yml` handles the update PRs.
+If the installer job fails on a PyPI that hasn't caught up yet, re-run the failed job
+(`gh run rerun <id> --failed`). Until it succeeds,
+`releases/latest/download/VoxaSetup.exe` and voxa.servoogle.com/download return 404, so check
+them when the run is green.
 
-## PyPI (optional)
+## After it
 
-Voxa is installable from source (`pip install .`) and does not currently publish to PyPI.
-If that changes, prefer [trusted publishing](https://docs.pypi.org/trusted-publishers/) over
-storing an API token in repository secrets.
+- PyPI shows the new version, and `pipx install voxa-dub` gets it.
+- `docker pull ghcr.io/akshinmrv/voxa:X.Y.Z` works, and the image's labels name the version
+  and the commit.
+- voxa.servoogle.com/download downloads the new VoxaSetup.exe.
+- Existing installs see the update within a day (they check PyPI once a day).
+
+## Repository settings
+
+Set on GitHub, not in the repository:
+
+- Description: *Video dubbing that stays in sync with the speaker. Whisper, LLM translation,
+  six speech engines, voice cloning. Runs locally, MIT.*
+- Topics: `dubbing`, `video-dubbing`, `text-to-speech`, `speech-to-text`, `whisper`,
+  `translation`, `voice-cloning`, `subtitles`, `ffmpeg`, `python`, `cli`
+- Private vulnerability reporting (Settings, Security), which `SECURITY.md` points to.
+- Dependabot alerts; `.github/dependabot.yml` opens the update PRs. It ignores numpy and numba
+  on purpose: newer ones break Intel Macs.
+- A `pypi` environment trusted by PyPI for this repository and workflow.

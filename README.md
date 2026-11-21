@@ -2,864 +2,238 @@
 
 # Voxa
 
-**Dub any video into another language — and keep it in sync.**
-
-Voxa transcribes a video, translates it with context, speaks it in the target language, and
-mixes the result back over the original. The engine is one Python file with four speech
-engines, five translation backends, and one non-negotiable property: the dub does not drift
-away from the speaker.
+**Dub videos into other languages, in sync with the speaker.**
 
 [![CI](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml/badge.svg)](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/akshinmrv/Voxa?display_name=tag&sort=semver)](https://github.com/akshinmrv/Voxa/releases)
-[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![PyPI](https://img.shields.io/pypi/v/voxa-dub)](https://pypi.org/project/voxa-dub/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](https://github.com/akshinmrv/Voxa/blob/main/LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%20to%203.14-blue.svg)](https://www.python.org/downloads/)
 
-[![The dub stays in sync: a naive tool drifts +18s behind while Voxa holds at 0.0s](docs/assets/voxa_drift.gif)](https://voxa.servoogle.com/#demo)
-
-**[▶ Watch the drift comparison](https://voxa.servoogle.com/#demo)** — you hear Voxa's dub locked to
-the speaker at 0.0s, while a naive concatenation drifts seconds behind. Same dub, measured not claimed.
-
-</div>
-
-```bash
-pipx install voxa-dub
-voxa talk.mp4 --target_lang ru        # → talk_dubbed_ru.mp4
-```
-
-<div align="center">
-
-🎧 **[Hear the demo dubs](https://voxa.servoogle.com)** — English → Turkish, Azerbaijani
-and French, produced with no API key
+[Download for Windows](https://voxa.servoogle.com/download) ·
+[Install on macOS or Linux](https://github.com/akshinmrv/Voxa/blob/main/docs/INSTALL.md#one-line-installer) ·
+[voxa.servoogle.com](https://voxa.servoogle.com)
 
 </div>
 
----
-
-## Overview
-
-Most dubbing tools concatenate synthesized clips one after another. A clip that runs slightly
-long pushes the next one later, the error accumulates, and three minutes in the dub is a
-sentence behind the speaker.
-
-Voxa places every clip **anchored to the source timeline**. The slot for a line runs from its
-own onset to the *next line's* onset. A clip that over-runs is trimmed to fit; a short one is
-padded with silence. The cursor is assigned, never accumulated — so drift is structurally
-impossible.
-
-Everything else follows from that decision: the translator is given a character budget so the
-line fits its slot at a natural pace, speech is only ever sped up (never slowed down, which
-sounds dragged), and segment starts are tightened to the first word's timestamp so the dub
-does not begin before the speaker does.
-
-```bash
-voxa talk.mp4 --target_lang ru
-# → talk_dubbed_ru.mp4 + subtitles_ru.srt
-```
-
-No API key is required. The defaults work out of the box.
-
-## Features
-
-| Capability | Detail |
-|---|---|
-| **Video dubbing** | Dubbed voice mixed over the original as a faint ambience bed, or over its music and effects alone with `--separate`; video stream copied without re-encoding |
-| **Speech recognition** | `openai-whisper` (tiny → turbo) or `faster-whisper` (2–4× faster, built-in VAD, no torch) |
-| **Automatic translation** | Google, Ollama (local), OpenAI, Anthropic, OpenRouter |
-| **Context-aware translation** | Lines are translated in blocks, not one by one, so pronouns, gender, names and tone stay consistent across a scene |
-| **Duration-matched translation** | Each line gets a character budget, so the dub fits its slot at a natural pace instead of being sped up |
-| **Preview a run** | `--dry-run` prints the engines, models, output path and which cached steps it would reuse — then exits without writing anything |
-| **Subtitle processing** | SRT output, `--subtitles-only` mode, built-in SubRip parser (no GPL dependency) |
-| **Voice cloning** | XTTS v2 from a short reference sample, auto-extracted from the source if you don't supply one |
-| **OpenAI TTS** | `gpt-4o-mini-tts` with instructable delivery |
-| **Expressive delivery** | `--detect-emotion` selects native voice styles on Edge; on OpenAI TTS an LLM tags each line with an emotion/energy/pace instruction |
-| **Speaker diarization** | `--diarize` detects who speaks when and gives each speaker their own voice on Edge and OpenAI TTS (pyannote, optional extra) |
-| **Self-hosted speech** | `--openai-tts-base-url` drives any OpenAI-compatible `/v1/audio/speech` server — no API key, no extra dependency |
-| **Offline speech** | Piper, fully offline after the model download |
-| **Anchored placement** | Each line stays in sync with the speaker; a longer translation breathes into the pause that follows instead of being rushed, and drift cannot accumulate |
-| **Quality gate** | Each clip is transcribed back and scored (word error rate, clipping, silence, pacing), with a per-job report |
-| **Auto-regeneration** | XTTS sampling is stochastic, so a flagged segment is re-synthesized up to twice and the best take is kept |
-| **Batch processing** | Pass several videos in one command |
-| **Resumable runs** | Every step is checkpointed; an interrupted job resumes instead of restarting |
-| **Preflight validation** | Missing input files and a missing FFmpeg are reported before any work begins |
-| **Configuration** | `.env` loading, JSON config defaults, structured JSON logging |
-| **Extensible** | New speech or translation providers are one adapter plus one registry line |
-
-> [!NOTE]
-> The Python package ships no model weights and vendors no third-party code. It orchestrates
-> tools you install yourself — and their licences, including those of the speech voices, vary.
-> See [NOTICE.md](NOTICE.md) before using it commercially.
-
-## Supported Languages
-
-| Layer | Coverage |
-|---|---|
-| **Transcription** | Whisper's full language set, auto-detected |
-| **Translation** | 74 target languages carry a full language name into the LLM prompt; Google accepts more |
-| **Edge TTS** | 100+ locales, including native `az-AZ` voices |
-| **OpenAI TTS** | Multilingual; strongest on major languages |
-| **Piper** | 15 bundled voice mappings, fully offline |
-| **XTTS** | 17 — `ar` `cs` `de` `en` `es` `fr` `hi` `hu` `it` `ja` `ko` `nl` `pl` `pt` `ru` `tr` `zh` |
-
-### Which engine for which language?
-
-There is no universal answer, and the cloud engine does not always win — a voice that
-genuinely covers a language usually beats a larger model that only approximates it. Which is
-why Voxa ships the measurement rather than a verdict.
-
-`--quality-gate` transcribes every synthesized clip back with a second ASR model and scores it
-by word error rate, so you can check the engines against **your** content:
-
-```bash
-voxa clip.mp4 --target_lang az --tts edge --quality-gate --gate-model base
-```
-
-[`docs/BENCHMARK.md`](docs/BENCHMARK.md) has a reproducible script, a worked run across six
-languages, and — just as important — the limits of what a number like this can tell you.
-
-> [!TIP]
-> If a language has a dedicated native neural voice in Edge, try it first. For a low-resource
-> language use `--gate-model base` or larger: a `tiny` gate model misreads a perfectly good
-> voice and reports a worse score than it deserves.
-
-> [!IMPORTANT]
-> **A WER figure only means something next to the clip it came from.** The same engine and
-> language score very differently on different source material — one proper noun in a short
-> clip can move the average enormously. Treat any published number, including ours, as a
-> starting point for your own measurement rather than a ranking.
-
-## Supported Models
-
-| Stage | Models |
-|---|---|
-| Transcription | `tiny` · `base` · `small` · `medium` · `large` · `turbo` (`large-v3-turbo` on the faster backend) |
-| Translation (OpenAI) | `gpt-5` (default), `gpt-5-mini`, any chat model id |
-| Translation (Anthropic) | `claude-opus-4-8` (default), `claude-sonnet-5`, any model id |
-| Translation (Ollama) | `llama3` (default), any local model |
-| Speech (OpenAI) | `gpt-4o-mini-tts` |
-| Delivery direction | `gpt-4o-mini` — one cheap call per job, cached |
-| Voice cloning | XTTS v2 |
-| Offline speech | Piper voices |
-| Quality gate | `faster-whisper` (`tiny` default, `base` recommended for low-resource languages) |
-
-## Architecture Overview
-
-```
-                         Video
-                           │
-                           ▼
-              ┌─────────────────────────┐
-              │   Speech Recognition    │  Whisper / faster-whisper
-              │                         │  + word-onset refinement
-              │                         │  + non-speech filtering
-              └────────────┬────────────┘
-                           ▼
-              ┌─────────────────────────┐
-              │       Translation       │  Google · Ollama · OpenAI · Anthropic · OpenRouter
-              │                         │  context-aware, length-budgeted
-              └────────────┬────────────┘
-                           ▼
-              ┌─────────────────────────┐
-              │     Text-to-Speech      │  Edge · OpenAI · Piper · XTTS
-              │                         │  one shared timeline driver
-              └────────────┬────────────┘
-                           ▼
-              ┌─────────────────────────┐
-              │    Audio Processing     │  fit (speed up only)
-              │                         │  anchored placement
-              │                         │  2-pass loudnorm
-              └────────────┬────────────┘
-                           ▼
-                      Dubbed Video
-```
-
-Every stage is checkpointed in `<video>_work/`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-for why the cursor is assigned rather than accumulated, how the two provider registries work,
-and where each concern lives in the code.
-
-## Demo
-
-One 15-second English clip, dubbed into three languages from a single transcription. Every
-dub below was produced with the **default engines and no API key**:
-
-```bash
-voxa clip.mp4 --target_lang tr        # then --target_lang az, --target_lang fr
-```
-
-| Target | Engines | Listen |
-|---|---|---|
-| 🎬 Original (English) | — | [play ▶](https://voxa.servoogle.com) · [`original.mp4`](web/public/demo/original.mp4) |
-| 🇹🇷 Turkish | `google` + `edge` | [play ▶](https://voxa.servoogle.com) · [`dub_tr.mp4`](web/public/demo/dub_tr.mp4) |
-| 🇦🇿 Azerbaijani | `google` + `edge` | [play ▶](https://voxa.servoogle.com) · [`dub_az.mp4`](web/public/demo/dub_az.mp4) |
-| 🇫🇷 French | `google` + `edge` | [play ▶](https://voxa.servoogle.com) · [`dub_fr.mp4`](web/public/demo/dub_fr.mp4) |
-
-The second and third languages reused the cached transcription, so only translation and speech
-were regenerated — the timeline is identical across all three.
-
-<!--
-  To play a video inline on GitHub rather than linking to it, upload the file to a GitHub
-  issue or release, copy the resulting https://github.com/user-attachments/... URL, and paste
-  it below. Repository-relative paths do not render inline on GitHub.
--->
-<!-- DEMO_TR --> <!-- DEMO_AZ --> <!-- DEMO_FR -->
-
-## Installation
-
-**Windows: [VoxaSetup.exe](https://github.com/akshinmrv/Voxa/releases/latest/download/VoxaSetup.exe).** An installer for your user alone, with no
-administrator rights: it puts Voxa, the Python it runs on and **Voxa Studio** in one folder,
-adds a Start menu shortcut, installs FFmpeg with winget if it's missing, and appears in
-*Apps & features* to uninstall. It isn't code-signed yet, so Windows may say *Windows
-protected your PC*: choose *More info*, then *Run anyway*.
-
-**One line.** No Python needed beforehand:
-
-```powershell
-irm https://voxa.servoogle.com/install.ps1 | iex          # Windows (PowerShell)
-```
-
-```bash
-curl -fsSL https://voxa.servoogle.com/install.sh | sh     # macOS / Linux
-```
-
-The installer uses [uv](https://docs.astral.sh/uv/) to put Voxa and its browser console in an
-environment of their own, with the Python they run on (0.85 GB on Windows, 1.4 GB on Linux, most of it PyTorch: the
-CUDA build only when uv finds an NVIDIA GPU, the CPU one otherwise). It
-installs FFmpeg on Windows (winget) and macOS (Homebrew) — on Linux it prints the command,
-since that needs `sudo` — adds a **Voxa Studio** shortcut, and ends with `voxa doctor`.
-Running it again upgrades Voxa; `uv tool uninstall voxa-dub` removes it. Settings such as
-`VOXA_EXTRAS=serve,piper` are listed at the top of each script.
-
-Or install it step by step:
-
-**1. FFmpeg** — Voxa checks for it at startup and tells you if it's missing.
-
-```bash
-sudo apt install ffmpeg      # Debian / Ubuntu
-sudo dnf install ffmpeg      # Fedora / RHEL
-brew install ffmpeg          # macOS
-winget install Gyan.FFmpeg   # Windows
-```
-
-**2. Voxa** — Python 3.10 or newer (on an Intel Mac, 3.10–3.12: PyTorch has no build for 3.13 or later there).
-
-```bash
-pipx install voxa-dub          # recommended: isolated, puts `voxa` on your PATH
-```
-
-Or run it once without installing anything:
-
-```bash
-uvx voxa-dub talk.mp4 --target_lang ru
-```
-
-<details>
-<summary>From source (for development)</summary>
-
-```bash
-git clone https://github.com/akshinmrv/Voxa
-cd Voxa
-python3 -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
-
-# The CPU-only torch wheel keeps the install considerably smaller.
-# Have an NVIDIA GPU? Install the CUDA wheel instead — see "4. GPU acceleration" below.
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-pip install .
-```
-
-</details>
-
-> [!NOTE]
-> The distribution is named **`voxa-dub`** (the `voxa` name on PyPI belongs to an unrelated,
-> abandoned package). The command it installs is **`voxa`** — that is what every example below
-> uses. Running the script directly, `python voxa.py …`, is equivalent.
-
-<details>
-<summary>Docker — no Python, torch or ffmpeg on the host</summary>
-
-```bash
-docker run --rm -v "$PWD:/data" ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
-```
-
-The dub lands next to the input on your host. The defaults need no API key; pass one through
-with `-e OPENAI_API_KEY=...` if you switch engines. Keep the downloaded Whisper models between
-runs by mounting the cache:
-
-```bash
-docker run --rm -v "$PWD:/data" -v voxa-cache:/cache \
-    ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
-```
-
-The image is ~3.0 GB, most of it torch's CPU build, FFmpeg and Whisper. It includes the console:
-
-```bash
-docker run --rm -p 127.0.0.1:8000:8000 -v "$PWD:/data" -v voxa-cache:/cache \
-    -v voxa-engines:/engines ghcr.io/akshinmrv/voxa serve --host 0.0.0.0
-```
-
-Open the link it prints, `http://127.0.0.1:8000/?token=…`. Listening beyond the container's
-loopback, the console asks for an access token: a new one each start, or your own with
-`-e VOXA_TOKEN=…`. Publishing on `127.0.0.1` keeps it off your network as well. Uploads, jobs
-and dubs stay in the mounted folder, and so do keys you add in Settings (in its `.env`); you can
-pass them with `-e` instead. Engines go into the `voxa-engines` volume, from the console's Engines
-page or from the CLI:
-
-```bash
-docker run --rm -v voxa-cache:/cache -v voxa-engines:/engines \
-    ghcr.io/akshinmrv/voxa engines install chatterbox
-```
-
-To translate with Ollama running on the host, point the container at it with
-`-e OLLAMA_HOST=http://host.docker.internal:11434` (on Linux also
-`--add-host=host.docker.internal:host-gateway`).
-
-</details>
-
-**Check the install.** `voxa doctor` lists what works, what is optional and not set up yet,
-and the command that fixes each item for *this* install — `pipx inject` when Voxa lives in pipx.
-It says whether an API key is set, never what it is.
-
-```bash
-voxa doctor            # FFmpeg, packages, GPU, engines, keys
-voxa doctor --online   # also tries Google, Microsoft Edge and Hugging Face
-voxa doctor --deep     # also loads XTTS and pyannote, which break on dependency updates
-```
-
-**3. Optional engines** — install only what you use.
-
-| Command | Enables |
-|---|---|
-| `pipx install "voxa-dub[faster]"` | `--whisper-backend faster` — 2–4× quicker, no torch |
-| `pipx install "voxa-dub[piper]"` | `--tts piper` — fully offline (GPL-3.0 engine; voice licences vary, see [NOTICE](NOTICE.md#41-piper-voices)) |
-| `pipx install "voxa-dub[anthropic]"` | `--translator anthropic` |
-| `pipx install "voxa-dub[xtts]"` | `--tts xtts` voice cloning |
-| `pipx install "voxa-dub[url]"` | `voxa <video-url>` — download the input first (yt-dlp) |
-| `pipx install "voxa-dub[diarize]"` | `--diarize` — a distinct voice per speaker (pyannote) |
-| `voxa engines install chatterbox` | `--tts chatterbox` — clones each speaker's voice in 23 languages, MIT. Installed into an environment of its own (about 4.5 GB); slow without a GPU |
-| `voxa engines install voxcpm` | `--tts voxcpm` — VoxCPM2: clones each speaker's voice in 30 languages, Vietnamese, Thai and Indonesian among them, Apache-2.0. Installed into an environment of its own (about 6.4 GB); made for an NVIDIA GPU |
-| `voxa engines install demucs` | `--separate` — keeps the original's music and effects at full volume, its speech taken out. Installed into an environment of its own (about 0.7 GB); the weights' licence is unclear (see [NOTICE](NOTICE.md#47-engines-in-environments-of-their-own-voxa-engines)) |
-
-> [!NOTE]
-> **Multiple speakers** (`--diarize`) detects who speaks when and gives each speaker a distinct
-> voice, so an interview or podcast isn't dubbed in one voice. It needs a Hugging Face token
-> (`--hf-token` or `HF_TOKEN`) and a one-time acceptance of the model terms at
-> [hf.co/pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) —
-> the pipeline is MIT-licensed and only gated; the speaker-embedding model it loads is CC BY 4.0,
-> so credit it. Pass `--num-speakers N` if you know the
-> count. Edge and OpenAI TTS get per-speaker voices; Piper and XTTS stay single-voice for now, and
-> `--diarize` isn't combinable with `--subtitles` (diarization needs the source audio).
-
-> [!NOTE]
-> **Dubbing from a URL** (`voxa "https://…" --target_lang de`) downloads the video with
-> `yt-dlp` and then runs the normal pipeline. Downloading may breach the source platform's
-> Terms of Service — **you are responsible for having the right to the content**; the CLI
-> prints this before it fetches. Local files behave exactly as before.
-
-> [!WARNING]
-> `voxa-dub[xtts]` installs [`coqui-tts`](https://github.com/idiap/coqui-ai-TTS), the maintained
-> community fork. The **XTTS-v2 model weights are non-commercial** (CPML), and Coqui Inc. no
-> longer exists to sell a commercial licence. For commercial voice cloning, drive an
-> MIT-licensed engine through `--openai-tts-base-url`. If `import TTS` fails after install, `pip`
-> picked a `transformers` `coqui-tts` can't use — pin a compatible one, e.g.
-> `pip install "transformers==4.53.0"`.
-
-> [!NOTE]
-> **Engines in environments of their own.** Chatterbox pins its own versions of PyTorch and
-> transformers, so `voxa engines install chatterbox` puts it in a separate environment under
-> `~/.voxa/engines` instead of next to Voxa; nothing clashes, and `voxa engines remove
-> chatterbox` deletes it. The console's **Engines** page does the same with a click. On a laptop
-> CPU it took 40–60 seconds per sentence, so a GPU makes the difference here; every clip it
-> makes carries Resemble AI's inaudible PerTh watermark. With faster-whisper installed, Voxa
-> also cuts the words Chatterbox sometimes adds after a line.
->
-> VoxCPM2 (`voxa engines install voxcpm`) speaks 30 languages, seven of them ones Chatterbox
-> doesn't, and needs a GPU even more: on a laptop CPU a sentence took 2–3 minutes (18–31× its
-> length), and loading it peaked at 9.5 GB of memory. In a test in five languages Whisper heard
-> every word it said, and its clones of an English speaker scored 0.74 for speaker similarity
-> (0.50 speaking German), against 0.02–0.17 for its own voices.
-
-> [!NOTE]
-> **Keeping the music and effects** (`--separate`). By default the whole original stays
-> under the dub as a faint bed, so its music is barely audible and its speech is only
-> quieter. With `voxa engines install demucs` and `--separate`, Demucs takes the speech out
-> first, and the music and effects stay at full volume. In a test mix (speech over music)
-> the music came out 26 dB louder than in the faint bed, and the original speech 5 dB
-> quieter. Whisper and a cloned voice get the separated speech: over music 12 dB louder
-> than the speech, Whisper's word error rate fell from 32% (it made up the last sentence)
-> to 12%, and a cloning reference cut from it is quiet between words instead of carrying
-> the music under them. Where the dub speaks, the background is lowered just enough to
-> stay 10 dB under it, and between lines it plays at its own level (`--no-duck` keeps it
-> at one level): over music 12 dB louder than the speech, German Whisper misheard 34% of
-> the dub without that and 6.5% with it, as under the faint bed. On a laptop CPU it took about 0.6× the video's length and 1.7 GB of memory; the
-> result is kept, so dubbing the same video into another language doesn't separate it
-> again. Demucs' code is MIT, but its author says the weights' licence is unclear (part of
-> their training data was released for research only), so check that before commercial
-> use — see [NOTICE](NOTICE.md#47-engines-in-environments-of-their-own-voxa-engines).
-
-**4. GPU acceleration** — optional: NVIDIA, and experimentally Apple Silicon.
-
-Voxa detects CUDA on its own; there is no flag to turn it on (`--device cpu` keeps everything on
-the CPU). What it speeds up:
-
-| Stage | On GPU |
-|---|---|
-| Whisper transcription (both backends) | ✅ CUDA, fp16 |
-| XTTS voice cloning | ✅ CUDA |
-| Quality gate (WER scoring) | ✅ CUDA |
-| Translation — Google / OpenAI / Anthropic | ➖ network-bound |
-| Translation — Ollama | ➖ Ollama uses your GPU on its own |
-| Speech — Edge / OpenAI | ➖ cloud |
-| Speech — Piper | ➖ CPU (ONNX) |
-
-The one-line installer does this on its own when it finds an NVIDIA GPU. Installing by hand,
-install the **CUDA** build of PyTorch instead of the CPU wheel from step 2:
-
-```bash
-# Match the CUDA version your driver supports — https://pytorch.org/get-started/locally/
-pip install torch --index-url https://download.pytorch.org/whl/cu124
-```
-
-Check it took:
-
-```bash
-python -c "import torch; print(torch.cuda.is_available())"   # → True
-```
-
-> [!NOTE]
-> A brand-new GPU can outrun its PyTorch build: `torch.cuda.is_available()` returns `True`, yet
-> transcription fails with *"no kernel image is available for execution on the device"* — the
-> installed torch simply has no compiled kernels for that architecture yet. Install a newer CUDA
-> build (a higher `cuXXX`), or sidestep torch altogether with **`--whisper-backend faster`**
-> (`voxa-dub[faster]`, CTranslate2): it transcribes without the PyTorch/CUDA version matching,
-> and is also 2–4× faster on CPU.
-
-When the GPU is in use, the run log prints `⚙️  Using device: CUDA` at the transcription step
-(it prints `CPU` otherwise). Rough VRAM per Whisper model: `tiny`/`base` ≈ 1 GB, `small` ≈ 2 GB,
-`medium` ≈ 5 GB, `turbo` ≈ 6 GB, `large` ≈ 10 GB; XTTS wants roughly 4 GB more.
-
-> [!NOTE]
-> `--whisper-backend faster` (CTranslate2) runs on the GPU too, but needs NVIDIA's cuBLAS and
-> cuDNN libraries: `pip install nvidia-cublas-cu12 nvidia-cudnn-cu12`.
-> AMD GPUs fall back to the CPU.
-
-**Apple Silicon (experimental).** `--device mps` (or Settings → Advanced in the console) tries the
-Mac's GPU for Whisper transcription, diarization, Chatterbox and Demucs. Each falls back to the
-CPU if it fails there, so a dub never stops for it; XTTS, VoxCPM2 and `--whisper-backend faster`
-stay on the CPU. It is off by default because it hasn't been measured on a Mac yet: Whisper on
-MPS may even be slower than on the CPU. `voxa doctor` says when the GPU is there; if you try it,
-an issue with what you measured helps decide whether it should become the default.
-
-## Configuration
-
-**API keys.** Copy `.env.example` to `.env` (gitignored) and fill it in. Voxa loads it on
-startup; real environment variables always win. Prefer this over `--openai_api_key`, which
-lands in your shell history and the process list.
-
-```dotenv
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-OPENROUTER_API_KEY=sk-or-...
-```
-
-**Defaults.** Put common options in a JSON file. Keys are the long option names with dashes as
-underscores; explicit flags override the file. A complete example lives in
-[`examples/config.json`](examples/config.json).
-
-```bash
-voxa video.mp4 --config examples/config.json
-```
-
-**Logging.** `--log-format json` emits one JSON object per line. `--verbose` raises the level
-to DEBUG and also surfaces third-party libraries.
-
-**Updates.** Once a day the console, `voxa serve` and `voxa doctor` ask PyPI which voxa-dub is
-the newest. When it's newer than yours they say so, with the way your install gets it: the new
-VoxaSetup.exe for an install that VoxaSetup.exe made, otherwise the one command for how you
-installed Voxa. PyPI sees that request as it sees any download (your IP address, and this
-Voxa's version); nothing else goes with it. Turn it off in the console's Settings → Advanced, or
-everywhere with `VOXA_NO_UPDATE_CHECK=1`.
-
-**Cost estimates.** The per-job summary reports usage and — when a price is known — an estimated
-cost. For an LLM translator, a couple of low-cost defaults are built in; set prices for the models
-you use with `--llm-prices` (best kept in the config file), since list prices change. For OpenAI
-TTS, `--tts-price` (USD per 1M characters) turns the reported character count into a cost.
-
-```json
-{ "llm_prices": { "gpt-5": [1.25, 10], "claude-opus-4-8": [15, 75] }, "tts_price": 12.0 }
-```
-
-**All options:** `voxa --help`. It is generated from the code, so unlike a README table it can
-never go stale.
-
-## Quick Start
-
-```bash
-# Simplest possible run — no API key, no configuration
-voxa video.mp4 --target_lang ru
-
-# Natural, context-aware translation with an LLM
-export OPENAI_API_KEY="sk-..."
-voxa video.mp4 --target_lang de --translator openai
-
-# Hundreds of models (DeepSeek, Gemini, Llama…) through one OpenRouter key — no extra to install
-export OPENROUTER_API_KEY="sk-or-..."
-voxa video.mp4 --target_lang az --translator openrouter --openrouter_model deepseek/deepseek-chat
-
-# Clone the original speaker's voice
-voxa video.mp4 --target_lang tr --tts xtts
-
-# Fully offline: local LLM translation, offline speech
-voxa video.mp4 --target_lang fr --translator ollama --tts piper
-
-# See what a run would do — engines, output path, cached steps — without running it
-voxa video.mp4 --target_lang ru --dry-run
-
-# Hear the first 20 seconds before dubbing it all (or --preview 45): video.preview20s_dubbed_ru.mp4
-voxa video.mp4 --target_lang ru --preview
-
-# Subtitles only, no synthesis
-voxa video.mp4 --target_lang es --subtitles-only
-
-# ...in the video too: as a track players can turn on (soft), or drawn onto the picture (hard)
-voxa video.mp4 --target_lang es --subtitles-only --subtitles-in-video hard
-
-# A dub with its subtitles in it
-voxa video.mp4 --target_lang es --subtitles-in-video soft
-
-# Check the translation before it's voiced: it stops once the lines are translated; change
-# any in video_work/translated.json, then run again without --review. Change a line later
-# and run again: only that line is voiced again.
-voxa video.mp4 --target_lang de --review
-
-# Voice lines translated elsewhere (an .srt, or JSON the way translated.json holds them)
-voxa video.mp4 --target_lang de --translation lines.de.srt
-
-# Dub from an existing SRT — skip Whisper (hand-corrected captions, or subtitles you already have)
-voxa video.mp4 --target_lang de --subtitles captions.srt
-
-# ...which also voices a video with no sound at all, such as a screen recording
-voxa screencast.mp4 --target_lang de --subtitles script.srt
-
-# Give every speaker their own voice (interviews, podcasts) — needs a Hugging Face token
-voxa video.mp4 --target_lang de --diarize --num-speakers 2 --hf-token hf_...
-
-# Choose the voice: list a language's voices, then name one
-voxa voices --lang az
-voxa video.mp4 --target_lang az --edge-voice az-AZ-BanuNeural
-
-# Several videos in one command
-voxa a.mp4 b.mp4 c.mp4 --target_lang ru
-
-# Score the result instead of guessing
-voxa video.mp4 --target_lang az --quality-gate --gate-model base
-
-# Self-hosted speech: any OpenAI-compatible server, no API key
-voxa video.mp4 --target_lang tr --tts openai \
-     --openai-tts-base-url http://localhost:8004/v1
-
-# ...such as VoiceStudio's local server (open the app; it listens on port 3900)
-voxa video.mp4 --target_lang az --tts openai \
-     --openai-tts-base-url http://127.0.0.1:3900/v1
-```
-
-> [!NOTE]
-> Your `OPENAI_API_KEY` is never sent to a self-hosted server; if it wants a key of its
-> own, set `OPENAI_TTS_API_KEY`. A self-hosted server gets the target language with every
-> line, so a multilingual model speaks
-> the right one. The server's model decides what you may do with the dub: VoiceStudio's default,
-> OmniVoice, speaks Azerbaijani but is non-commercial, while Chatterbox is MIT — see
-> [NOTICE](NOTICE.md#46-self-hosted-speech-servers). On a CPU it is slow: through VoiceStudio and
-> OmniVoice, a 45-second clip took about four minutes of speech synthesis on a laptop.
-
-> [!TIP]
-> A wordier target language (Turkish or Russian for an English source) reads most naturally with an
-> **LLM translator** (`--translator openai` / `anthropic` / `openrouter`): each line gets a length
-> budget so it fits its slot at a natural pace. Lines also breathe into the pause that follows
-> instead of being sped up. `google` translates literally, so a long line can still be compressed.
-
-## Optional local console (`voxa serve`)
-
-The CLI is the product. If you'd rather click than type, `voxa serve` starts a local console
-that **shells out to the very same `voxa` command** — so the UI cannot drift away from the
-engine, because it *is* the engine. It binds to `127.0.0.1`; nothing is uploaded anywhere. It
-answers only to `localhost` and `127.0.0.1`, so another site can't drive it from your browser.
-Started with `--host 0.0.0.0`, to reach it from another machine, it asks for an access token,
-given in the link it prints (or yours, from `--token` or `VOXA_TOKEN`).
-
-<div align="center">
-<img src="docs/assets/app-en.png" alt="Voxa Studio: a finished dub's lines beside its video, each at the time it was spoken" width="820">
+Voxa transcribes a video with Whisper, translates what was said, speaks the translation in a
+new voice and mixes it back under the picture. It runs on your own computer, and the default
+engines are free and need neither an account nor an API key.
+
+What it does differently is timing. Every translated line starts where the original line
+started, so the dub is still with the speaker in the thirtieth minute, not only the first.
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/akshinmrv/Voxa/main/docs/assets/app-en.png" width="820" alt="Voxa Studio: a finished dub's lines beside its video, each at the moment it was spoken">
 <br>
-<sub>A finished dub in Voxa Studio: each line beside the video at the moment it was spoken, with how well it fits its time. Change a line, and only the lines you change are voiced again.</sub>
-</div>
+<sub>A finished dub in Voxa Studio. Each line sits next to the video at the moment it was
+spoken; change one and only that line is voiced again.</sub>
+</p>
+
+## Why the dub stays in sync
+
+Most automatic dubbing places each new clip right after the one before it. A translated line
+is rarely as long as the original, so a clip that runs a little long pushes everything after it
+a little later, and the error adds up. On a three-minute clip we measured that approach ending
+18 seconds behind the speaker.
+
+Voxa keeps no running total. Each line gets the time from its own start in the original to the
+start of the next line, and it is placed at the beginning of that slot. A long line can use the
+pause after it. If it still doesn't fit, it's spoken faster and then trimmed, but it can never
+push the next line later. On the same clip, the drift stays at 0.0 seconds.
+
+Two smaller choices follow from this. The LLM translators get a character budget for each line,
+so the translation is written to fit instead of being squeezed afterwards. And speech is only
+ever sped up, never slowed down, because slowed speech sounds dragged.
+[ARCHITECTURE.md](https://github.com/akshinmrv/Voxa/blob/main/docs/ARCHITECTURE.md) walks through the arithmetic and where it lives in the
+code.
+
+## Install
+
+### Windows
+
+Download [VoxaSetup.exe](https://voxa.servoogle.com/download) (11 MB) and run it. It installs
+Voxa Studio for your user, without administrator rights, along with the Python it needs, and
+FFmpeg if you don't have it. Setup downloads about 1 GB more, mostly PyTorch.
+
+The installer isn't code-signed yet, so Windows will probably warn you about it. Choose *More
+info*, then *Run anyway*.
+
+### macOS and Linux
+
+```bash
+curl -fsSL https://voxa.servoogle.com/install.sh | sh
+```
+
+The same thing exists for Windows users who prefer a terminal:
+`irm https://voxa.servoogle.com/install.ps1 | iex`.
+
+### With pipx or Docker
+
+If you already have Python 3.10 or newer and FFmpeg:
 
 ```bash
 pipx install "voxa-dub[studio]"
-voxa studio                             # starts it and opens the console in a window of its own
-voxa studio --browser                   # the same, in your browser
-voxa serve                              # just the server, at http://127.0.0.1:8000
 ```
 
-`voxa studio` shows the console in a window of its own (Edge WebView2 on Windows, WebKit on
-macOS, from the `[studio]` extra); the one-line installer sets this up, and its **Voxa Studio**
-shortcut opens no terminal. Closing the window stops the server, after asking if a dub is still
-running. Without the extra, or on Linux without GTK or Qt, it opens your browser instead.
+The package is called `voxa-dub`; the command is `voxa`. There is also a Docker image,
+`ghcr.io/akshinmrv/voxa`. [INSTALL.md](https://github.com/akshinmrv/Voxa/blob/main/docs/INSTALL.md) covers every route, GPUs, the optional
+engines and uninstalling.
 
-The console comes inside the package: no Node, no second terminal. Working on the console
-itself? Run `npm run dev` in [`web/`](web/) next to `voxa serve`.
+## Voxa Studio
 
-**Subtitles.** *Make* a dubbed video, or subtitles only, with no voice; and put the subtitles
-in the video as a track players can turn on, or drawn onto the picture for players and sites
-that show none. Either way they are cut to read on screen, at most two lines of about 42
-characters, and the console's player shows them.
+Studio is the app. VoxaSetup adds it to the Start menu; anywhere else, `voxa studio` starts it.
+It opens in a window of its own on Windows and macOS, and in your browser on Linux.
 
-**Choose the voices.** *Voices* lists the voices for a language, to hear Edge's and Piper's
-first, and keeps your own clips (3 to 30 seconds of one person) to clone voices from with
-XTTS, Chatterbox and VoxCPM2. A new job takes one of them as its voice; a job being reviewed,
-or a finished one, can take another, and with speakers detected, one for each speaker, heard
-saying their own first line.
+You add one or more videos, choose the languages and engines, and start. While a dub runs, its
+page shows the seven steps and the log. When it's done, the lines sit next to the video, each
+marked if it's longer than the time it has. Edit a line, save with Ctrl+S and voice it again;
+only the lines you changed are synthesized.
 
-**Hear it before dubbing it all.** *Preview the first 20 s* dubs just the start of the video,
-in a minute or two, with the settings you picked; if you like it, *Dub the whole video* starts
-a job for all of it with the same settings, and the preview stays.
+Some things worth knowing about:
 
-**Check the translation before it's voiced.** Tick *Review* on a new job and it stops once the
-lines are translated, each under the line it came from, with about how many characters fit its
-time. Change any, then *Voice it*. A finished job can be changed too (*Change the
-translation*), and only the lines you change are voiced again.
+- *Preview the first 20 s* dubs only the start, so you can hear the voice before you spend time
+  on the whole video.
+- *Check the translation before it's voiced* stops a dub once the lines are translated. You read
+  and fix them, then press *Voice it*.
+- The Voices page plays a voice before you pick it, and keeps short clips of your own (3 to 30
+  seconds of one person) for the cloning engines.
+- The Engines page installs Chatterbox, VoxCPM2 and Demucs with one click, and says what each
+  licence allows before you install it.
+- The System page runs the same checks as `voxa doctor` and shows the command that fixes
+  anything missing.
 
-It also carries the settings the CLI reads: API keys (kept in your local `.env`, never echoed
-back), per-provider models with a connection test, translation style, and speech style presets.
+Behind the window is a local server, `voxa serve`, which listens on 127.0.0.1 only and runs the
+same `voxa` command you would type yourself.
 
-The repository also contains the public landing site in [`web/`](web/) — a trilingual
-(EN/AZ/TR) showcase, deployable as a static site. See [`web/README.md`](web/README.md) for
-development, environment variables, and deployment.
+## The command line
 
-## Project Structure
+Everything Studio does is also a command:
 
-```
-Voxa/
-├── voxa.py                     # The entire tool: pipeline, engines, registries, CLI
-├── voxa_server.py              # `voxa serve` operator backend (FastAPI; optional [serve] extra)
-├── voxa_ui/                    # the console, built from web/ into the package (npm run build:console)
-├── web/                        # Web frontend: public landing + local operator app
-├── pyproject.toml              # Packaging, extras, ruff and pytest configuration
-├── requirements.txt            # Core dependencies (optional engines live in extras)
-│
-├── tests/
-│   ├── test_voxa.py            # Unit tests: parsing, timing maths, scoring, adapters
-│   ├── test_golden.py          # Golden harness: the same functions composed
-│   └── golden/                 # Recorded inputs and expected outputs
-│
-├── docs/
-│   ├── ARCHITECTURE.md         # Design decisions and where each concern lives
-│   ├── RELEASING.md            # Release checklist
-│   └── assets/                 # Demo videos and images
-│
-├── examples/
-│   └── config.json             # A complete, verified configuration file
-│
-├── .github/
-│   ├── workflows/ci.yml        # ruff + pytest on Python 3.10–3.14
-│   ├── workflows/release.yml   # A tag becomes a release only if it passes
-│   ├── ISSUE_TEMPLATE/         # Bug report and feature request forms
-│   └── dependabot.yml
-│
-├── README.md
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-├── SECURITY.md
-├── CODE_OF_CONDUCT.md
-├── NOTICE.md                   # Third-party licences and commercial-use guidance
-└── LICENSE                     # MIT
+```bash
+voxa talk.mp4 --target_lang ru                         # writes talk_dubbed_ru.mp4
+voxa talk.mp4 --target_lang de --translator openai     # LLM translation (OPENAI_API_KEY)
+voxa talk.mp4 --target_lang tr --tts chatterbox        # clone the speaker's voice
+voxa talk.mp4 --target_lang fr --translator ollama --tts piper   # offline
+voxa talk.mp4 --target_lang ru --preview               # the first 20 seconds
+voxa talk.mp4 --target_lang de --review                # stop after translating
+voxa talk.mp4 --target_lang es --subtitles-only        # subtitles, no voice
+voxa interview.mp4 --target_lang de --diarize          # a voice for each speaker
+voxa doctor                                            # what works and what's missing
 ```
 
-## Roadmap
+The video itself is copied as it is; only the sound track is rebuilt. Every step is saved in
+`talk_work/`, so an interrupted run carries on where it stopped and a second language reuses the
+transcription. [USAGE.md](https://github.com/akshinmrv/Voxa/blob/main/docs/USAGE.md) covers the rest: choosing voices, running your own
+speech server, subtitles in the video, keeping the original's music, the quality gate,
+configuration and costs.
 
-Direction, not a promise. Anything requiring hardware or a paid key waits until it can be
-tested honestly.
+## Engines
 
-| Item | Status | Note |
+| Stage | Default | Other options |
 |---|---|---|
-| Per-speaker voices for Piper & XTTS | Considering | Edge and OpenAI TTS get distinct voices under `--diarize` today; offline engines stay single-voice |
-| Diarization robustness | Considering | Min-turn smoothing and confidence handling for noisy multi-speaker audio |
-| Azure Neural TTS adapter | Blocked | Needs an API key to test. Official `az-AZ` voices and real SSML prosody |
-| Speaker similarity and MOS scoring | Considering | Would extend the quality gate beyond word error rate |
-| Wider golden set | Considering | More languages and edge cases in the regression harness |
-| Demo assets | Open | Before/after clips in `docs/assets/` |
+| Transcription | Whisper | faster-whisper, 2 to 4 times quicker |
+| Translation | Google | OpenAI, Anthropic, OpenRouter, Ollama (local) |
+| Speech | Microsoft Edge voices | OpenAI, Piper (offline), any server with OpenAI's speech API |
+| Voice cloning | | Chatterbox, VoxCPM2, XTTS |
+| Extras | | a voice per speaker (pyannote), the original's music kept (Demucs), subtitles in the video, a quality gate that listens back to every line |
 
-Have a use case that isn't covered? [Open an issue.](https://github.com/akshinmrv/Voxa/issues)
+Which speech engine sounds best depends on the language, and the cloud doesn't always win. In
+our runs Edge's native Azerbaijani voice was understood far better than OpenAI's. Voxa can
+transcribe its own output and score it (`--quality-gate`), so you can compare engines on your
+own videos instead of trusting ours.
 
-## FAQ
+## What leaves your computer
 
-<details>
-<summary><strong>Do I need an API key?</strong></summary>
+Voxa has no account and no telemetry, and it never sends anything to us. What does go out
+depends on the engines you choose:
 
-No. The defaults — Whisper, Google Translate and Edge TTS — need no key. A key is only
-required for OpenAI/Anthropic translation or OpenAI speech.
-</details>
+- Transcription runs on your machine.
+- The text of each line goes to your translator: Google, OpenAI, Anthropic or OpenRouter.
+  Ollama runs locally.
+- Edge and OpenAI receive the translated text to speak it. Piper, XTTS, Chatterbox and VoxCPM2
+  run locally.
+- Models are downloaded the first time they are needed.
+- Studio, `voxa serve` and `voxa doctor` ask PyPI once a day whether a newer Voxa exists.
+  `VOXA_NO_UPDATE_CHECK=1` turns that off.
 
-<details>
-<summary><strong>Why does the dub not drift out of sync?</strong></summary>
+With Ollama and a local voice, a dub needs no network once the models are on disk.
 
-Each clip is placed in the slot between its own source onset and the next line's onset, and
-the timeline cursor is *assigned* to that next onset rather than accumulated from clip
-durations. An over-running clip is trimmed instead of pushing everything after it. The
-timing maths is pure, unit-tested, and locked by a golden regression harness.
-</details>
+## Commercial use
 
-<details>
-<summary><strong>Can I use Voxa commercially?</strong></summary>
+Voxa's own code is MIT, and none of its required dependencies is GPL. The engines and models it
+drives have terms of their own, and some are stricter:
 
-Voxa itself is MIT and requires no GPL-licensed dependency (the default speech engine,
-`edge-tts`, is LGPL-3.0). The engines and models it drives have their own licences.
-`--tts openai` with `--translator openai` runs under OpenAI's commercial terms. `--tts piper` with
-`--translator ollama` runs fully offline, but it is only as permissive as the voice and the LLM:
-11 of the 15 Piper voices allow commercial use (the Japanese, Korean and Turkish ones do not, and
-the Chinese one's licence is unknown), and the default `llama3` comes with Meta's licence
-conditions. Most Piper voices were fine-tuned from an English voice licensed for research only;
-[NOTICE](NOTICE.md#41-piper-voices) explains what that means.
-`--tts xtts` is **not** commercially usable. See [NOTICE.md](NOTICE.md).
-</details>
+| Setup | Commercial use |
+|---|---|
+| `--translator openai` with `--tts openai` | Yes, under OpenAI's terms |
+| `--tts chatterbox` (MIT) or `--tts voxcpm` (Apache-2.0) | Yes |
+| `--tts piper` | Depends on the voice: 11 of the 15 languages allow it |
+| `--translator ollama` | Depends on the model |
+| `--tts edge` and `--translator google`, the defaults | Unclear: both use unofficial endpoints |
+| `--tts xtts` | No, the weights are non-commercial |
+| `--separate` (Demucs) | Check first: the licence of the weights is unclear |
 
-<details>
-<summary><strong>How do I clone a voice for a commercial product?</strong></summary>
+[NOTICE.md](https://github.com/akshinmrv/Voxa/blob/main/NOTICE.md) goes through it voice by voice. Read it before a dub goes into a product.
 
-Install Chatterbox (MIT) and dub with it; it clones each speaker from the original video:
+## Known limits
 
-```bash
-voxa engines install chatterbox
-voxa video.mp4 --tts chatterbox --target_lang de
-```
+- The Windows installer isn't code-signed yet, so SmartScreen warns about it.
+- Voxa Studio is built and tested on Windows. The macOS window comes from the same code, but
+  nobody has tried it on a Mac yet.
+- Apple Silicon GPUs (`--device mps`) are experimental and haven't been measured.
+- Cloning is slow without an NVIDIA GPU. On a laptop CPU, Chatterbox took 40 to 60 seconds per
+  sentence and VoxCPM2 two to three minutes.
+- `--diarize` can't start from existing subtitles, since it needs the audio.
 
-With an NVIDIA GPU, VoxCPM2 (Apache-2.0) does the same in 30 languages: `voxa engines install voxcpm`, then `--tts voxcpm`.
-
-Or run an MIT-licensed, OpenAI-compatible speech server locally and point Voxa at it:
-
-```bash
-voxa video.mp4 --tts openai --openai-tts-base-url http://localhost:8004/v1
-```
-
-No API key, no extra Python dependency, and no non-commercial model weights — as long as the
-server runs a permissive model such as Chatterbox (see [NOTICE](NOTICE.md#46-self-hosted-speech-servers)).
-</details>
-
-<details>
-<summary><strong>Can it run entirely offline?</strong></summary>
-
-Yes: `--translator ollama --tts piper`. Nothing leaves your machine after the models are
-downloaded (the console and `voxa doctor` also ask PyPI once a day whether a newer Voxa is out;
-`VOXA_NO_UPDATE_CHECK=1` stops that). Offline is not the same as commercially clean, though — check the voice for your
-language in [NOTICE.md](NOTICE.md#41-piper-voices).
-</details>
-
-<details>
-<summary><strong>Does it re-encode my video?</strong></summary>
-
-No. The video stream is copied. Only the audio track is rebuilt: the original is mixed in at
-5% as a faint ambience bed, the dub at 150%, and `amix` halves both so the result cannot clip.
-Both levels are configurable. With `--separate` the original's speech is taken out first,
-and its music and effects go in at 100% instead.
-</details>
-
-<details>
-<summary><strong>What does a run cost?</strong></summary>
-
-Nothing with the defaults. With an LLM translator, token usage is logged after every job; add
-your model's prices to the `LLM_PRICING` table in `voxa.py` to also print an estimate.
-</details>
-
-<details>
-<summary><strong>A long job was interrupted. Do I start over?</strong></summary>
-
-No. Every step is checkpointed in `<video>_work/`; rerun the same command and Voxa continues.
-Use `--no-resume` to force a clean start.
-</details>
-
-<details>
-<summary><strong>Does it work on Windows?</strong></summary>
-
-Yes, with FFmpeg on your PATH. CI runs on Linux, and the tool is developed on Windows.
-</details>
+If one of these is in your way, say so in an issue. It helps decide what to work on next.
 
 ## Contributing
 
-Issues and pull requests are welcome, and **a first pull request gets a response within 24
-hours** — even if that response is a request for changes. A
-[good first issue](https://github.com/akshinmrv/Voxa/labels/good%20first%20issue) is the
-easiest place to start. [CONTRIBUTING.md](CONTRIBUTING.md) covers the test suite, how to
-re-record the golden files, and the two dependency rules that matter: no GPL-licensed
-required dependency, and engine-specific packages belong in extras.
+The most useful thing you can send is a bug report with the end of `voxa.log` attached. Pull
+requests are welcome, and a first one gets an answer within 24 hours, even if the answer is a
+list of changes. [CONTRIBUTING.md](https://github.com/akshinmrv/Voxa/blob/main/CONTRIBUTING.md) explains the test suite, the golden files
+that lock the timing arithmetic, and the two rules for dependencies: nothing GPL among the
+required ones, and anything only one engine needs goes in an extra. A new speech engine is one
+adapter and one line in a registry; the timeline and placement are already taken care of.
 
-Adding a speech engine is one adapter plus one registry line — the timeline, placement, drift
-tracking and scoring are already handled for you.
+## Documentation
 
-```bash
-pip install -e ".[dev]"
-ruff check .
-pytest
-```
+- [INSTALL.md](https://github.com/akshinmrv/Voxa/blob/main/docs/INSTALL.md): every way to install, GPUs, optional engines, Docker
+- [USAGE.md](https://github.com/akshinmrv/Voxa/blob/main/docs/USAGE.md): the command line in detail
+- [ARCHITECTURE.md](https://github.com/akshinmrv/Voxa/blob/main/docs/ARCHITECTURE.md): how the pipeline and the timing work
+- [BENCHMARK.md](https://github.com/akshinmrv/Voxa/blob/main/docs/BENCHMARK.md): measuring engines on your own clips
+- [NOTICE.md](https://github.com/akshinmrv/Voxa/blob/main/NOTICE.md): third-party licences and commercial use
+- [CHANGELOG.md](https://github.com/akshinmrv/Voxa/blob/main/CHANGELOG.md)
 
----
+## Credits
 
-## License
+Voxa is built on other people's work: [Whisper](https://github.com/openai/whisper) and
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) for transcription;
+[edge-tts](https://github.com/rany2/edge-tts), [Piper](https://github.com/OHF-Voice/piper1-gpl),
+[coqui-tts](https://github.com/idiap/coqui-ai-TTS), [Chatterbox](https://github.com/resemble-ai/chatterbox)
+and [VoxCPM](https://github.com/OpenBMB/VoxCPM) for speech; [Demucs](https://github.com/adefossez/demucs)
+for separation; [pyannote](https://github.com/pyannote/pyannote-audio) for telling speakers
+apart; [FFmpeg](https://ffmpeg.org/) for everything audio and video; and
+[uv](https://github.com/astral-sh/uv) and [pywebview](https://github.com/r0x0r/pywebview) for the
+installer and the app window.
 
-Voxa is released under the [MIT License](LICENSE).
+## Who makes Voxa
 
-The Python package ships no model weights and vendors no third-party code, but the engines and
-models it drives have their own licences — some stricter than Voxa's. The container image also
-bundles system packages, FFmpeg among them, under their own licences. Read
-[NOTICE.md](NOTICE.md) before commercial use.
+Voxa is written and maintained by [Akshin Miranov](https://github.com/akshinmrv) at Servoogle,
+a digital engineering agency in Baku. We hold it to the same rule as our client work: a claim
+goes into the documentation once we have measured it. The drift figure, the engine timings and
+the licence table above come from our own runs, and where something hasn't been measured, the
+text says so.
 
-| Configuration | Commercial use |
-|---|:---:|
-| `--tts openai` + `--translator openai` (paid APIs) | ✅ |
-| `--tts piper` (fully offline) | ⚠️ depends on the voice — 11 of 15 languages |
-| `--translator ollama` (fully offline) | ⚠️ depends on the model |
-| `--tts edge` / `--translator google` (defaults, unofficial endpoints) | ⚠️ grey area |
-| `--tts xtts` (XTTS-v2 weights are CPML) | ❌ non-commercial only |
-
-## Acknowledgements
-
-Voxa stands on work done by others.
-
-| Project | Role |
-|---|---|
-| [OpenAI Whisper](https://github.com/openai/whisper) | Speech recognition |
-| [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | Faster transcription backend |
-| [edge-tts](https://github.com/rany2/edge-tts) | Microsoft neural voices |
-| [Piper](https://github.com/OHF-Voice/piper1-gpl) | Offline neural speech |
-| [coqui-tts](https://github.com/idiap/coqui-ai-TTS) | Maintained fork powering XTTS voice cloning |
-| [OpenAI](https://platform.openai.com/) · [Anthropic](https://www.anthropic.com/) | LLM translation and speech |
-| [Ollama](https://ollama.com/) | Local, private LLM translation |
-| [FFmpeg](https://ffmpeg.org/) | Everything audio and video |
-
-## Author
-
-**Voxa** is built and maintained by **[Akshin Miranov](https://github.com/akshinmrv)** under
-the **Servoogle** name.
-
-Servoogle exists to build practical AI tooling — software that solves a real problem end to
-end rather than demonstrating a model — and to release the parts that other people can build
-on. Voxa is one of those parts. Dubbing a video should not require a studio, a licence
-negotiation, or a proprietary pipeline; it should require one command and a machine you
-already own.
-
-That is why Voxa is MIT, why it requires no GPL dependency, why its licence obligations
-are documented rather than glossed over, and why every engine sits behind a registry that
-anyone can extend. The interesting problems in this space — keeping a dub in sync, making a
-synthetic voice sound unhurried, knowing whether the output is actually good — are worth
-solving in the open.
-
-If Voxa is useful to you, the most valuable thing you can send back is a bug report with the
-log attached.
+Voxa is MIT-licensed because every dubbing tool has to keep a dub in sync, and that part
+shouldn't be locked inside a product. If you need Voxa inside yours,
+[servoogle.com](https://servoogle.com) is where to find us.
 
 <div align="center">
 
 ---
 
-**Read this in another language:** 🇦🇿 [Azərbaycan](README.az.md) · 🇹🇷 [Türkçe](README.tr.md)
-
-**Voxa** · MIT · [Report a bug](https://github.com/akshinmrv/Voxa/issues) ·
-[Contribute](CONTRIBUTING.md) · [Architecture](docs/ARCHITECTURE.md)
+[Azərbaycanca](https://github.com/akshinmrv/Voxa/blob/main/README.az.md) · [Türkçe](https://github.com/akshinmrv/Voxa/blob/main/README.tr.md)
 
 </div>

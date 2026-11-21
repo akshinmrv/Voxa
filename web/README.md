@@ -1,56 +1,64 @@
-# Voxa Web
+# Voxa web
 
-The frontend for [Voxa](https://github.com/akshinmrv/Voxa) — one design system, two surfaces:
+The frontend for [Voxa](https://github.com/akshinmrv/Voxa). One Next.js app, built three ways:
 
-- **Landing** (`/[locale]`) — a public, static, trilingual (EN/AZ/TR) showcase, tuned for SEO and AI answer engines.
-- **Operator app** (`/[locale]/app`) — a local console for the `voxa serve` backend: upload a video, pick engines, watch the seven-step pipeline live (SSE), and download the result.
+- **The console** (`/[locale]/app`): what Voxa Studio shows. It talks to `voxa serve`, and a
+  static build of it ships inside the Python package (`voxa_ui/static`).
+- **The website** (`/[locale]`): [voxa.servoogle.com](https://voxa.servoogle.com) in English,
+  Azerbaijani and Turkish, deployed on Vercel. Its download button goes to `/download`, which
+  `next.config.ts` redirects to the newest VoxaSetup.exe.
+- **The style guide** (`/[locale]/style-guide`): every building block in both themes and all
+  three languages. It's left out of the package.
 
-Built with Next.js (App Router), React, Tailwind CSS, shadcn-style primitives, next-intl, next-themes, and React Query.
+Next.js (App Router), React, Tailwind CSS, Radix primitives, next-intl, next-themes and React
+Query. Texts live in `messages/en.json`, `az.json` and `tr.json`.
 
 ## Develop
 
 ```bash
 cd web
-npm install
+npm ci
 npm run dev          # http://localhost:3000
 ```
 
-For the operator app to work, run the backend alongside it:
+The console needs the server next to it:
 
 ```bash
-pip install "voxa[serve]"
-voxa serve           # http://localhost:8000
+pip install -e ".[serve]"      # in the repository's root; or: pipx install "voxa-dub[serve]"
+voxa serve                     # http://127.0.0.1:8000
 ```
+
+In development the bare `/` goes straight to the console; a production build keeps the
+website there.
 
 ## Environment
 
-Copy `.env.example` to `.env.local` and adjust. Key variables:
+Copy `.env.example` to `.env.local` if you need to change anything. All of these are optional.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `NEXT_PUBLIC_TARGET` | `local` | `local` ships the full app; `public` replaces `/app` with a "run locally" notice |
-| `NEXT_PUBLIC_SITE_URL` | placeholder | Canonical URL for SEO (canonical, hreflang, OpenGraph, sitemap, JSON-LD) |
-| `NEXT_PUBLIC_VOXA_API` | `http://localhost:8000` | Base URL of the `voxa serve` backend |
-| `NEXT_PUBLIC_DEMO_VIDEO` / `_POSTER` | empty | Optional demo clip for the landing |
+| `NEXT_PUBLIC_TARGET` | `local` | `local` is the full app. `public` is the website: `/app` becomes a "run it locally" notice. `console` is set by `build:console` |
+| `NEXT_PUBLIC_SITE_URL` | Vercel's domain, else voxa.servoogle.com | Canonical URL for SEO: hreflang, OpenGraph, sitemap, JSON-LD, llms.txt |
+| `NEXT_PUBLIC_VOXA_API` | `http://localhost:8000` | Where the console finds `voxa serve`. Empty in the packaged console, which uses its own origin |
 
-## Build & deploy
+## Build
 
 ```bash
-npm run build        # local build (full app)
-
-# The console `voxa serve` ships: a static export copied into ../voxa_ui/static
-npm run build:console
-
-# Public landing for a domain:
-NEXT_PUBLIC_TARGET=public NEXT_PUBLIC_SITE_URL=https://your-domain npm run build
+npm run build:console                      # the console, copied into ../voxa_ui/static
+NEXT_PUBLIC_TARGET=public npm run build    # the website, as Vercel builds it
 ```
 
-Deploy the public build to any Next-compatible host (Vercel, Cloudflare Pages, Netlify). The landing pages are statically prerendered; the operator app is intended to run locally only.
+## Checks
 
-## Scripts
+CI runs all of these:
 
-- `npm run dev` — dev server
-- `npm run build` — production build
-- `npm run build:console` — static build of the operator app, copied into the Python package
-- `npm run start` — serve the production build
-- `npm run lint` — ESLint
+```bash
+npm run lint
+npx tsc --noEmit
+npm run check:messages     # the three languages have the same keys and arguments, none empty,
+                           # none given twice, and no console text left in English
+npm run check:contrast     # every text colour against every surface, both themes, WCAG AA
+```
+
+The browser tests in `../tests/test_e2e.py` run against a `build:console` build; see
+[CONTRIBUTING.md](../CONTRIBUTING.md#before-you-open-a-pull-request).

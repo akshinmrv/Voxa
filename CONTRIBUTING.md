@@ -1,7 +1,8 @@
 # Contributing to Voxa
 
-Thanks for wanting to help. Voxa is a single-module CLI with a small, deliberately boring
-test suite — you should be able to get productive in a few minutes.
+Thanks for wanting to help. The dubbing pipeline is one module, `voxa.py`; the server, the
+Studio window and the console sit around it (see [ARCHITECTURE.md](docs/ARCHITECTURE.md)).
+The test suite is deliberately boring, so you should be productive within a few minutes.
 
 ## Setup
 
@@ -10,24 +11,44 @@ git clone https://github.com/akshinmrv/Voxa
 cd Voxa
 python3 -m venv venv && source venv/bin/activate
 
-pip install -e ".[dev]"       # voxa + pytest + ruff
+pip install -e ".[dev,serve]"   # voxa, its server, pytest and ruff
 ```
 
 You also need **ffmpeg** on your PATH (`sudo apt install ffmpeg`, `brew install ffmpeg`).
 
-For the pure-logic test suite you do **not** need torch, whisper or any TTS engine — those
-imports are guarded. `pip install pytest numpy soundfile openai` is enough, which is exactly
-what CI installs.
+For the tests you do **not** need torch, Whisper or any speech engine; those imports are
+guarded. `pip install pytest numpy soundfile openai` runs the pipeline's tests, and adding
+`fastapi httpx python-multipart` runs the server's too. That is what CI installs.
+
+Working on the console? It lives in [`web/`](web/): `npm ci`, then `npm run dev` next to
+`voxa serve`. `npm run build:console` builds the copy that ships inside the package.
 
 ## Before you open a pull request
 
 ```bash
-ruff check .      # lint — CI enforces this
-pytest            # 93 tests, ~10 seconds
+ruff check .      # lint, enforced by CI
+pytest            # about 670 tests; some skip without FFmpeg or an engine
 ```
 
 Both must pass. If a test needs an engine you don't have installed, skip it (`pytest.skip`)
 rather than making it a hard dependency.
+
+If you changed the console, also run in `web/`:
+
+```bash
+npm run lint && npx tsc --noEmit
+npm run check:messages     # en, az and tr have the same keys, nothing left in English
+npm run check:contrast     # every text colour passes WCAG AA in both themes
+```
+
+and the browser tests, which drive the real server with the pipeline faked and run axe on
+every page:
+
+```bash
+pip install playwright==1.55.0 && python -m playwright install chromium   # with [serve] above
+npm run build:console      # in web/
+VOXA_E2E=1 pytest tests/test_e2e.py
+```
 
 ## The golden tests
 
@@ -60,7 +81,7 @@ still lines up with the source.
 
 ## Adding a TTS engine
 
-All four engines share one loop (`synthesize_timeline`), so an engine only has to say how a
+Every engine shares one loop (`synthesize_timeline`), so an engine only has to say how a
 single line of text becomes a WAV file:
 
 1. Write `async def _tts_<name>(subs, args, work_dir, video_path, gate_asr, logger)`.
@@ -85,8 +106,9 @@ Voxa is MIT and intends to stay installable without GPL obligations.
   [NOTICE.md](NOTICE.md#41-piper-voices). When a language has a CC0, public-domain or CC BY
   voice, prefer it — many Piper voices are non-commercial.
 - Anything only one engine needs belongs in an **extra**, not in `dependencies`.
-- If a package pins its own dependencies aggressively (Coqui did, Chatterbox does), prefer
-  talking to it over HTTP — see `--openai-tts-base-url` — rather than importing it.
+- If a package pins its own dependencies hard (Chatterbox and VoxCPM2 pin PyTorch and
+  transformers), don't import it. Give it an environment of its own in `voxa_engines` with a
+  worker script, as those two have, or talk to it over HTTP through `--openai-tts-base-url`.
 
 New third-party licenses must be recorded in [NOTICE.md](NOTICE.md).
 

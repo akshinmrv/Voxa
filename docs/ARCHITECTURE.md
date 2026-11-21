@@ -1,7 +1,21 @@
-# Voxa Architecture
+# Voxa architecture
 
-Voxa is one module, `voxa.py`. This document explains how it's organised, why the
-non-obvious decisions were made, and where to put new code.
+The dubbing itself is one module, `voxa.py`: the pipeline, the engines, the registries and the
+command line. Everything else is around it:
+
+| Part | What it is |
+|---|---|
+| `voxa.py` | The pipeline and the `voxa` command |
+| `voxa_server.py` | `voxa serve`: a FastAPI server that runs each dub as a `voxa` subprocess, keeps their history in `.voxa_serve/`, and serves the console |
+| `voxa_studio.py` | `voxa studio`: starts the server and shows the console in a pywebview window, with the taskbar progress and the close prompt |
+| `voxa_engines/` | Engines with dependencies Voxa can't share (Chatterbox, VoxCPM2, Demucs), each installed in an environment of its own and driven through a worker script |
+| `voxa_ui/static/` | The console, built from `web/` into the package |
+| `web/` | The source of the console and of voxa.servoogle.com (Next.js) |
+| `installer/` | VoxaSetup.exe (NSIS) and its tests |
+
+Because the server only ever shells out to `voxa`, the console can't do anything the command
+line can't, and the two can't drift apart. This document explains how the pipeline is
+organised, why the non-obvious decisions were made, and where to put new code.
 
 ---
 
@@ -81,10 +95,12 @@ generated from the registry.
 
 ```python
 TTS_PROVIDERS = {
-    "edge":   {"synthesize": _tts_edge},
-    "openai": {"synthesize": _tts_openai},
-    "piper":  {"synthesize": _tts_piper},
-    "xtts":   {"synthesize": _tts_xtts},
+    "chatterbox": {"synthesize": _tts_chatterbox},
+    "edge":       {"synthesize": _tts_edge},
+    "openai":     {"synthesize": _tts_openai},
+    "piper":      {"synthesize": _tts_piper},
+    "voxcpm":     {"synthesize": _tts_voxcpm},
+    "xtts":       {"synthesize": _tts_xtts},
 }
 ```
 
@@ -93,6 +109,12 @@ An adapter is
 It performs its own setup — model load, HTTP client, voice lookup — raises `TTSError` with a
 useful message if it can't proceed, and delegates the loop to `synthesize_timeline`.
 `--tts` choices are generated from the registry.
+
+Chatterbox and VoxCPM2 pin versions of PyTorch and transformers that would break Voxa's own,
+so their adapters don't import them. `voxa_engines` installs each into an environment under
+`~/.voxa/engines/<name>` and starts its worker script there (`start_worker`); the adapter sends
+it one line at a time and gets a WAV back. To the timeline they look like any other engine.
+Demucs (`--separate`) runs the same way, before transcription.
 
 ---
 
@@ -135,8 +157,10 @@ Two things learned the hard way, both documented in the CLI help:
   (`_score_better`: passes the gate > fewer failed checks > lower WER) is kept. Scoring happens
   *before* placement, because placement trims over-runs and that would skew the round-trip.
 
-Regeneration is deliberately XTTS-only: edge, openai and piper are effectively deterministic,
-so re-rolling them would return the same audio.
+OpenAI TTS gets one retry of its own: when a line was rendered with a style or an emotion
+hint and scores badly, it is rendered once more with neutral delivery, and the better take is
+kept. Edge and Piper are effectively deterministic, so re-rolling them would return the same
+audio.
 
 ---
 
@@ -148,7 +172,7 @@ pipeline when a **required** one is absent; optional ones (`torchaudio`, `noiser
 disable the feature that needs them.
 
 The payoff: the test suite imports `voxa` and exercises all the pure logic without installing
-torch. CI runs in seconds with `pytest numpy soundfile openai`.
+torch. `pip install pytest numpy soundfile openai` is enough for it.
 
 `soundfile` and `noisereduce` are guarded **separately**. They once shared a try block, so an
 environment with soundfile but no noisereduce lost soundfile too — and with it every audio
@@ -191,7 +215,11 @@ the engines already read, so no engine code changed.
 | Layer | What it protects |
 |-------|------------------|
 | `tests/test_voxa.py` | Individual functions: parsing, timing maths, scoring, registries, adapters |
-| `tests/test_golden.py` | The same functions **composed** — where cross-stage regressions actually hide |
+| `tests/test_golden.py` | The same functions composed, which is where cross-stage regressions hide |
+| `tests/test_*_server.py`, `test_job_control.py`, `test_history.py`, ... | `voxa serve`: jobs, review, preview, stopping, history, access |
+| `tests/test_studio.py` | The Studio window's process handling (the Windows Job Object is tested for real on Windows) |
+| `tests/test_smoke.py`, `test_review.py`, `test_preview.py`, `test_subtitles.py` | The real FFmpeg assembly, run by CI's smoke job |
+| `tests/test_e2e.py` | The console in a real browser against the real server, with the pipeline faked, plus axe on every page (`VOXA_E2E=1`) |
 
 The golden harness runs a canonical transcript (a music intro, a segment starting before its
 first word, a line closed by punctuation and one closed by a pause) through the deterministic
@@ -220,3 +248,6 @@ video before it lands — see [CONTRIBUTING.md](../CONTRIBUTING.md).
 | Audio | `stretch_audio_smart`, `_fit_to_window`, `normalize_audio`, `_apply_micro_fades` |
 | Quality | `score_speech`, `_score_better`, `log_quality_report` |
 | Infrastructure | `_try_import`, `Logger`, `StateManager`, `load_dotenv`, `run_ffmpeg` |
+| Engines in their own environments | `voxa_engines.ENGINES`, `start_worker`, `voxa_engines/workers/` |
+| The server | `voxa_server.py`: `_run_job`, `_run_steps`, the `/api/...` routes, `load_history` |
+| The window | `voxa_studio.py`: `open_window`, `Taskbar`, `watch_jobs` |

@@ -5981,7 +5981,8 @@ def doctor_checks(online: bool = False, deep: bool = False) -> List[DoctorCheck]
         add("Speed", "GPU", "ok", f"{torch.cuda.get_device_name(0)} (CUDA)")
     elif shutil.which("nvidia-smi"):
         add("Speed", "GPU", "warn", "an NVIDIA GPU is present, but this torch can't use it",
-            "install the CUDA build of torch (see the README's GPU section)")
+            "install the CUDA build of torch: "
+            f"{REPO_URL}/blob/main/docs/INSTALL.md#gpu")
     elif sys.platform == "darwin" and mps_usable():
         add("Speed", "GPU", "warn", "Apple's GPU (MPS) is here, unused by default: the local "
             "models run on the CPU", "try it with --device mps (experimental)")

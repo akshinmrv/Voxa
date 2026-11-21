@@ -2,819 +2,243 @@
 
 # Voxa
 
-**İstənilən videonu başqa dilə dublyaj et — və sinxronu qoru.**
-
-Voxa videonu transkripsiya edir, kontekstlə tərcümə edir, hədəf dildə səsləndirir və nəticəni
-orijinalın üzərinə miksləyir. Mühərrik tək Python faylıdır — dörd nitq mühərriki, beş tərcümə
-backend-i və bir güzəştsiz xüsusiyyət: dublyaj danışandan sürüşmür.
+**Videoları başqa dillərə dublyaj edir, səsi danışanla eyni vaxtda saxlayır.**
 
 [![CI](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml/badge.svg)](https://github.com/akshinmrv/Voxa/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/akshinmrv/Voxa?display_name=tag&sort=semver)](https://github.com/akshinmrv/Voxa/releases)
+[![PyPI](https://img.shields.io/pypi/v/voxa-dub)](https://pypi.org/project/voxa-dub/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Python](https://img.shields.io/badge/python-3.10%20to%203.14-blue.svg)](https://www.python.org/downloads/)
 
-[![Dublyaj sinxron qalır: naive alət +18s geri sürüşür, Voxa 0.0s-də saxlayır](docs/assets/voxa_drift.gif)](https://voxa.servoogle.com/#demo)
-
-**[▶ Drift müqayisəsinə bax](https://voxa.servoogle.com/#demo)** — Voxa-nın dublyajını danışana
-0.0s-də kilidli eşidirsən, naive birləşdirmə isə saniyələrlə geri sürüşür. Eyni dublyaj — iddia yox, ölçmə.
+[Windows üçün yüklə](https://voxa.servoogle.com/download) ·
+[macOS və Linux-da quraşdır](docs/INSTALL.md#one-line-installer) ·
+[voxa.servoogle.com](https://voxa.servoogle.com/az)
 
 </div>
 
-```bash
-pipx install voxa-dub
-voxa talk.mp4 --target_lang ru        # → talk_dubbed_ru.mp4
-```
+Voxa videonu Whisper ilə mətnə çevirir, deyilənləri tərcümə edir, tərcüməni yeni səslə
+səsləndirir və görüntünün altına geri qoyur. Hamısı öz kompüterinizdə işləyir. Standart mühərriklər
+pulsuzdur, onlar üçün nə hesab, nə də API açarı lazımdır.
 
-<div align="center">
+Voxa-nı fərqləndirən vaxtdır. Tərcümə olunmuş hər sətir orijinalda başladığı anda başlayır.
+Ona görə dublyaj danışanla yalnız birinci dəqiqədə yox, otuzuncu dəqiqədə də bərabər gedir.
 
-🎧 **[Demo dublyajları dinlə](https://voxa.servoogle.com)** — İngiliscədən türk, Azərbaycan
-və fransız dillərinə, API açarı olmadan
+<p align="center">
+<img src="docs/assets/app-az.png" width="820" alt="Voxa Studio: hazır dublyajın sətirləri videonun yanında, hər biri deyildiyi anda">
+<br>
+<sub>Voxa Studio-da hazır dublyaj. Hər sətir videonun yanında, deyildiyi anın qarşısında
+durur. Birini dəyişsəniz, yalnız o sətir yenidən səsləndirilir.</sub>
+</p>
 
-</div>
+## Dublyaj niyə geri qalmır
 
----
+Avtomatik dublyaj alətlərinin çoxu hər yeni klipi əvvəlkinin ardınca qoyur. Tərcümə olunmuş
+sətir nadir hallarda orijinal qədər olur. Bir az uzun çıxan klip ondan sonra gələn hər şeyi bir
+az geri itələyir və bu xəta yığılır. Üç dəqiqəlik videoda ölçdük: belə alət sonda danışandan
+18 saniyə geri qalırdı.
 
-## Ümumi baxış
+Voxa gecikməni cəmləmir. Hər sətrə orijinalda öz başlanğıcından növbəti sətrin başlanğıcına
+qədər olan vaxt verilir və sətir bu aralığın əvvəlinə qoyulur. Uzun sətir özündən sonrakı
+fasiləyə keçə bilər. Yenə sığmırsa, bir az sürətli deyilir, sonra kəsilir, amma heç vaxt
+növbəti sətri geri itələmir. Eyni videoda sürüşmə 0,0 saniyə olaraq qalır.
 
-Əksər dublyaj alətləri sintez edilmiş kliplər ard-arda birləşdirir. Bir az uzun çıxan klip
-növbətisini gecikdirir, xəta toplanır, və üç dəqiqədən sonra dublyaj danışandan bir cümlə
-geridə qalır.
-
-Voxa hər klipi **mənbə zaman oxuna bağlayaraq** yerləşdirir. Bir sətrin yeri onun öz
-başlanğıcından **növbəti sətrin** başlanğıcına qədərdir. Yerinə sığmayan klip kəsilir, qısa
-klip sükutla doldurulur. Kursor toplanmır — **təyin edilir**, ona görə sürüşmə struktur olaraq
-mümkün deyil.
-
-Qalan hər şey bu qərardan doğur: tərcüməçiyə simvol büdcəsi verilir ki, sətir öz yerinə təbii
-sürətdə sığsın; nitq yalnız sürətləndirilir (heç vaxt yavaşladılmır — yavaşladılmış nitq
-"sürünən" səslənir); və seqment başlanğıcları ilk sözün vaxt damğasına sıxlaşdırılır ki,
-dublyaj danışandan əvvəl başlamasın.
-
-```bash
-voxa talk.mp4 --target_lang az
-# → talk_dubbed_az.mp4 + subtitles_az.srt
-```
-
-API açarı tələb olunmur. Default parametrlər olduğu kimi işləyir.
-
-## İmkanlar
-
-| İmkan | Təfərrüat |
-|---|---|
-| **Video dublyaj** | Dublyaj səsi orijinalın, ya da `--separate` ilə yalnız onun musiqi və effektlərinin üzərinə miksləndir; video axını yenidən kodlaşdırılmır |
-| **Nitqin tanınması** | `openai-whisper` (tiny → turbo) və ya `faster-whisper` (2–4× sürətli, daxili VAD, torch-suz) |
-| **Avtomatik tərcümə** | Google, Ollama (lokal), OpenAI, Anthropic, OpenRouter |
-| **Kontekst-məlumatlı tərcümə** | Sətirlər bloklarla tərcümə olunur, ona görə əvəzliklər, cins, adlar və ton səhnə boyu ardıcıl qalır |
-| **Uzunluğa uyğun tərcümə** | Hər sətrə simvol büdcəsi verilir ki, dublyaj sıxılmadan öz yerinə sığsın |
-| **İşi əvvəlcədən gör** | `--dry-run` mühərrikləri, modelləri, çıxış yolunu və hansı keşlənmiş addımların təkrar işlədiləcəyini çap edir — sonra heç nə yazmadan çıxır |
-| **Altyazı emalı** | SRT çıxışı, `--subtitles-only` rejimi, daxili SubRip parseri (GPL asılılığı yoxdur) |
-| **Səs klonlama** | XTTS v2, qısa referans nümunəsindən — verməsəniz, mənbədən avtomatik çıxarılır |
-| **OpenAI TTS** | `gpt-4o-mini-tts`, təlimatla idarə olunan ifa |
-| **Ekspressiv ifa** | `--detect-emotion` Edge-də doğma səs stillərini seçir; OpenAI TTS-də LLM hər sətrə emosiya/enerji/temp göstərişi verir |
-| **Öz serverində nitq** | `--openai-tts-base-url` istənilən OpenAI-uyğun `/v1/audio/speech` serverini işlədir — açar da, əlavə asılılıq da lazım deyil |
-| **Offline nitq** | Piper, model yükləndikdən sonra tam offline |
-| **Bağlanmış yerləşdirmə** | Aşan kliplər fade ilə kəsilir, qısaları doldurulur, sürüşmə toplanmır |
-| **Keyfiyyət nəzarəti** | Hər klip geri transkripsiya olunur və ballanır (WER, clipping, sükut, temp) |
-| **Avtomatik yenidən sintez** | XTTS stoxastikdir, ona görə zəif seqment 2 dəfəyə qədər yenidən sintez olunur və ən yaxşısı saxlanılır |
-| **Toplu emal** | Bir əmrdə bir neçə video |
-| **Bərpa olunan işlər** | Hər addım checkpoint-lənir; yarımçıq iş bərpa olunur |
-| **Preflight yoxlaması** | Olmayan giriş faylı və olmayan FFmpeg iş başlamazdan əvvəl bildirilir |
-| **Konfiqurasiya** | `.env`, JSON config, struktur JSON logging |
-| **Genişlənə bilən** | Yeni nitq və ya tərcümə provayderi = 1 adapter + 1 registry sətri |
-
-> [!NOTE]
-> Python paketi heç bir model çəkisi daşımır və üçüncü tərəf kodu daxil etmir. O, sizin
-> quraşdırdığınız alətləri idarə edir, onların, o cümlədən nitq səslərinin lisenziyaları isə
-> fərqlidir. Kommersiya istifadəsindən əvvəl [NOTICE.md](NOTICE.md) oxuyun.
-
-## Dəstəklənən dillər
-
-| Qat | Əhatə |
-|---|---|
-| **Transkripsiya** | Whisper-in tam dil dəsti, avtomatik təyin |
-| **Tərcümə** | 74 hədəf dil üçün tam dil adı LLM prompt-una ötürülür; Google daha çoxunu qəbul edir |
-| **Edge TTS** | 100+ lokal, o cümlədən doğma `az-AZ` səsləri |
-| **OpenAI TTS** | Çoxdilli; böyük dillərdə ən güclü |
-| **Piper** | 15 səs, tam offline |
-| **XTTS** | 17 — `ar` `cs` `de` `en` `es` `fr` `hi` `hu` `it` `ja` `ko` `nl` `pl` `pt` `ru` `tr` `zh` |
-
-### Hansı dil üçün hansı mühərrik?
-
-Universal cavab yoxdur, və bulud mühərriki həmişə qalib gəlmir — dili həqiqətən əhatə edən səs,
-onu yalnız təxmin edən daha böyük modeli adətən üstələyir. Məhz buna görə Voxa hökm yox,
-**ölçmə** təqdim edir.
-
-`--quality-gate` hər sintez olunmuş klipi ikinci ASR modeli ilə geri transkripsiya edir və söz
-xəta nisbəti ilə ballandırır — beləliklə mühərrikləri **öz** materialında yoxlaya bilərsən:
-
-```bash
-voxa clip.mp4 --target_lang az --tts edge --quality-gate --gate-model base
-```
-
-[`docs/BENCHMARK.md`](docs/BENCHMARK.md) təkrarlana bilən skript, altı dil üzrə nümunə ölçmə və
-— eyni dərəcədə vacib — belə bir rəqəmin nə deyə bilmədiyinin hüdudlarını verir.
-
-> [!TIP]
-> Dilin Edge-də doğma neyron səsi varsa, əvvəlcə onu sına. Az-resurslu dil üçün `--gate-model
-> base` və ya daha böyüyünü işlət: `tiny` modeli tamamilə yaxşı səsi səhv oxuyur və layiq
-> olduğundan pis bal verir.
-
-> [!IMPORTANT]
-> **WER rəqəmi yalnız hansı klipdən gəldiyi ilə birlikdə məna daşıyır.** Eyni mühərrik və dil
-> fərqli mənbə materialında çox fərqli bal alır — qısa klipdə bir xüsusi isim ortalamanı
-> kəskin dəyişə bilər. İstənilən dərc olunmuş rəqəmi, bizimki də daxil, sıralama kimi yox, öz
-> ölçmən üçün başlanğıc nöqtəsi kimi qəbul et.
-
-## Dəstəklənən modellər
-
-| Mərhələ | Modellər |
-|---|---|
-| Transkripsiya | `tiny` · `base` · `small` · `medium` · `large` · `turbo` |
-| Tərcümə (OpenAI) | `gpt-5` (default), `gpt-5-mini`, istənilən chat model |
-| Tərcümə (Anthropic) | `claude-opus-4-8` (default), `claude-sonnet-5` |
-| Tərcümə (Ollama) | `llama3` (default), istənilən lokal model |
-| Nitq (OpenAI) | `gpt-4o-mini-tts` |
-| İfa direktivi | `gpt-4o-mini` — iş başına bir ucuz çağırış, keşlənir |
-| Səs klonlama | XTTS v2 |
-| Offline nitq | Piper səsləri |
-| Keyfiyyət nəzarəti | `faster-whisper` (`tiny` default, az-resurslu dillərdə `base`) |
-
-## Arxitektura
-
-```
-                         Video
-                           │
-                           ▼
-              ┌─────────────────────────┐
-              │    Nitqin tanınması     │  Whisper / faster-whisper
-              │                         │  + söz-onset dəqiqləşdirmə
-              │                         │  + qeyri-nitq filtri
-              └────────────┬────────────┘
-                           ▼
-              ┌─────────────────────────┐
-              │        Tərcümə          │  Google · Ollama · OpenAI · Anthropic · OpenRouter
-              │                         │  kontekstli, uzunluq büdcəli
-              └────────────┬────────────┘
-                           ▼
-              ┌─────────────────────────┐
-              │      Nitq sintezi       │  Edge · OpenAI · Piper · XTTS
-              │                         │  vahid timeline sürücüsü
-              └────────────┬────────────┘
-                           ▼
-              ┌─────────────────────────┐
-              │      Audio emalı        │  yerləşdirmə (yalnız sürətləndirmə)
-              │                         │  bağlanmış anchor
-              │                         │  2-keçidli loudnorm
-              └────────────┬────────────┘
-                           ▼
-                    Dublyaj edilmiş video
-```
-
-Hər mərhələ `<video>_work/` qovluğunda checkpoint-lənir. Kursorun niyə toplanmadığını və
-registry-lərin necə işlədiyini [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) izah edir.
-
-## Demo
-
-15 saniyəlik bir ingilis klipi, **tək transkripsiyadan** üç dilə dublyaj edilib. Aşağıdakı
-bütün dublyajlar **defolt mühərriklərlə və API açarı olmadan** hazırlanıb:
-
-```bash
-voxa clip.mp4 --target_lang tr        # sonra --target_lang az, --target_lang fr
-```
-
-| Hədəf | Mühərriklər | Dinlə |
-|---|---|---|
-| 🎬 Orijinal (İngilis) | — | [oynat ▶](https://voxa.servoogle.com) · [`original.mp4`](web/public/demo/original.mp4) |
-| 🇹🇷 Türkçe | `google` + `edge` | [oynat ▶](https://voxa.servoogle.com) · [`dub_tr.mp4`](web/public/demo/dub_tr.mp4) |
-| 🇦🇿 Azərbaycan | `google` + `edge` | [oynat ▶](https://voxa.servoogle.com) · [`dub_az.mp4`](web/public/demo/dub_az.mp4) |
-| 🇫🇷 Fransız | `google` + `edge` | [oynat ▶](https://voxa.servoogle.com) · [`dub_fr.mp4`](web/public/demo/dub_fr.mp4) |
-
-İkinci və üçüncü dillər keşlənmiş transkripsiyanı təkrar işlətdi — yalnız tərcümə və nitq
-yenidən yaradıldı, ona görə timeline hər üçündə eynidir.
-
-<!-- DEMO_TR --> <!-- DEMO_AZ --> <!-- DEMO_FR -->
+Bu qərardan daha iki şey çıxır. LLM tərcüməçiləri hər sətir üçün simvol limiti alır, ona görə
+tərcümə sonradan sıxışdırılmır, əvvəldən vaxta sığan şəkildə yazılır. Nitq isə yalnız
+sürətləndirilir, heç vaxt yavaşladılmır, çünki yavaşladılmış nitq süni səslənir.
+Hesabın necə aparıldığını və kodda harada olduğunu [ARCHITECTURE.md](docs/ARCHITECTURE.md)
+izah edir (ingiliscə).
 
 ## Quraşdırma
 
-**Windows: [VoxaSetup.exe](https://github.com/akshinmrv/Voxa/releases/latest/download/VoxaSetup.exe).** Yalnız sizin istifadəçiniz üçün, administrator
-hüququ olmadan quraşdırıcı: Voxa-nı, işlədiyi Python-u və **Voxa Studio**-nu bir qovluğa qoyur,
-Start menyusuna qısayol əlavə edir, FFmpeg yoxdursa onu winget ilə qurur və silmək üçün
-*Apps & features*-də görünür. Hələ kod imzası yoxdur, ona görə Windows *Windows protected your
-PC* deyə bilər: *More info*, sonra *Run anyway* seçin.
+### Windows
 
-**Bir sətirlə.** Əvvəlcədən Python lazım deyil:
+[VoxaSetup.exe](https://voxa.servoogle.com/download)-ni (11 MB) yükləyib işə salın. O, Voxa
+Studio-nu administrator hüququ istəmədən, yalnız sizin istifadəçiniz üçün qurur. Lazım olan
+Python-u da gətirir, FFmpeg yoxdursa onu da qurur. Quraşdırma zamanı təxminən 1 GB da yükləyir,
+bunun çoxu PyTorch-dur.
 
-```powershell
-irm https://voxa.servoogle.com/install.ps1 | iex          # Windows (PowerShell)
-```
+Quraşdırıcının hələ kod imzası yoxdur, ona görə Windows çox güman ki, xəbərdarlıq edəcək.
+*More info*, sonra *Run anyway* seçin.
 
-```bash
-curl -fsSL https://voxa.servoogle.com/install.sh | sh     # macOS / Linux
-```
-
-Quraşdırıcı [uv](https://docs.astral.sh/uv/) ilə Voxa-nı və onun brauzer konsolunu, işlədikləri
-Python ilə birlikdə ayrıca mühitə qoyur (Windows-da 0.85 GB, Linux-da 1.4 GB, çoxu PyTorch: CUDA buildi yalnız uv
-NVIDIA GPU tapanda, əks halda CPU buildi). FFmpeg-i Windows-da
-(winget) və macOS-da (Homebrew) quraşdırır — Linux-da `sudo` tələb etdiyi üçün əmri göstərir —,
-**Voxa Studio** qısayolu əlavə edir və `voxa doctor` ilə bitir. Təkrar işə salmaq Voxa-nı
-yeniləyir; `uv tool uninstall voxa-dub` silir. `VOXA_EXTRAS=serve,piper` kimi ayarlar hər
-skriptin əvvəlində sadalanıb.
-
-Ya da addım-addım quraşdırın:
-
-**1. FFmpeg** — Voxa onu başlanğıcda yoxlayır və yoxdursa bildirir.
+### macOS və Linux
 
 ```bash
-sudo apt install ffmpeg      # Debian / Ubuntu
-sudo dnf install ffmpeg      # Fedora / RHEL
-brew install ffmpeg          # macOS
-winget install Gyan.FFmpeg   # Windows
+curl -fsSL https://voxa.servoogle.com/install.sh | sh
 ```
 
-**2. Voxa** — Python 3.10 və ya daha yeni (Intel Mac-də 3.10–3.12: PyTorch orada 3.13 və sonrası üçün build vermir).
+Terminalla işləməyi sevən Windows istifadəçiləri üçün də eyni yol var:
+`irm https://voxa.servoogle.com/install.ps1 | iex`.
 
-```bash
-pipx install voxa-dub          # tövsiyə olunan: izolyasiya, PATH-ə `voxa` əlavə edir
-```
+### pipx və ya Docker ilə
 
-Və ya heç nə quraşdırmadan bir dəfə işlət:
-
-```bash
-uvx voxa-dub talk.mp4 --target_lang ru
-```
-
-<details>
-<summary>Mənbədən (development üçün)</summary>
-
-```bash
-git clone https://github.com/akshinmrv/Voxa
-cd Voxa
-python3 -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
-
-# Yalnız-CPU torch quraşdırmanı xeyli kiçildir.
-# NVIDIA GPU-nuz var? Əvəzinə CUDA wheel quraşdırın — aşağıda "4. GPU sürətləndirmə".
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-pip install .
-```
-
-</details>
-
-> [!NOTE]
-> Paketin adı **`voxa-dub`**-dır (PyPI-dakı `voxa` adı əlaqəsiz, tərk edilmiş paketə
-> məxsusdur). Quraşdırdığı əmr isə **`voxa`**-dır — aşağıdakı bütün nümunələr onu işlədir.
-> Skripti birbaşa işlətmək, `python voxa.py …`, eyni işi görür.
-
-<details>
-<summary>Docker — host-da Python, torch və ffmpeg olmadan</summary>
-
-```bash
-docker run --rm -v "$PWD:/data" ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
-```
-
-Dublyaj host-da girişin yanında yaranır. Defolt parametrlər API açarı tələb etmir; başqa
-mühərrikə keçsəniz `-e OPENAI_API_KEY=...` ilə ötürün. Yüklənmiş Whisper modellərini
-saxlamaq üçün keşi mount edin:
-
-```bash
-docker run --rm -v "$PWD:/data" -v voxa-cache:/cache \
-    ghcr.io/akshinmrv/voxa talk.mp4 --target_lang ru
-```
-
-Image ~3.0 GB-dır, çoxu torch-un CPU buildi, FFmpeg və Whisper-dir. Konsol da içindədir:
-
-```bash
-docker run --rm -p 127.0.0.1:8000:8000 -v "$PWD:/data" -v voxa-cache:/cache \
-    -v voxa-engines:/engines ghcr.io/akshinmrv/voxa serve --host 0.0.0.0
-```
-
-Çap etdiyi linki açın: `http://127.0.0.1:8000/?token=…`. Konteynerin loopback-ından kənarda
-dinlədiyi üçün konsol giriş tokeni istəyir: hər başlanğıcda yenisi, ya da `-e VOXA_TOKEN=…` ilə
-öz tokeniniz. `127.0.0.1`-də açmaq onu həm də şəbəkənizdən kənarda saxlayır. Yükləmələr, işlər
-və dublyajlar mount edilmiş qovluqda qalır, Settings-də əlavə etdiyiniz açarlar da (onun
-`.env`-ində); əvəzində onları `-e` ilə də ötürə bilərsiniz. Mühərriklər `voxa-engines`
-volume-una qurulur — konsolun Mühərriklər səhifəsindən, ya da CLI ilə:
-
-```bash
-docker run --rm -v voxa-cache:/cache -v voxa-engines:/engines \
-    ghcr.io/akshinmrv/voxa engines install chatterbox
-```
-
-Host-da işləyən Ollama ilə tərcümə üçün konteynerə onun ünvanını verin:
-`-e OLLAMA_HOST=http://host.docker.internal:11434` (Linux-da həm də
-`--add-host=host.docker.internal:host-gateway`).
-
-</details>
-
-**Quraşdırmanı yoxlayın.** `voxa doctor` nəyin işlədiyini, nəyin opsional olub hələ
-qurulmadığını və hər birini *bu* quraşdırmada düzəldən əmri göstərir — Voxa pipx-dədirsə,
-`pipx inject`. API açarının qoyulub-qoyulmadığını deyir, dəyərini heç vaxt göstərmir.
-
-```bash
-voxa doctor            # FFmpeg, paketlər, GPU, mühərriklər, açarlar
-voxa doctor --online   # Google, Microsoft Edge və Hugging Face-i də yoxlayır
-voxa doctor --deep     # asılılıq yeniləmələrində sınan XTTS və pyannote-u da yükləyir
-```
-
-**3. Opsional mühərriklər** — yalnız istifadə etdiyinizi quraşdırın.
-
-| Əmr | Nəyi açır |
-|---|---|
-| `pipx install "voxa-dub[faster]"` | `--whisper-backend faster` — 2–4× sürətli, torch-suz |
-| `pipx install "voxa-dub[piper]"` | `--tts piper` — tam offline (mühərrik GPL-3.0-dır; səslərin lisenziyaları fərqlidir, bax: [NOTICE](NOTICE.md#41-piper-voices)) |
-| `pipx install "voxa-dub[anthropic]"` | `--translator anthropic` |
-| `pipx install "voxa-dub[xtts]"` | `--tts xtts` səs klonlama |
-| `pipx install "voxa-dub[url]"` | `voxa <video-url>` — girişi əvvəlcə yüklə (yt-dlp) |
-| `pipx install "voxa-dub[diarize]"` | `--diarize` — hər danışana ayrı səs (pyannote) |
-| `voxa engines install chatterbox` | `--tts chatterbox` — hər danışanın səsini 23 dildə klonlayır, MIT. Öz mühitinə quraşdırılır (təxminən 4.5 GB); GPU olmadan yavaşdır |
-| `voxa engines install voxcpm` | `--tts voxcpm` — VoxCPM2: hər danışanın səsini 30 dildə klonlayır, aralarında vyetnam, tay və indoneziya dilləri də var, Apache-2.0. Öz mühitinə quraşdırılır (təxminən 6.4 GB); NVIDIA GPU üçün nəzərdə tutulub |
-| `voxa engines install demucs` | `--separate` — orijinalın musiqi və effektlərini tam səslə saxlayır, danışığını çıxarır. Öz mühitinə quraşdırılır (təxminən 0.7 GB); çəkilərin lisenziyası aydın deyil ([NOTICE](NOTICE.md#47-engines-in-environments-of-their-own-voxa-engines)) |
-
-> [!NOTE]
-> **Çox danışan** (`--diarize`) kimin nə vaxt danışdığını aşkarlayır və hər danışana ayrı səs verir —
-> müsahibə/podkast tək səslə dublyaj olunmasın. Hugging Face token (`--hf-token` və ya `HF_TOKEN`) və
-> [hf.co/pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
-> ünvanında model şərtlərinin birdəfəlik qəbulu lazımdır. Pipeline MIT lisenziyalıdır, sadəcə
-> gated-dir. Onun yüklədiyi danışan-embedding modeli isə CC BY 4.0-dır, ona görə müəllifini qeyd edin.
-> Danışan sayını bilirsənsə `--num-speakers N` ver. Edge və OpenAI TTS hər danışana ayrı səs alır;
-> Piper/XTTS hələ tək səsdir və `--diarize` `--subtitles` ilə birləşmir (mənbə audio lazımdır).
-
-> [!NOTE]
-> **URL-dən dublyaj** (`voxa "https://…" --target_lang de`) videonu `yt-dlp` ilə yükləyib adi
-> pipeline-ı işlədir. Yükləmə mənbə platformanın İstifadə Şərtlərini poza bilər — **məzmuna
-> hüququn olması sənin məsuliyyətindədir**; CLI bunu yükləmədən əvvəl xəbərdar edir. Lokal
-> fayllar əvvəlki kimi işləyir.
-
-> [!WARNING]
-> `voxa-dub[xtts]` [`coqui-tts`](https://github.com/idiap/coqui-ai-TTS) forkunu quraşdırır.
-> **XTTS-v2 model çəkiləri qeyri-kommersiyadır** (CPML) və Coqui Inc. artıq mövcud deyil ki,
-> kommersiya lisenziyası satsın. Kommersiya klonlama üçün `--openai-tts-base-url` ilə
-> MIT lisenziyalı mühərrik işlədin.
-
-> [!NOTE]
-> **Öz mühitində işləyən mühərriklər.** Chatterbox PyTorch və transformers-in öz versiyalarını
-> tələb edir, ona görə `voxa engines install chatterbox` onu Voxa-nın yanına yox, `~/.voxa/engines`
-> altında ayrıca mühitə qoyur; heç nə toqquşmur, `voxa engines remove chatterbox` isə onu silir.
-> Konsolun **Mühərriklər** səhifəsi eyni işi bir kliklə görür. Noutbuk CPU-sunda hər cümlə 40–60
-> saniyə çəkdi, yəni burada GPU həlledicidir; yaratdığı hər klipdə Resemble AI-ın eşidilməyən
-> PerTh su nişanı var. faster-whisper quraşdırılıbsa, Voxa Chatterbox-un bəzən sətrin sonuna
-> əlavə etdiyi sözləri də kəsir.
->
-> VoxCPM2 (`voxa engines install voxcpm`) 30 dildə danışır, onlardan yeddisini Chatterbox
-> bilmir, və GPU-ya daha çox ehtiyac duyur: noutbuk CPU-sunda bir cümlə 2–3 dəqiqə çəkdi (öz
-> uzunluğunun 18–31 misli), yüklənərkən isə 9.5 GB-a qədər yaddaş tutdu. Beş dildə sınaqda
-> Whisper onun dediyi hər sözü eşitdi; ingiliscə danışanın klonları danışan oxşarlığında 0.74
-> (almanca danışanda 0.50) topladı, öz səsləri isə 0.02–0.17.
-
-> [!NOTE]
-> **Musiqi və effektləri saxlamaq** (`--separate`). Standart olaraq bütün orijinal
-> dublyajın altında zəif fon kimi qalır: musiqisi çətin eşidilir, danışığı isə sadəcə
-> sakitləşir. `voxa engines install demucs` və `--separate` ilə Demucs əvvəlcə danışığı
-> çıxarır, musiqi və effektlər isə tam səslə qalır. Sınaq miksində (musiqi üstündə danışıq)
-> musiqi zəif fondakından 26 dB uca, orijinal danışıq isə 5 dB sakit çıxdı. Whisper və
-> klonlanan səs də ayrılmış danışığı alır: danışıqdan 12 dB uca musiqinin altında
-> Whisper-in söz xətası 32%-dən (son cümləni uydurmuşdu) 12%-ə düşdü, ondan kəsilən
-> klonlama nümunəsində isə sözlərin arasında musiqi qalmır. Dublyaj danışanda fon
-> ondan 10 dB aşağı qalacaq qədər azaldılır, sətirlərin arasında isə öz səviyyəsində
-> səslənir (`--no-duck` bunu söndürür): danışıqdan 12 dB uca musiqidə almanca Whisper
-> dublyajın 34%-ni bunsuz, 6.5%-ni isə bununla səhv eşitdi, zəif fondakı kimi. Noutbuk
-> CPU-sunda videonun uzunluğunun təxminən 0.6-sı qədər vaxt və 1.7 GB yaddaş tələb etdi;
-> nəticə saxlanılır, ona görə eyni videonu başqa dilə dublyaj edəndə yenidən ayrılmır.
-> Demucs-un kodu MIT-dir, amma müəllifinə görə çəkilərin lisenziyası aydın deyil (təlim
-> datasının bir hissəsi yalnız tədqiqat üçün buraxılıb), ona görə kommersiya istifadəsindən
-> əvvəl bunu yoxlayın — [NOTICE](NOTICE.md#47-engines-in-environments-of-their-own-voxa-engines).
-
-**4. GPU sürətləndirmə** — opsional: NVIDIA, eksperimental olaraq Apple Silicon.
-
-Voxa CUDA-nı özü aşkarlayır; açmaq üçün heç bir flag yoxdur (`--device cpu` hər şeyi CPU-da
-saxlayır). Nəyi sürətləndirir:
-
-| Mərhələ | GPU-da |
-|---|---|
-| Whisper transkripsiya (hər iki backend) | ✅ CUDA, fp16 |
-| XTTS səs klonlama | ✅ CUDA |
-| Keyfiyyət qapısı (WER ballama) | ✅ CUDA |
-| Tərcümə — Google / OpenAI / Anthropic | ➖ şəbəkə-asılı |
-| Tərcümə — Ollama | ➖ Ollama GPU-nu özü işlədir |
-| Nitq — Edge / OpenAI | ➖ bulud |
-| Nitq — Piper | ➖ CPU (ONNX) |
-
-Bir sətirlik quraşdırıcı NVIDIA GPU tapanda bunu özü edir. Əl ilə quraşdıranda Step 2-dəki
-CPU wheel əvəzinə PyTorch-un **CUDA** buildini quraşdırın:
-
-```bash
-# Sürücünüzün dəstəklədiyi CUDA versiyasını seçin — https://pytorch.org/get-started/locally/
-pip install torch --index-url https://download.pytorch.org/whl/cu124
-```
-
-Yoxlayın:
-
-```bash
-python -c "import torch; print(torch.cuda.is_available())"   # → True
-```
-
-> [!NOTE]
-> Çox yeni GPU öz PyTorch buildini qabaqlaya bilər: `torch.cuda.is_available()` **True** qaytarır,
-> amma transkripsiya *"no kernel image is available for execution on the device"* xətası verir —
-> quraşdırılmış torch həmin arxitektura üçün kernel-lərə hələ malik deyil. Daha yeni CUDA buildi
-> (daha yüksək `cuXXX`) quraşdır, ya da torch-u tamam yan keç: **`--whisper-backend faster`**
-> (`voxa-dub[faster]`, CTranslate2) — PyTorch/CUDA uyğunlaşdırması olmadan transkripsiya edir,
-> üstəlik CPU-da 2–4× sürətlidir.
-
-GPU işləyəndə iş loqu transkripsiya addımında `⚙️  Using device: CUDA` çap edir (əks halda `CPU`).
-Təxmini VRAM (Whisper modelinə görə): `tiny`/`base` ≈ 1 GB, `small` ≈ 2 GB, `medium` ≈ 5 GB,
-`turbo` ≈ 6 GB, `large` ≈ 10 GB; XTTS üstünə təxminən 4 GB istəyir.
-
-> [!NOTE]
-> `--whisper-backend faster` (CTranslate2) da GPU-da işləyir, amma NVIDIA cuBLAS və cuDNN
-> kitabxanalarını tələb edir: `pip install nvidia-cublas-cu12 nvidia-cudnn-cu12`.
-> AMD GPU-lar CPU-ya düşür.
-
-**Apple Silicon (eksperimental).** `--device mps` (ya da konsolda Ayarlar → Ətraflı) Whisper
-transkripsiyası, danışanların ayrılması, Chatterbox və Demucs üçün Mac-in GPU-nu sınayır. Hər
-biri orada alınmasa CPU-ya keçir, ona görə dublyaj dayanmır; XTTS, VoxCPM2 və
-`--whisper-backend faster` CPU-da qalır. Hələ Mac-də ölçülmədiyi üçün default olaraq sönülüdür:
-Whisper MPS-də CPU-dan da yavaş ola bilər. `voxa doctor` GPU olanda bunu deyir; sınasanız,
-ölçdüyünüzü issue-da yazın, bu, onun default olub-olmamasına qərar verməyə kömək edir.
-
-## Konfiqurasiya
-
-**API açarları.** `.env.example`-i `.env` (gitignore olunur) kimi kopyalayın və doldurun. Voxa
-onu başlanğıcda yükləyir; real mühit dəyişənləri həmişə üstündür. `--openai_api_key`
-əvəzinə bunu seçin — flaq shell tarixçəsinə və proses siyahısına düşür.
-
-**Default-lar.** Tez-tez işlədilən parametrləri JSON faylına yazın. Açarlar uzun flaq
-adlarıdır (tirelər alt-xətt). Tam nümunə: [`examples/config.json`](examples/config.json).
-
-**Loglama.** `--log-format json` hər sətrə bir JSON obyekti verir. `--verbose` səviyyəni DEBUG
-edir.
-
-**Yeniləmələr.** Konsol, `voxa serve` və `voxa doctor` gündə bir dəfə PyPI-dan voxa-dub-ın ən
-yeni versiyasını soruşur. Sizinkindən yenisi çıxıbsa, bunu deyir və quraşdırmanızın onu necə
-alacağını göstərir: VoxaSetup.exe ilə qurulubsa yeni VoxaSetup.exe, yoxsa Voxa-nı necə
-qurmusunuzsa ona uyğun bir əmr. PyPI bu sorğunu istənilən yükləmə kimi görür (IP ünvanınız və
-bu Voxa-nın versiyası); başqa heç nə göndərilmir. Konsolda Ayarlar → Ətraflı bölməsindən, ya da
-hər yerdə `VOXA_NO_UPDATE_CHECK=1` ilə söndürülür.
-
-**Bütün parametrlər:** `voxa --help` — koddan generasiya olunur, ona görə heç vaxt köhnəlmir.
-
-## Sürətli başlanğıc
-
-```bash
-# Ən sadə: açar yox, konfiqurasiya yox
-voxa video.mp4 --target_lang az
-
-# LLM ilə təbii, kontekstli tərcümə
-export OPENAI_API_KEY="sk-..."
-voxa video.mp4 --target_lang de --translator openai
-
-# Bir OpenRouter açarı ilə yüzlərlə model (DeepSeek, Gemini, Llama…) — əlavə quraşdırma yox
-export OPENROUTER_API_KEY="sk-or-..."
-voxa video.mp4 --target_lang az --translator openrouter --openrouter_model deepseek/deepseek-chat
-
-# Danışanın səsini klonla
-voxa video.mp4 --target_lang tr --tts xtts
-
-# Tam offline: lokal LLM tərcümə + offline nitq
-voxa video.mp4 --target_lang fr --translator ollama --tts piper
-
-# Hamısını dublyaj etməzdən əvvəl ilk 20 saniyəni eşidin (və ya --preview 45): video.preview20s_dubbed_ru.mp4
-voxa video.mp4 --target_lang ru --preview
-
-# Yalnız altyazı
-voxa video.mp4 --target_lang es --subtitles-only
-
-# ...videonun içində də: pleyerdə açılan trek (soft), ya da kadrın üstünə yazılmış (hard)
-voxa video.mp4 --target_lang es --subtitles-only --subtitles-in-video hard
-
-# Altyazısı içində olan dublyaj
-voxa video.mp4 --target_lang es --subtitles-in-video soft
-
-# Tərcüməni səsləndirmədən əvvəl yoxlayın: sətirlər tərcümə olunanda dayanır; istənilənini
-# video_work/translated.json-da dəyişin, sonra --review olmadan yenidən işə salın. Sonradan bir
-# sətri dəyişib yenidən işə salsanız, yalnız o sətir yenidən səsləndirilir.
-voxa video.mp4 --target_lang de --review
-
-# Başqa yerdə tərcümə olunmuş sətirləri səsləndirin (.srt, ya da translated.json formatında JSON)
-voxa video.mp4 --target_lang de --translation lines.de.srt
-
-# Hazır SRT-dən dublyaj — Whisper-i atla (düzəldilmiş altyazı, ya da onsuz da mövcud olan)
-voxa video.mp4 --target_lang de --subtitles captions.srt
-
-# ...ümumiyyətlə səsi olmayan videonu da səsləndirir, məsələn ekran yazısını
-voxa screencast.mp4 --target_lang de --subtitles script.srt
-
-# Hər danışana öz səsi (müsahibə, podkast) — Hugging Face token lazımdır
-voxa video.mp4 --target_lang de --diarize --num-speakers 2 --hf-token hf_...
-
-# Səsi seçin: dilin səslərinə baxın, sonra birini adlandırın
-voxa voices --lang az
-voxa video.mp4 --target_lang az --edge-voice az-AZ-BanuNeural
-
-# Bir əmrdə bir neçə video
-voxa a.mp4 b.mp4 c.mp4 --target_lang az
-
-# Təxmin etmək əvəzinə nəticəni ölç
-voxa video.mp4 --target_lang az --quality-gate --gate-model base
-
-# Öz serverində nitq: OpenAI-uyğun endpoint, açarsız
-voxa video.mp4 --target_lang tr --tts openai \
-     --openai-tts-base-url http://localhost:8004/v1
-
-# ...məsələn, VoiceStudio-nun lokal serveri (proqramı açın; 3900 portunda dinləyir)
-voxa video.mp4 --target_lang az --tts openai \
-     --openai-tts-base-url http://127.0.0.1:3900/v1
-```
-
-> [!NOTE]
-> `OPENAI_API_KEY` öz serverinizə heç vaxt göndərilmir; serverin öz açarı lazımdırsa,
-> `OPENAI_TTS_API_KEY` təyin edin. Öz serveriniz hər sətirlə hədəf dili də alır, ona görə çoxdilli
-> model düzgün dildə danışır.
-> Dublyajla nə edə biləcəyinizi serverin modeli müəyyən edir: VoiceStudio-nun default modeli
-> OmniVoice azərbaycanca danışır, amma qeyri-kommersiyadır, Chatterbox isə MIT-dir — bax:
-> [NOTICE](NOTICE.md#46-self-hosted-speech-servers). CPU-da yavaşdır: VoiceStudio və OmniVoice
-> ilə 45 saniyəlik klipin nitq sintezi noutbukda təxminən dörd dəqiqə çəkdi.
-
-> [!TIP]
-> Hədəf dil ingiliscədən uzundursa (türkçə, rusca) ən təbii nəticəni **LLM translator** verir
-> (`--translator openai` / `anthropic` / `openrouter`): hər sətir uzunluq büdcəsi alır, ona görə
-> öz slotuna təbii sürətlə sığır. Sətirlər həm də sonrakı pauzaya nəfəs alır — sürətləndirilmir.
-> `google` hərfi tərcümə edir, ona görə uzun sətir hələ də sıxıla bilər.
-
-## Veb interfeys (`voxa serve`)
-
-Voxa [`web/`](web/) qovluğunda opsional veb frontend və `voxa serve` arxasında lokal operator
-backend təqdim edir — bir dizayn sistemi, iki səth:
-
-- **Landing** — publik, üçdilli (EN/AZ/TR) təqdimat saytı, statik olaraq deploy oluna bilər.
-- **Operator app** — lokal konsol: video yüklə, mühərrik seç, yeddi-addımlı pipeline-ı canlı
-  izlə (SSE) və nəticəni yüklə. Heç nə serverə yüklənmir — öz maşınında işləyir.
-
-<div align="center">
-<img src="docs/assets/app-az.png" alt="Voxa Studio: hazır dublyajın sətirləri videonun yanında, hər biri danışıldığı anda" width="820">
-<br>
-<sub>Voxa Studio-da hazır dublyaj: hər sətir videonun yanında, danışıldığı anda, vaxtına nə qədər sığdığı ilə. Sətri dəyişin: yalnız dəyişdiyiniz sətirlər yenidən səsləndirilir.</sub>
-</div>
+Python 3.10 və ya daha yenisi və FFmpeg artıq varsa:
 
 ```bash
 pipx install "voxa-dub[studio]"
-voxa studio                             # serveri işə salır və konsolu öz pəncərəsində açır
-voxa studio --browser                   # eyni, brauzerdə
-voxa serve                              # yalnız server, http://127.0.0.1:8000
 ```
 
-`voxa studio` konsolu öz pəncərəsində göstərir (Windows-da Edge WebView2, macOS-da WebKit,
-`[studio]` extra-sından); bir sətirlik quraşdırıcı bunu qurur və onun **Voxa Studio** qısayolu
-terminal açmır. Pəncərəni bağlamaq serveri dayandırır, dublyaj hələ gedirsə əvvəlcə soruşur.
-Extra olmadan, ya da GTK və Qt olmayan Linux-da brauzeri açır.
+Paketin adı `voxa-dub`, əmrin adı `voxa`-dır. Docker image-i də var:
+`ghcr.io/akshinmrv/voxa`. Bütün yollar, GPU, əlavə mühərriklər və silmə qaydası
+[INSTALL.md](docs/INSTALL.md)-dədir (ingiliscə).
 
-Konsol paketin içindədir: Node da, ikinci terminal da lazım deyil. Konsolun özü üzərində
-işləyirsinizsə, `voxa serve` ilə yanaşı [`web/`](web/)-də `npm run dev` işlədin.
+## Voxa Studio
 
-**Altyazı.** *Nə hazırlansın*: dublyaj olunmuş video, ya da səssiz, yalnız altyazı; altyazını
-videoya pleyerdə açılan trek kimi, ya da trek göstərməyən pleyer və saytlar üçün kadrın üstünə
-yazılmış qoyun. Hər iki halda ekranda oxunmaq üçün ən çox iki sətrə, sətirdə təxminən 42
-simvola bölünür və konsolun pleyeri onu göstərir.
+Studio tətbiqin özüdür. VoxaSetup onu Start menyusuna əlavə edir, başqa yerlərdə `voxa studio`
+əmri açır. Windows və macOS-da öz pəncərəsində, Linux-da brauzerdə açılır.
 
-**Səsləri seçin.** *Səslər* bir dilin səslərini göstərir (Edge və Piper səslərini əvvəlcə
-dinləmək olur) və XTTS, Chatterbox və VoxCPM2 ilə səs klonlamaq üçün öz kliplərinizi (bir
-nəfərin 3-30 saniyəlik danışığı) saxlayır. Yeni iş onlardan birini öz səsi kimi götürür;
-yoxlanan və ya bitmiş iş başqasını, danışanlar aşkarlanıbsa hər danışana birini götürə
-bilər, hərəsi öz ilk sətrini deyərkən dinlənərək.
+Bir və ya bir neçə video əlavə edirsiniz, dilləri və mühərrikləri seçib başladırsınız. Dublyaj
+gedərkən onun səhifəsində yeddi addım və loq görünür. Bitəndə sətirlər videonun yanında durur,
+ayrılan vaxtdan uzun olanlar işarələnir. Sətri dəyişib Ctrl+S ilə saxlayın və yenidən
+səsləndirin: yalnız dəyişdirdiyiniz sətirlər təzədən sintez olunur.
 
-**Hamısını dublyaj etməzdən əvvəl eşidin.** *İlk 20 s-ə önizləmə* seçdiyiniz ayarlarla yalnız
-videonun əvvəlini bir-iki dəqiqəyə dublyaj edir; bəyənsəniz, *Bütün videonu dublyaj et* eyni
-ayarlarla hamısı üçün iş başladır, önizləmə də yerində qalır.
+Bilməyə dəyər bir neçə şey:
 
-**Tərcüməni səsləndirmədən əvvəl yoxlayın.** Yeni işdə *Yoxlama*-nı seçsəniz, sətirlər tərcümə
-olunanda dayanır: hər biri tərcümə olunduğu sətrin altında, vaxtına təxminən neçə simvolun
-sığdığı ilə. İstənilənini dəyişin, sonra *Səsləndir*. Bitmiş iş də dəyişdirilə bilər
-(*Tərcüməni dəyiş*), və yalnız dəyişdiyiniz sətirlər yenidən səsləndirilir.
+- *İlk 20 s-ə önizləmə* yalnız videonun əvvəlini dublyaj edir. Bütün videoya vaxt sərf
+  etməzdən əvvəl səsi eşidirsiniz.
+- *Səsləndirmədən əvvəl tərcüməni yoxla* dublyajı sətirlər tərcümə olunan kimi dayandırır.
+  Onları oxuyub düzəldirsiniz, sonra *Səsləndir* düyməsini basırsınız.
+- *Səslər* səhifəsində səsi seçməzdən əvvəl dinləyə bilərsiniz. Klonlayan mühərriklər üçün öz
+  qısa kliplərinizi (bir nəfərin 3-30 saniyəlik səsi) də orada saxlayırsınız.
+- *Mühərriklər* səhifəsi Chatterbox, VoxCPM2 və Demucs-u bir kliklə qurur. Qurmazdan əvvəl hər
+  birinin lisenziyasının nəyə icazə verdiyini göstərir.
+- *Sistem* səhifəsi `voxa doctor`-un yoxlamalarını edir və çatışmayan hər şey üçün onu
+  düzəldən əmri göstərir.
 
-Server yalnız `localhost` və `127.0.0.1` adlarına cavab verir, ona görə başqa sayt onu
-brauzerinizdən idarə edə bilməz. Başqa maşından çatmaq üçün `--host 0.0.0.0` ilə başladanda
-giriş tokeni istəyir — çap etdiyi linkdə olanı, ya da `--token` / `VOXA_TOKEN` ilə öz tokeninizi.
+Pəncərənin arxasında yerli server, `voxa serve` işləyir. O, yalnız 127.0.0.1-də dinləyir və
+özünüzün yazacağınız eyni `voxa` əmrini işə salır.
 
-Development, mühit dəyişənləri və deploy üçün: [`web/README.md`](web/README.md).
+## Komanda sətri
 
-## Layihə strukturu
+Studio-nun etdiyi hər şey həm də bir əmrdir:
 
-```
-Voxa/
-├── voxa.py                     # Bütün alət: pipeline, mühərriklər, registry-lər, CLI
-├── pyproject.toml              # Paketləşmə, extras, ruff və pytest konfiqurasiyası
-├── requirements.txt            # Əsas asılılıqlar (opsional mühərriklər extras-dadır)
-│
-├── tests/
-│   ├── test_voxa.py            # Unit testlər
-│   ├── test_golden.py          # Golden harness: funksiyalar kompozisiyada
-│   └── golden/                 # Qeydə alınmış giriş və gözlənilən çıxışlar
-│
-├── docs/
-│   ├── ARCHITECTURE.md         # Dizayn qərarları
-│   ├── RELEASING.md            # Buraxılış siyahısı
-│   └── assets/                 # Demo videoları və şəkillər
-│
-├── examples/
-│   └── config.json             # Tam, yoxlanılmış konfiqurasiya
-│
-├── .github/                    # CI, release, issue/PR şablonları, dependabot
-│
-├── README.md
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-├── SECURITY.md
-├── CODE_OF_CONDUCT.md
-├── NOTICE.md                   # Üçüncü tərəf lisenziyaları
-└── LICENSE                     # MIT
+```bash
+voxa talk.mp4 --target_lang ru                         # talk_dubbed_ru.mp4 yazır
+voxa talk.mp4 --target_lang de --translator openai     # LLM tərcüməsi (OPENAI_API_KEY)
+voxa talk.mp4 --target_lang tr --tts chatterbox        # danışanın səsini klonla
+voxa talk.mp4 --target_lang fr --translator ollama --tts piper   # oflayn
+voxa talk.mp4 --target_lang ru --preview               # yalnız ilk 20 saniyə
+voxa talk.mp4 --target_lang de --review                # tərcümədən sonra dayan
+voxa talk.mp4 --target_lang es --subtitles-only        # yalnız altyazı, səs yox
+voxa interview.mp4 --target_lang de --diarize          # hər danışana ayrı səs
+voxa doctor                                            # nə işləyir, nə çatışmır
 ```
 
-## Yol xəritəsi
+Görüntü olduğu kimi köçürülür, yalnız səs yenidən qurulur. Hər addım `talk_work/` qovluğunda
+saxlanır. Yarımçıq qalan iş dayandığı yerdən davam edir, ikinci dil isə hazır transkripsiyadan
+istifadə edir. Qalanı [USAGE.md](docs/USAGE.md)-dədir (ingiliscə): səs seçmək, öz nitq
+serverinizi qoşmaq, altyazını videoya yazmaq, orijinalın musiqisini saxlamaq, keyfiyyət
+yoxlaması, konfiqurasiya və xərclər.
 
-Bu, vəd deyil, istiqamətdir. Avadanlıq və ya ödənişli açar tələb edən hər şey dürüst test
-edilə bilənə qədər gözləyir.
+## Mühərriklər
 
-| İş | Status | Qeyd |
+| Mərhələ | Standart | Digər seçimlər |
 |---|---|---|
-| Şəbəkə mühərrikləri üçün paralel sintez | Planlaşdırılır | Sorğular hazırda ardıcıl gedir; əsas performans ehtiyatı budur |
-| Azure Neural TTS adapteri | Bloklu | Test üçün API açarı lazımdır. Rəsmi `az-AZ` səsləri və SSML |
-| Danışan oxşarlığı və MOS ballama | Nəzərdən keçirilir | Keyfiyyət nəzarətini WER-dən kənara genişləndirər |
-| Daha geniş golden dəst | Nəzərdən keçirilir | Reqressiya harness-ində daha çox dil |
-| Demo materialları | Açıq | `docs/assets/` üçün əvvəl/sonra klipləri |
+| Transkripsiya | Whisper | faster-whisper, 2-4 dəfə sürətli |
+| Tərcümə | Google | OpenAI, Anthropic, OpenRouter, Ollama (yerli) |
+| Nitq | Microsoft Edge səsləri | OpenAI, Piper (oflayn), OpenAI-nin nitq API-si ilə işləyən istənilən server |
+| Səs klonlama | | Chatterbox, VoxCPM2, XTTS |
+| Əlavələr | | hər danışana ayrı səs (pyannote), orijinalın musiqisi (Demucs), videoda altyazı, hər sətri geri dinləyən keyfiyyət yoxlaması |
 
-## FAQ
+Hansı nitq mühərrikinin daha yaxşı səsləndiyi dildən asılıdır, bulud da həmişə qalib gəlmir.
+Bizim ölçmələrimizdə Edge-in yerli Azərbaycan səsi OpenAI-nin səsindən xeyli yaxşı başa
+düşüldü. Voxa öz nəticəsini yenidən mətnə çevirib qiymətləndirə bilir (`--quality-gate`). Belə
+ki, bizim rəqəmlərə inanmaq əvəzinə mühərrikləri öz videolarınızda müqayisə edə bilərsiniz.
 
-<details>
-<summary><strong>API açarı lazımdırmı?</strong></summary>
+## Kompüterinizdən kənara nə gedir
 
-Xeyr. Default-lar — Whisper, Google Translate və Edge TTS — açar tələb etmir. Açar yalnız
-OpenAI/Anthropic tərcüməsi və ya OpenAI nitqi üçün lazımdır.
-</details>
+Voxa-da hesab və telemetriya yoxdur, bizə heç nə göndərilmir. Kənara nəyin getdiyi seçdiyiniz
+mühərriklərdən asılıdır:
 
-<details>
-<summary><strong>Dublyaj niyə sürüşmür?</strong></summary>
+- Transkripsiya sizin kompüterinizdə gedir.
+- Hər sətrin mətni seçdiyiniz tərcüməçiyə gedir: Google, OpenAI, Anthropic və ya OpenRouter.
+  Ollama yerli işləyir.
+- Edge və OpenAI oxumaq üçün tərcümə olunmuş mətni alır. Piper, XTTS, Chatterbox və VoxCPM2
+  yerli işləyir.
+- Modellər ilk lazım olanda yüklənir.
+- Studio, `voxa serve` və `voxa doctor` gündə bir dəfə PyPI-dan daha yeni Voxa olub-olmadığını
+  soruşur. `VOXA_NO_UPDATE_CHECK=1` bunu söndürür.
 
-Hər klip öz başlanğıcı ilə növbəti sətrin başlanğıcı arasındakı yerə qoyulur və kursor klip
-müddətlərindən toplanmır — həmin növbəti başlanğıca **təyin edilir**. Aşan klip sonrakıların
-hamısını itələmək əvəzinə kəsilir. Vaxt riyaziyyatı safdır, unit test və golden harness ilə
-kilidlənib.
-</details>
+Ollama və yerli səslə modellər diskə düşəndən sonra dublyaj üçün internet lazım deyil.
 
-<details>
-<summary><strong>Kommersiya məqsədilə istifadə edə bilərəmmi?</strong></summary>
+## Kommersiya istifadəsi
 
-Voxa özü MIT-dir və GPL lisenziyalı məcburi asılılığı yoxdur (default nitq mühərriki
-`edge-tts` LGPL-3.0-dır). İdarə etdiyi mühərriklərin və modellərin öz lisenziyaları var.
-`--tts openai` + `--translator openai` OpenAI-ın kommersiya şərtləri ilə işləyir.
-`--tts piper` + `--translator ollama` tam offline işləyir, amma səs və LLM nə qədər sərbəstdirsə,
-o qədər sərbəstdir: 15 Piper səsindən 11-i kommersiya istifadəsinə icazə verir (yapon, koreya və
-türk səsləri vermir, çin səsinin lisenziyası isə məlum deyil), default `llama3` isə Meta-nın
-lisenziya şərtləri ilə gəlir. Piper səslərinin çoxu yalnız tədqiqat üçün lisenziyalı ingilis
-səsindən fine-tune olunub; bunun nə demək olduğunu [NOTICE](NOTICE.md#41-piper-voices) izah edir.
-`--tts xtts` kommersiya üçün **yararsızdır**. Bax: [NOTICE.md](NOTICE.md).
-</details>
+Voxa-nın öz kodu MIT lisenziyalıdır, məcburi asılılıqlarının heç biri GPL deyil. İstifadə
+etdiyi mühərriklərin və modellərin isə öz şərtləri var, bəziləri daha sərtdir:
 
-<details>
-<summary><strong>Kommersiya məhsulu üçün səsi necə klonlayım?</strong></summary>
+| Seçim | Kommersiya istifadəsi |
+|---|---|
+| `--translator openai` və `--tts openai` | Bəli, OpenAI-nin şərtləri ilə |
+| `--tts chatterbox` (MIT) və ya `--tts voxcpm` (Apache-2.0) | Bəli |
+| `--tts piper` | Səsdən asılıdır: 15 dildən 11-də icazə var |
+| `--translator ollama` | Modeldən asılıdır |
+| `--tts edge` və `--translator google`, standartlar | Aydın deyil: ikisi də rəsmi olmayan endpoint-lərdən istifadə edir |
+| `--tts xtts` | Xeyr, çəkilər qeyri-kommersiyadır |
+| `--separate` (Demucs) | Əvvəl yoxlayın: çəkilərin lisenziyası aydın deyil |
 
-Chatterbox-u (MIT) quraşdırın və onunla dublyaj edin; o, hər danışanı orijinal videodan
-klonlayır:
+[NOTICE.md](NOTICE.md) hər səsi ayrıca izah edir (ingiliscə). Dublyaj bir məhsula girməzdən
+əvvəl onu oxuyun.
 
-```bash
-voxa engines install chatterbox
-voxa video.mp4 --tts chatterbox --target_lang de
-```
+## Məlum məhdudiyyətlər
 
-NVIDIA GPU-nuz varsa, VoxCPM2 (Apache-2.0) eyni işi 30 dildə görür: `voxa engines install voxcpm`, sonra `--tts voxcpm`.
+- Windows quraşdırıcısının hələ kod imzası yoxdur, ona görə SmartScreen xəbərdarlıq edir.
+- Voxa Studio Windows-da qurulub və yoxlanılıb. macOS pəncərəsi eyni koddandır, amma hələ heç
+  kim onu Mac-də sınamayıb.
+- Apple Silicon GPU-ları (`--device mps`) eksperimentaldır və ölçülməyib.
+- NVIDIA GPU olmadan klonlama yavaşdır. Noutbuk prosessorunda Chatterbox bir cümləyə 40-60
+  saniyə, VoxCPM2 isə iki-üç dəqiqə sərf etdi.
+- `--diarize` hazır altyazıdan başlaya bilmir, çünki ona səs lazımdır.
 
-Ya da MIT lisenziyalı, OpenAI-uyğun nitq serverini lokal işlədin və Voxa-nı ona yönləndirin:
-
-```bash
-voxa video.mp4 --tts openai --openai-tts-base-url http://localhost:8004/v1
-```
-
-Açar yoxdur, əlavə asılılıq yoxdur, qeyri-kommersiya model çəkisi yoxdur — server Chatterbox
-kimi sərbəst lisenziyalı model işlətdikcə (bax: [NOTICE](NOTICE.md#46-self-hosted-speech-servers)).
-</details>
-
-<details>
-<summary><strong>Tam offline işləyə bilərmi?</strong></summary>
-
-Bəli: `--translator ollama --tts piper`. Modellər yükləndikdən sonra heç nə cihazınızdan
-çıxmır (konsol və `voxa doctor` gündə bir dəfə PyPI-dan Voxa-nın yeni versiyasını da soruşur;
-`VOXA_NO_UPDATE_CHECK=1` bunu dayandırır). Amma offline olmaq kommersiya üçün təmiz olmaq demək deyil: öz diliniz üçün səsin
-lisenziyasını [NOTICE.md](NOTICE.md#41-piper-voices)-də yoxlayın.
-</details>
-
-<details>
-<summary><strong>Video yenidən kodlaşdırılırmı?</strong></summary>
-
-Xeyr. Video axını kopyalanır. Yalnız audio yenidən qurulur: orijinal 5%-lə sakit ambiyans
-yatağı kimi, dublyaj 150%-lə qarışdırılır; `amix` hər ikisini yarıya bölür, ona görə miks
-kəsilmir. Hər iki səviyyə konfiqurasiya olunur. `--separate` ilə isə əvvəlcə orijinalın
-danışığı çıxarılır, musiqi və effektləri 100%-lə qarışdırılır.
-</details>
-
-<details>
-<summary><strong>Uzun iş yarımçıq qaldı. Yenidən başlamalıyam?</strong></summary>
-
-Xeyr. Hər addım `<video>_work/` qovluğunda checkpoint-lənir; eyni əmri təkrarlayın, Voxa davam
-edəcək. Təmiz başlanğıc üçün `--no-resume`.
-</details>
-
-<details>
-<summary><strong>Bir işin maliyyəti nə qədərdir?</strong></summary>
-
-Default-larla heç nə. LLM tərcüməçisi ilə hər işdən sonra token istifadəsi loglanır; təxmini
-qiymət də görmək üçün modelinizin qiymətlərini `voxa.py` içindəki `LLM_PRICING` cədvəlinə
-əlavə edin.
-</details>
-
-<details>
-<summary><strong>Windows-da işləyirmi?</strong></summary>
-
-Bəli, FFmpeg PATH-də olduqda. CI Linux-da qaçır, alət isə Windows-da inkişaf etdirilir.
-</details>
+Bunlardan biri sizə mane olursa, issue-da yazın. Növbəti işi seçməyə kömək edir.
 
 ## Töhfə vermək
 
-Issue və pull request-lər qəbul olunur, və **ilk pull request 24 saat ərzində cavab alır** —
-hətta bu cavab dəyişiklik istəyi olsa belə. Başlamaq üçün ən asan yer bir
-[good first issue](https://github.com/akshinmrv/Voxa/labels/good%20first%20issue)-dur.
-[CONTRIBUTING.md](CONTRIBUTING.md) test paketini, golden faylların yenilənməsini və iki vacib
-asılılıq qaydasını izah edir: **GPL lisenziyalı məcburi asılılıq olmamalıdır**, mühərrikə xas
-paketlər **extras**-a getməlidir.
+Göndərə biləcəyiniz ən faydalı şey `voxa.log`-un sonu əlavə edilmiş xəta hesabatıdır. Pull
+request-ləri də məmnuniyyətlə qəbul edirik. İlk pull request-ə 24 saat ərzində cavab veririk,
+cavab dəyişiklik siyahısı olsa belə. [CONTRIBUTING.md](CONTRIBUTING.md) testləri, vaxt hesabını kilidləyən
+golden faylları və asılılıqlar üçün iki qaydanı izah edir: məcburi asılılıqlar arasında GPL
+olmur, yalnız bir mühərrikə lazım olan paket isə extra-ya gedir. Yeni nitq mühərriki bir
+adapter və reyestrdə bir sətirdir, vaxt xətti və yerləşdirmə artıq hazırdır.
 
-Nitq mühərriki əlavə etmək = 1 adapter + 1 registry sətri.
+## Sənədlər
 
-```bash
-pip install -e ".[dev]"
-ruff check .
-pytest
-```
+- [INSTALL.md](docs/INSTALL.md): bütün quraşdırma yolları, GPU, əlavə mühərriklər, Docker
+- [USAGE.md](docs/USAGE.md): komanda sətri ətraflı
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md): pipeline və vaxt hesabı necə işləyir
+- [BENCHMARK.md](docs/BENCHMARK.md): mühərrikləri öz kliplərinizdə ölçmək
+- [NOTICE.md](NOTICE.md): üçüncü tərəf lisenziyaları və kommersiya istifadəsi
+- [CHANGELOG.md](CHANGELOG.md)
 
----
-
-## Lisenziya
-
-Voxa [MIT lisenziyası](LICENSE) altında yayımlanır.
-
-Python paketi heç bir model çəkisi daşımır və üçüncü tərəf kodu daxil etmir, lakin idarə
-etdiyi mühərriklərin və modellərin öz lisenziyaları var, bəziləri Voxa-nınkından sərtdir.
-Konteyner image-i isə sistem paketlərini, o cümlədən FFmpeg-i, öz lisenziyaları ilə birlikdə
-daşıyır. Kommersiya istifadəsindən əvvəl [NOTICE.md](NOTICE.md) oxuyun.
-
-| Konfiqurasiya | Kommersiya istifadəsi |
-|---|:---:|
-| `--tts openai` + `--translator openai` (ödənişli API) | ✅ |
-| `--tts piper` (tam offline) | ⚠️ səsdən asılıdır, 15 dildən 11-i |
-| `--translator ollama` (tam offline) | ⚠️ modeldən asılıdır |
-| `--tts edge` / `--translator google` (default, qeyri-rəsmi endpoint) | ⚠️ boz zona |
-| `--tts xtts` (XTTS-v2 çəkiləri CPML-dir) | ❌ yalnız qeyri-kommersiya |
+Bu sənədlər ingiliscədir.
 
 ## Təşəkkürlər
 
-Voxa başqalarının gördüyü işin üzərində dayanır.
+Voxa başqalarının əməyi üzərində qurulub: transkripsiya üçün
+[Whisper](https://github.com/openai/whisper) və
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper); nitq üçün
+[edge-tts](https://github.com/rany2/edge-tts), [Piper](https://github.com/OHF-Voice/piper1-gpl),
+[coqui-tts](https://github.com/idiap/coqui-ai-TTS), [Chatterbox](https://github.com/resemble-ai/chatterbox)
+və [VoxCPM](https://github.com/OpenBMB/VoxCPM); səsi ayırmaq üçün
+[Demucs](https://github.com/adefossez/demucs); danışanları ayırd etmək üçün
+[pyannote](https://github.com/pyannote/pyannote-audio); səs və videoda hər şey üçün
+[FFmpeg](https://ffmpeg.org/); quraşdırıcı və tətbiq pəncərəsi üçün
+[uv](https://github.com/astral-sh/uv) və [pywebview](https://github.com/r0x0r/pywebview).
 
-| Layihə | Rolu |
-|---|---|
-| [OpenAI Whisper](https://github.com/openai/whisper) | Nitqin tanınması |
-| [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | Sürətli transkripsiya backend-i |
-| [edge-tts](https://github.com/rany2/edge-tts) | Microsoft neyron səsləri |
-| [Piper](https://github.com/OHF-Voice/piper1-gpl) | Offline neyron nitq |
-| [coqui-tts](https://github.com/idiap/coqui-ai-TTS) | XTTS səs klonlamasını işlədən fork |
-| [OpenAI](https://platform.openai.com/) · [Anthropic](https://www.anthropic.com/) | LLM tərcümə və nitq |
-| [Ollama](https://ollama.com/) | Lokal, məxfi LLM tərcümə |
-| [FFmpeg](https://ffmpeg.org/) | Bütün audio və video işləri |
+## Voxa-nı kim hazırlayır
 
-## Müəllif
+Voxa-nı Bakıdakı rəqəmsal mühəndislik agentliyi Servoogle-da
+[Akşin Miranov](https://github.com/akshinmrv) hazırlayır və dəstəkləyir. Ona müştəri işlərimizdəki
+qaydanı tətbiq edirik: iddia sənədə yalnız ölçüləndən sonra düşür. Yuxarıdakı sürüşmə rəqəmi,
+mühərriklərin vaxtları və lisenziya cədvəli öz ölçmələrimizdəndir. Nəyisə ölçməmişiksə, mətn
+bunu açıq deyir.
 
-**Voxa** **[Akshin Miranov](https://github.com/akshinmrv)** tərəfindən **Servoogle** adı
-altında qurulur və dəstəklənir.
-
-Servoogle praktiki AI alətləri qurmaq üçün mövcuddur — modeli nümayiş etdirən deyil, real
-problemi başdan-sona həll edən proqram təminatı — və başqalarının üzərində qura biləcəyi
-hissələri açıq buraxmaq üçün. Voxa həmin hissələrdən biridir. Videonu dublyaj etmək üçün
-studiya, lisenziya danışığı və ya qapalı pipeline lazım olmamalıdır; bir əmr və artıq
-sahib olduğunuz kompüter kifayətdir.
-
-Voxa məhz buna görə MIT-dir, məhz buna görə GPL asılılığı tələb etmir, lisenziya
-öhdəlikləri məhz buna görə gizlədilmir, sənədləşdirilir, və hər mühərrik məhz buna görə
-istənilən adamın genişləndirə biləcəyi registry-nin arxasındadır. Bu sahədəki maraqlı
-problemlər — dublyajı sinxron saxlamaq, süni səsi tələsməyən göstərmək, çıxışın həqiqətən
-yaxşı olub-olmadığını bilmək — açıq şəkildə həll edilməyə dəyər.
-
-Voxa sizə faydalıdırsa, göndərə biləcəyiniz ən dəyərli şey logu əlavə edilmiş bir baq
-hesabatıdır.
+Voxa MIT lisenziyalıdır, çünki dublyajı sinxron saxlamaq hər dublyaj alətinin işidir və bu
+hissə bir məhsulun içində bağlı qalmamalıdır. Voxa-nı öz məhsulunuzda istifadə etmək istəsəniz,
+bizi [servoogle.com](https://servoogle.com)-da tapa bilərsiniz.
 
 <div align="center">
 
 ---
 
-**Başqa dildə oxu:** 🇬🇧 [English](README.md) · 🇹🇷 [Türkçe](README.tr.md)
-
-**Voxa** · MIT · [Baq bildir](https://github.com/akshinmrv/Voxa/issues) ·
-[Töhfə ver](CONTRIBUTING.md) · [Arxitektura](docs/ARCHITECTURE.md)
+[English](README.md) · [Türkçe](README.tr.md)
 
 </div>
