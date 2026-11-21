@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-21
+
+The console and Voxa Studio, redesigned as a desktop app: the Studio, the Dubs library, a
+dub's lines anchored to its video, Settings in sections, System, notes and a taskbar button
+that follow your dubs. The new major number is for that: what you see, and where it is, has
+changed. What you run and what you keep has not. The `voxa` command and its options, the
+server's API (it only gained routes), your settings, keys, voices and dubs work as before,
+and the console's addresses are the same.
+
 ### Added
 
 - **Voxa Studio's window looks and behaves like one piece.**
@@ -215,8 +224,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   light theme, white on the cyan buttons was 4.1:1 and is now 5.9:1. The light theme's colored
   badges (cyan, green, amber, red) were 2.6 to 3.8:1 and the dark theme's red one 4.3:1; all are
   4.5:1 or better now. The dark theme's red delete button was 3.6:1 under its white text and is
-  now 4.6:1. The light theme's focus ring was 2.8:1 against white and is now 4.1:1. `npm run check:contrast`, run by CI, measures every text color on every surface in
-  both themes, and fails under 4.5:1 for text and 3:1 for focus rings and outlines.
+  now 4.6:1. The light theme's focus ring was 2.8:1 against white and is now 4.1:1.
+  `npm run check:contrast`, run by CI, measures every text color on every surface in both
+  themes, and fails under 4.5:1 for text and 3:1 for focus rings and outlines.
 - **The groundwork for the desktop redesign** (design tokens and building blocks, nothing moved
   yet):
   - new surfaces, a speaker palette, motion timings and a denser type scale for the app;
@@ -1075,7 +1085,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v1.18.0...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/akshinmrv/Voxa/compare/v1.18.0...v2.0.0
 [1.18.0]: https://github.com/akshinmrv/Voxa/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/akshinmrv/Voxa/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/akshinmrv/Voxa/compare/v1.15.0...v1.16.0
