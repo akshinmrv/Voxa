@@ -142,7 +142,9 @@ jobs:
   # accessibility rules (WCAG 2.2 AA and best practices) on every page, in both themes.
   e2e:
     name: e2e (console in a browser)
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: that is Ubuntu 26.04 now, and Playwright 1.55 can't install its
+    # Chromium there ("does not support chromium on ubuntu26.04-x64").
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
