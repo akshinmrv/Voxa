@@ -248,6 +248,17 @@ def test_the_lines_land_where_the_plan_puts_them(tmp_path):
     assert second[0] == pytest.approx(3.0, abs=0.02)              # and the second on its own
 
 
+def test_without_ffmpeg_a_line_plays_as_spoken(tmp_path, monkeypatch):
+    def no_ffmpeg(*a, **k):
+        raise FileNotFoundError("ffmpeg")
+
+    monkeypatch.setattr(voxa.subprocess, "run", no_ffmpeg)
+    src, dst = tmp_path / "fin.wav", tmp_path / "put.wav"
+    _write(src, ("tone", 1.5))
+    voxa._play_at(src, dst, 1.2, RATE)
+    assert sf.info(str(dst)).duration == pytest.approx(1.5)
+
+
 def test_a_silent_take_is_voiced_again(tmp_path, monkeypatch):
     monkeypatch.setattr(voxa, "_play_at", lambda src, dst, speed, sr: shutil.copyfile(src, dst))
     calls = []

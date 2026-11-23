@@ -3530,17 +3530,24 @@ def _clip_ms(path: Path) -> float:
 
 def _play_at(src: Path, dst: Path, speed: float, sample_rate: int) -> None:
     """Write src to dst played `speed` times faster (pitch kept), with a few-ms fade at each
-    end so it doesn't click against the silence around it."""
+    end so it doesn't click against the silence around it. If FFmpeg can't change the tempo,
+    the clip plays as spoken: it runs on a little, but nothing of it is lost."""
+    played = False
     if speed > 1.0005:
         stages, rest = [], speed
         while rest > 2.0:
             stages.append("atempo=2.0")
             rest /= 2.0
         stages.append(f"atempo={rest:.4f}")
-        run_ffmpeg(["ffmpeg", "-y", "-i", str(src), "-filter:a", ",".join(stages),
-                    "-ar", str(sample_rate), "-ac", "1", "-c:a", "pcm_s16le", str(dst)],
-                   f"Tempo for {src.name}")
-    else:
+        try:
+            run_ffmpeg(["ffmpeg", "-y", "-i", str(src), "-filter:a", ",".join(stages),
+                        "-ar", str(sample_rate), "-ac", "1", "-c:a", "pcm_s16le", str(dst)],
+                       f"Tempo for {src.name}")
+            played = True
+        except (FFmpegError, OSError) as e:
+            _LOG.warning(f"⚠️  Couldn't play {src.name} {speed:.2f}× faster ({e}); it plays as "
+                         f"spoken")
+    if not played:
         shutil.copyfile(str(src), str(dst))
     _apply_micro_fades(dst)
 
