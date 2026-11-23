@@ -237,6 +237,32 @@ def test_the_settings_search_opens_the_setting(page, server):
            what="the setting to take the focus")
 
 
+def test_the_language_picked_is_kept_when_the_window_closes(browser, server):
+    # A Turkish system, the language set to Azerbaijani, the window closed and opened again:
+    # the console came back in Turkish, because the choice lived in a session cookie, which a
+    # window drops when it closes. It must outlast the window.
+    url, _ = server
+    ctx = browser.new_context(locale="tr-TR", reduced_motion="reduce")
+    ctx.add_init_script("localStorage.setItem('voxa.welcomed', '1')")
+    page = ctx.new_page()
+    page.goto(f"{url}/")
+    page.wait_for_url("**/tr/app/**", timeout=WAIT)
+    page.goto(f"{url}/tr/app/settings/?section=general")
+    page.get_by_role("radio", name="Azərbaycanca").click(timeout=WAIT)
+    page.wait_for_url("**/az/app/**", timeout=WAIT)
+    cookie = next(c for c in ctx.cookies() if c["name"] == "NEXT_LOCALE")
+    ctx.close()
+    assert cookie["value"] == "az"
+    assert cookie["expires"] > time.time() + 300 * 86400     # not a session cookie
+    # What a window opened again sends: the kept cookie, from the same Turkish system.
+    again = browser.new_context(locale="tr-TR")
+    again.add_cookies([cookie])
+    reopened = again.new_page()
+    reopened.goto(f"{url}/")
+    reopened.wait_for_url("**/az/app/**", timeout=WAIT)
+    again.close()
+
+
 @pytest.mark.skipif(not AXE.exists(), reason="axe-core isn't installed: cd web && npm ci")
 def test_no_page_breaks_an_accessibility_rule(page, server):
     url, _ = server

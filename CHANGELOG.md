@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Voxa Studio forgot the language you picked.** Pick Azerbaijani on a Turkish Windows, close
+  the window, open it again, and it was Turkish: the choice was kept in a session cookie
+  (next-intl 4's default), which the window drops when it closes, so the console fell back to
+  the system's language. The cookie now lasts a year, in the Studio and in a browser.
+
 ## [2.1.0] - 2026-11-23
 
 Dubs that keep the speaker's pace. A line too long for its time is no longer played up to 2.5
