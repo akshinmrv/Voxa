@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-23
+
+Dubs that keep the speaker's pace. A line too long for its time is no longer played up to 2.5
+times faster and then cut: it is said at its own pace or a little faster, said in fewer words
+when an LLM translator is there, and never cut. Every line is checked before it goes in, and
+the original's voice is never under the dub. VoxaSetup.exe can now be downloaded from the
+website.
+
 ### Added
 
 - **VoxaSetup.exe from the website.** voxa.servoogle.com leads with *Download for Windows*, and
@@ -1160,7 +1168,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/akshinmrv/Voxa/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/akshinmrv/Voxa/compare/v1.18.0...v2.0.0
 [1.18.0]: https://github.com/akshinmrv/Voxa/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/akshinmrv/Voxa/compare/v1.16.0...v1.17.0
