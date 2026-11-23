@@ -172,8 +172,9 @@ environment under `~/.voxa/engines`, and Voxa talks to it through a small worker
 `voxa engines remove <name>` deletes that folder and nothing else.
 
 On a laptop CPU, Chatterbox took 40 to 60 seconds per sentence, so a GPU matters here. Every
-clip it makes carries Resemble AI's inaudible PerTh watermark. With faster-whisper installed,
-Voxa also trims the extra words Chatterbox sometimes adds at the end of a line.
+clip it makes carries Resemble AI's inaudible PerTh watermark. Chatterbox sometimes keeps
+going after a line, with extra words or a murmur; Voxa listens for the line's last word with
+Whisper and cuts what follows. VoxCPM2 and XTTS get the same check.
 
 VoxCPM2 speaks seven languages Chatterbox doesn't, Vietnamese, Thai and Indonesian among them.
 It needs a GPU even more: on a laptop CPU one sentence took 2 to 3 minutes, and loading the

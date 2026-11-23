@@ -61,8 +61,13 @@ def lean_voxa(monkeypatch):
 
 @pytest.fixture
 def speech(monkeypatch):
-    """A speech engine ("fake") that says nothing, quickly, and records what it was given.
-    Like Edge, it keeps what it said (fake_raw_<i>.wav) and reuses it when it's there."""
+    """A speech engine ("fake") that hums, quickly, for as long as its line would take to say
+    (14 characters a second, 0.4 s at least), and records what it was given. Like Edge, it
+    keeps what it said (fake_raw_<i>.wav) and reuses it when it's there. It hums rather than
+    staying silent: a silent or too short clip fails the check every clip passes."""
+    import numpy as np
+    import soundfile as sf
+
     import voxa
     said = []
 
@@ -73,7 +78,10 @@ def speech(monkeypatch):
             raw = work_dir / f"fake_raw_{i}.wav"
             if not raw.exists():
                 said.append(text)
-                voxa.create_silence_wav(0.4, str(raw), 22050)
+                rate = 22050
+                seconds = max(0.4, len(text) / 14)
+                hum = 0.3 * np.sin(2 * np.pi * 220 * np.arange(int(seconds * rate)) / rate)
+                sf.write(str(raw), hum.astype("float32"), rate, subtype="PCM_16")
             shutil.copyfile(raw, final_file)
             return True
 

@@ -1816,17 +1816,20 @@ def _kept_lines(job: Job) -> list:
 
 
 def _translation_view(job: Job, lines: list) -> dict:
-    """The lines with the length each can take: about what the speaking rate fits into its
-    time (Settings → Advanced). A longer line is sped up, then trimmed, to fit."""
+    """The lines with the length each can take: about what the speaking rate (Settings →
+    Advanced) fits into the time placement gives the line, up to the next one
+    (voxa._line_budgets). A longer line is said in fewer words by an LLM translator, or a
+    little faster."""
     rate = (read_settings().get("advanced") or {}).get("speechRate") or \
         voxa.DEFAULT_SPEECH_RATE_CPS
+    timed = [{"start": float(line["start"]), "end": float(line["end"])} for line in lines]
+    budgets = voxa._line_budgets(timed, float(rate))
     return {
         "editable": job.status in JOB_AT_REST,
         "lines": [{"start": line["start"], "end": line["end"], "text": line.get("text", ""),
                    "source": line.get("source", ""), "speaker": line.get("speaker"),
-                   "maxChars": voxa._duration_to_max_chars(
-                       max(0.0, float(line["end"]) - float(line["start"])), float(rate))}
-                  for line in lines],
+                   "maxChars": budget}
+                  for line, budget in zip(lines, budgets)],
     }
 
 

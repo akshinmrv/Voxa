@@ -732,18 +732,12 @@ def _xtts_fit_candidate(tts_model, text: str, speaker_wav: str, xtts_lang: str,
                         raw_path: Path, fin_path: Path, work_dir: Path, tag,
                         sample_rate: int, target_duration: float,
                         enable_stretch: bool) -> bool:
-    """Synthesize + no-slowdown-fit one XTTS candidate into fin_path (A3 regeneration).
-    Mirrors the first-attempt path; returns True on non-empty output."""
+    """Synthesize one XTTS candidate and prepare it into fin_path (A3 regeneration), as the
+    first take is; returns True on non-empty output."""
     if not _xtts_synthesize_segment(tts_model, text, speaker_wav, xtts_lang,
                                     raw_path, work_dir, tag, sample_rate):
         return False
-    if enable_stretch:
-        if not stretch_audio_smart(str(raw_path), str(fin_path), target_duration,
-                                   work_dir, sample_rate, allow_slowdown=False):
-            sf.write(str(fin_path), *sf.read(str(raw_path)), subtype="PCM_16")
-    else:
-        sf.write(str(fin_path), *sf.read(str(raw_path)), subtype="PCM_16")
-    return _has_content(fin_path, 1000)
+    return _prepare_clip(raw_path, fin_path, sample_rate) and _has_content(fin_path, 1000)
 
 
 async def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
@@ -779,8 +773,7 @@ async def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
             _LOG.warning(f"XTTS produced empty output for segment {i}: {text[:40]}")
             return False
         temp_files.append(str(raw_file))
-        return _fit_to_window(raw_file, final_file, target_duration, work_dir,
-                              sample_rate, enable_stretch)
+        return _prepare_clip(raw_file, final_file, sample_rate)
 
     def _regenerate(i, text, final_file, target_duration):
         """A3: XTTS sampling is stochastic, so a flagged take can be improved by re-rolling.
@@ -815,7 +808,7 @@ async def generate_xtts(subs, tts_model, speaker_wav: str, lang_code: str,
         concat_list=concat_list, temp_files=temp_files, render=_render, on_ready=_regenerate,
         text_of=lambda s: s.text.strip(), desc="XTTS Synthesis", unit="phrase",
         quality_gate=quality_gate, asr_model=asr_model, gate_lang=xtts_lang,
-        media_ms=media_ms)
+        media_ms=media_ms, enable_stretch=enable_stretch, check_run_on=True)
 def infer_delivery(text: str) -> str:
     """Language-agnostic delivery hint from a line's punctuation/structure (questions,
     exclamations, trailing-off), appended to the TTS instruction. A cheap structural tier;
@@ -905,8 +898,8 @@ def infer_delivery_llm(texts: List[str], client, *,
 #
 # Emotion must change HOW a line sounds, never how long it takes. The guard below is
 # appended to every request and always comes last, so the model weights it most: an
-# expressive style can't turn into slow, pause-heavy delivery that anchored placement
-# would then have to trim (see _place_speech_block). It is exactly the historical default
+# expressive style can't turn into slow, pause-heavy delivery that placement would then
+# have to play faster (see _plan_line). It is exactly the historical default
 # instruction, so with no operator style the request is unchanged.
 DEFAULT_TTS_TIMING_GUARD = (
     "Speak naturally and clearly at a steady, even pace that matches the natural rhythm "
@@ -1052,8 +1045,7 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
             _LOG.warning(f"OpenAI TTS returned empty audio for segment {i}: {text[:40]}")
             return False
         temp_files.append(str(raw_file))
-        return _fit_to_window(raw_file, final_file, target_duration, work_dir,
-                              sample_rate, enable_stretch)
+        return _prepare_clip(raw_file, final_file, sample_rate)
 
     # A style or per-line emotion can occasionally garble one line. Only then is a neutral
     # re-render worth an extra API call — with no added direction, a bad take isn't style-caused.
@@ -1079,8 +1071,7 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
         except Exception as e:
             _LOG.debug(f"neutral retry failed for segment {i}: {e}")
             return best
-        if not _has_content(cand_raw, 1000) or not _fit_to_window(
-                cand_raw, cand_fin, target_duration, work_dir, sample_rate, enable_stretch):
+        if not _has_content(cand_raw, 1000) or not _prepare_clip(cand_raw, cand_fin, sample_rate):
             _safe_unlink(cand_raw, cand_fin)
             return best
         cand = score_speech(str(cand_fin), text, asr_model=asr_model, lang=lang_code)
@@ -1098,7 +1089,7 @@ async def generate_openai_tts(subs, client, voice: str, model: str, instructions
         text_of=lambda s: normalize_tts_text(s.text),
         desc="OpenAI TTS", unit="phrase",
         quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code,
-        media_ms=media_ms, concurrency=concurrency)
+        media_ms=media_ms, concurrency=concurrency, enable_stretch=enable_stretch)
 # ─────────────────────────────────────────────
 #  Existing code below — unchanged
 # ─────────────────────────────────────────────
@@ -1268,7 +1259,10 @@ def _stage_own_params(stage: str, args) -> Dict:
                   "openai_voice": getattr(args, "openai_voice", None),
                   "openai_tts_model": getattr(args, "openai_tts_model", None),
                   "openai_tts_base_url": getattr(args, "openai_tts_base_url", None),
-                  "openai_tts_instructions": getattr(args, "openai_tts_instructions", None)}
+                  "openai_tts_instructions": getattr(args, "openai_tts_instructions", None),
+                  # Version 1 clips were sped up (up to 2.5x) as they were made, so _plan_line
+                  # can't place them; raising this voices a work dir's lines again.
+                  "clips": 2}
         # Only recorded when set, so a run without it keeps its exact previous signature.
         if getattr(args, "speaker_voices", None):
             params["speaker_voices"] = args.speaker_voices
@@ -1289,7 +1283,8 @@ def stage_signature(stage: str, args) -> str:
 # Files produced by the synthesis stage. When synthesis is rerun with changed parameters,
 # these are cleared first — otherwise synthesize_timeline's per-segment cache (keyed only
 # by engine prefix and index, not by language) would reuse the previous run's clips.
-_SYNTHESIS_ARTIFACT_GLOBS = ["edge_*", "otts_*", "xtts_*", "piper_*", "fill_*"]
+_SYNTHESIS_ARTIFACT_GLOBS = ["edge_*", "otts_*", "xtts_*", "piper_*", "cbx_*", "vcpm_*",
+                             "fill_*"]
 _SYNTHESIS_ARTIFACT_FILES = ["voiceover.wav", "voiceover_normalized.wav",
                              "deliveries.json", "concat_list.txt", "synthesized_lines.json"]
 
@@ -1675,8 +1670,7 @@ async def generate_piper(subs, model_path: Path, concat_list: list, temp_files: 
                             f"({stderr.decode(errors='replace')[:100]})")
             return False
         temp_files.append(str(raw_file))
-        return _fit_to_window(raw_file, final_file, target_duration, work_dir,
-                              sample_rate, enable_stretch)
+        return _prepare_clip(raw_file, final_file, sample_rate)
 
     await synthesize_timeline(
         subs, engine="piper", prefix="piper", sample_rate=sample_rate, work_dir=work_dir,
@@ -1684,7 +1678,7 @@ async def generate_piper(subs, model_path: Path, concat_list: list, temp_files: 
         text_of=lambda s: normalize_tts_text(s.text).replace('"', "").replace("'", ""),
         desc="Piper Synthesis", unit="phrase",
         quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code or None,
-        media_ms=media_ms)
+        media_ms=media_ms, enable_stretch=enable_stretch)
 
 
 # The voice an English dub speaks with when Edge's list can't be had.
@@ -2150,6 +2144,33 @@ def _drop_changed_clips(work_dir: Path, voiced: list, spoken: list) -> int:
     if changed:
         # OpenAI speech keeps a delivery hint per line, inferred from the old text.
         _safe_unlink(work_dir / "deliveries.json")
+    return changed
+
+
+def _write_line_srt(segments: List[Dict], path: Path) -> None:
+    """The SRT the speech is made from: one cue per translated line."""
+    with open(path, "w", encoding="utf-8") as f:
+        for i, seg in enumerate(segments):
+            f.write(f"{i + 1}\n")
+            f.write(f"{format_timestamp(seg['start'])} --> {format_timestamp(seg['end'])}\n")
+            f.write(f"{seg['text']}\n\n")
+
+
+def _keep_shortened(shortened: Dict[int, str], subs, translated_segments: List[Dict],
+                    spoken: list) -> int:
+    """Put the lines placement had said in fewer words (_TimingRun.shortened, by index into
+    subs) into the translation, found by their start, and into the record of what each line
+    was voiced from, so the subtitles show what is said and the next run keeps those clips.
+    Returns how many lines it changed. Pure apart from mutating its arguments."""
+    changed = 0
+    for i, text in shortened.items():
+        start = _sub_start_ms(subs[i])
+        for seg in translated_segments:
+            if abs(round(seg["start"] * 1000) - start) <= 2:
+                seg["text"] = text
+                spoken[i] = _spoken_line(_with_text(subs[i], text))
+                changed += 1
+                break
     return changed
 
 
@@ -2835,7 +2856,60 @@ DEFAULT_SPEECH_RATE_CPS = 15.0   # rough natural speaking rate (chars/sec) for l
 def _duration_to_max_chars(seconds: float, cps: float = DEFAULT_SPEECH_RATE_CPS) -> int:
     """Character budget for a translation to stay speakable within `seconds` at ~cps
     chars/second. Floored so very short segments still get a usable budget."""
-    return max(20, int(seconds * cps))
+    return max(12, int(seconds * cps))
+
+
+def _line_budgets(segments: List[Dict], cps: float = DEFAULT_SPEECH_RATE_CPS) -> List[int]:
+    """The character budget for each line's translation: what can be said at `cps` in the time
+    placement gives the line (_plan_line), from its start to MIN_INTER_LINE_GAP_MS before the
+    next line, or its own spoken time if that is longer. Budgeting only the spoken time, as
+    before, squeezed a line followed by a pause into fewer words than it had room for. Pure."""
+    budgets = []
+    for k, seg in enumerate(segments):
+        room = max(0.0, seg["end"] - seg["start"])
+        if k + 1 < len(segments):
+            room = max(room, segments[k + 1]["start"] - seg["start"]
+                       - MIN_INTER_LINE_GAP_MS / 1000.0)
+        budgets.append(_duration_to_max_chars(room, cps))
+    return budgets
+
+
+def _shorten_for_time(text: str, max_chars: int, target_lang: str, provider: str,
+                      model: Optional[str] = None, api_key: Optional[str] = None,
+                      style: str = "") -> Optional[str]:
+    """`text`, a line of the dub that is too long to say in its time, reworded by the LLM
+    translator in at most about max_chars characters with its meaning kept. None when the
+    answer isn't a shorter line in the same language."""
+    p = LLM_PROVIDERS[provider]
+    full_lang = LANG_MAP.get(target_lang.lower(), target_lang)
+    system = (
+        f"You edit {full_lang} dubbing scripts. The line you get is too long to say in the time "
+        f"the speaker on screen takes. Rewrite it in {full_lang} so it is quicker to say, in "
+        f"at most {max_chars} characters if that can be done without changing what it means. "
+        f"Keep its meaning exactly, with every name, number and fact in it, and who is "
+        f"speaking to whom; use shorter words and phrasing, and leave out only filler. If it "
+        f"can't be that short and mean the same, make it as short as it can be and still mean "
+        f"the same."
+        f"{_with_clause(_translation_style_clause(style))} "
+        f"Output only the rewritten line."
+    )
+    out = _clean_line(p["chat"](system, text, model or p["default_model"], False, api_key))
+    if not out or len(out) >= len(text) or _foreign_scripts(out, target_lang):
+        return None
+    return out
+
+
+def _line_shortener(args) -> Optional[Callable[[str, int], Optional[str]]]:
+    """How this run says a line in fewer words when it is too long for its time: with its LLM
+    translator, if it has one (_TimingRun.shorten)."""
+    provider = getattr(args, "translator", None)
+    if provider not in LLM_PROVIDERS:
+        return None
+    model = getattr(args, f"{provider}_model", None)
+    key = getattr(args, f"{provider}_api_key", None)
+    style = getattr(args, "translation_prompt", None) or ""
+    return lambda text, max_chars: _shorten_for_time(text, max_chars, args.target_lang,
+                                                     provider, model, key, style)
 
 
 def translate_llm(text: str, target_lang: str, provider: str, model: Optional[str] = None,
@@ -3261,31 +3335,78 @@ def merge_segments_into_sentences(segments: List[Dict], max_duration: float = 10
     return merged
 
 
-def _plan_block(actual_ms: float, start_ms: float, end_ms: float) -> Tuple[float, float]:
-    """Pure timeline math for placing one speech block on the concat timeline.
-    Returns (pad_ms, next_cursor_ms): `pad_ms` of trailing silence so a shorter-than-window
-    clip still reaches the window end; `next_cursor_ms` is where the timeline stands after
-    the block (past the window on an over-run, so the following gap shrinks to compensate)."""
-    window_ms = end_ms - start_ms
-    if actual_ms < window_ms - 20:
-        return (window_ms - actual_ms), float(end_ms)
-    return 0.0, float(start_ms) + max(actual_ms, float(window_ms))
+# ── Fitting each line into the timeline ───────────────────
+# A dubbed line starts where the original line started, and it may run on into the pause
+# after it, up to MIN_INTER_LINE_GAP_MS before the next line. When it is longer than that:
+#   1. it is played up to NATURAL_SPEEDUP faster, which isn't heard as hurried;
+#   2. then it may run past the next line's onset by up to MAX_LAG_MS, which starts the next
+#      line that much later; a pause pays the lag back, so it never adds up;
+#   3. then faster again, up to MAX_SPEEDUP;
+#   4. a line that would need more than SHORTEN_ABOVE, by more than SHORTEN_MIN_EXCESS_MS of
+#      speech, is shortened by the LLM translator, when there is one, and voiced again
+#      (synthesize_timeline). A line a few hundred ms over is only played faster: rewording a
+#      short line saves little time and can change what it says, as "Burada mısınız?" ("are
+#      you here?") became "Burada mı?" ("is it here?") in a real dub;
+#   5. what still doesn't fit runs on and starts the lines after it late until a pause takes
+#      the lag up.
+# Speech is never cut off to make room, and never played faster than MAX_SPEEDUP: past about
+# 1.25x a voice sounds rushed, and at the 2.5x allowed before, words stopped being words.
+MIN_INTER_LINE_GAP_MS = 150.0   # silence always kept between two lines
+MAX_LAG_MS = 400.0              # how late a line may start to let the one before it finish
+NATURAL_SPEEDUP = 1.10
+MAX_SPEEDUP = 1.25
+SHORTEN_ABOVE = 1.15
+SHORTEN_MIN_EXCESS_MS = 300.0
 
 
-def _plan_anchored_block(actual_ms: float, start_ms: float,
-                         next_start_ms: float) -> Tuple[float, float]:
-    """Pure math for the anchored slot [start_ms, next_start_ms] (Pillar 1). Returns
-    (trim_ms, pad_ms): trim if the clip over-runs the slot, else pad the remainder."""
-    room = float(next_start_ms) - float(start_ms)
-    if room > 0 and actual_ms > room:
-        return (actual_ms - room), 0.0
-    return 0.0, max(0.0, room - actual_ms)
+class LinePlan(NamedTuple):
+    start_ms: float     # where the clip starts on the dub's timeline
+    speed: float        # its tempo (1.0 = as the engine spoke it)
+    end_ms: float       # where it ends
+    lag_ms: float       # how much later than the original line it starts
+    needed: float       # the tempo it would take to end within MAX_LAG_MS of the next onset
+    overrun_ms: float   # how far past that it still ends, at the tempo it got
 
 
-# A dubbed line may breathe into the pause before the next line, so a longer target-language
-# line is spoken at a natural pace instead of being sped up to fit only its own spoken window.
-# This is the minimum silence kept before the next onset, so consecutive lines never run together.
-MIN_INTER_LINE_GAP_MS = 150.0
+def _worth_shortening(clip_ms: float, plan: "LinePlan") -> bool:
+    """Whether a line is long enough past its time to be said again in fewer words (step 4
+    above): it needs more than SHORTEN_ABOVE, and at NATURAL_SPEEDUP more than
+    SHORTEN_MIN_EXCESS_MS of it would still be left over. Pure."""
+    if plan.needed <= SHORTEN_ABOVE:
+        return False
+    if not math.isfinite(plan.needed):      # no time left at all
+        return True
+    return clip_ms / NATURAL_SPEEDUP - clip_ms / plan.needed > SHORTEN_MIN_EXCESS_MS
+
+
+def _plan_line(clip_ms: float, onset_ms: float, prev_end_ms: Optional[float],
+               next_onset_ms: Optional[float], media_end_ms: Optional[float] = None,
+               max_speedup: float = MAX_SPEEDUP) -> LinePlan:
+    """Where one clip goes on the dub's timeline and how fast it is played, by the steps
+    above. prev_end_ms is where the line before it ended (None for the first); the last line
+    has no next onset and may use the time to the end of the media. Pure: placement, the
+    golden harness and the tests all run this one copy."""
+    start = float(onset_ms)
+    if prev_end_ms is not None:
+        start = max(start, float(prev_end_ms) + MIN_INTER_LINE_GAP_MS)
+    if next_onset_ms is not None:
+        preferred = float(next_onset_ms) - MIN_INTER_LINE_GAP_MS - start
+        limit = preferred + MAX_LAG_MS
+    elif media_end_ms is not None:
+        preferred = limit = float(media_end_ms) - start
+    else:
+        preferred = limit = math.inf
+    clip = float(clip_ms)
+    needed = clip / limit if limit > 0 else math.inf
+    speed = 1.0
+    if clip > preferred:
+        speed = min(clip / preferred, NATURAL_SPEEDUP) if preferred > 0 else NATURAL_SPEEDUP
+        if clip / speed > limit:
+            speed = needed
+        speed = max(1.0, min(speed, max_speedup))
+    end = start + clip / speed
+    return LinePlan(start, speed, end, start - float(onset_ms), needed,
+                    max(0.0, end - (start + limit)))
 
 
 def _dub_target_ms(own_ms: float, start_ms: float, next_start_ms) -> float:
@@ -3312,20 +3433,116 @@ def _sub_end_ms(sub) -> int:
     return (t.hours * 3600 + t.minutes * 60 + t.seconds) * 1000 + t.milliseconds
 
 
-def _fit_to_window(src: Path, dst: Path, target_duration: float, work_dir: Path,
-                   sample_rate: int, enable_stretch: bool) -> bool:
-    """Fit a freshly synthesized clip into its source window: speed it up when it over-runs
-    (S0 — never slow it down, that sounds dragged), otherwise copy it through unchanged and
-    let placement pad the remainder."""
-    if enable_stretch and stretch_audio_smart(str(src), str(dst), target_duration,
-                                              work_dir, sample_rate, allow_slowdown=False):
-        return True
+CLIP_LEAD_MS = 40.0    # silence kept before a clip's first sound
+CLIP_TAIL_MS = 120.0   # and after its last, so a word's release isn't clipped
+
+
+def _frame_db(data, sr: int, frame_ms: float = 10.0):
+    """A clip's level in dBFS per frame_ms frame, mixed down to mono. Pure."""
+    mono = data if data.ndim == 1 else data.mean(axis=1)
+    n = max(1, int(sr * frame_ms / 1000.0))
+    usable = len(mono) // n * n
+    if not usable:
+        return np.zeros(0), n
+    frames = mono[:usable].reshape(-1, n).astype(np.float64)
+    return 10.0 * np.log10(np.mean(frames ** 2, axis=1) + 1e-12), n
+
+
+def _sound_span(data, sr: int, floor_db: float = -55.0,
+                below_peak_db: float = 40.0) -> Optional[Tuple[int, int]]:
+    """The first and last sample of a clip's sound: the 10 ms frames louder than both
+    floor_db and below_peak_db under its loudest frame. None when no frame is. Pure."""
+    db, n = _frame_db(data, sr)
+    if not len(db):
+        return None
+    loud = np.flatnonzero(db > max(floor_db, float(db.max()) - below_peak_db))
+    if not len(loud):
+        return None
+    return int(loud[0] * n), int(min(len(data), (loud[-1] + 1) * n))
+
+
+def _prepare_clip(src: Path, dst: Path, sample_rate: int) -> bool:
+    """Make a freshly synthesized clip ready to place: mono, 16-bit, at the engine's rate, with
+    the silence the engine left before and after the speech taken off (CLIP_LEAD_MS and
+    CLIP_TAIL_MS stay), so that its length is the speech's. Engines pad differently, and that
+    padding used to count as speech: a clip was sped up to make room for its own silence.
+    The tempo is left as it is; placement sets it, once it knows how long the line may take.
+    False when the clip can't be read or has no sound."""
+    src, dst = Path(src), Path(dst)
     try:
-        sf.write(str(dst), *sf.read(str(src)), subtype="PCM_16")
+        data, sr = sf.read(str(src), dtype="float32", always_2d=True)
+        if sr != sample_rate:
+            resampled = dst.with_name(dst.stem + "_rs.wav")
+            run_ffmpeg(["ffmpeg", "-y", "-i", str(src), "-ar", str(sample_rate), "-ac", "1",
+                        str(resampled)], f"Resampling {src.name}")
+            data, sr = sf.read(str(resampled), dtype="float32", always_2d=True)
+            _safe_unlink(resampled)
+    except Exception as e:
+        _LOG.error(f"Could not read {src.name}: {e}")
+        return False
+    mono = data.mean(axis=1)
+    span = _sound_span(mono, sr)
+    if span is None:
+        return False
+    first = max(0, span[0] - int(CLIP_LEAD_MS / 1000.0 * sr))
+    last = min(len(mono), span[1] + int(CLIP_TAIL_MS / 1000.0 * sr))
+    try:
+        sf.write(str(dst), mono[first:last], sr, subtype="PCM_16")
     except Exception as e:
         _LOG.error(f"Could not write {dst.name}: {e}")
         return False
     return True
+
+
+# A clip must have this much sound to stand for a line, and must not need reading faster than
+# CLIP_MAX_LETTERS_PER_S (people speak about 12): faster means the engine stopped early.
+CLIP_MIN_SOUND_S = 0.12
+CLIP_SILENT_DB = -45.0
+CLIP_MAX_LETTERS_PER_S = 25.0
+
+
+def _clip_problem(path: Path, text: str) -> Optional[str]:
+    """Why a synthesized clip can't stand for its line, or None when it can: it has no audio,
+    no sound, or too little sound for the words it should say."""
+    try:
+        data, sr = sf.read(str(path), dtype="float32", always_2d=True)
+    except Exception:
+        return "no audio"
+    db, n = _frame_db(data, sr)
+    if not len(db) or float(db.max()) < CLIP_SILENT_DB:
+        return "silent"
+    sounding = float(np.sum(db > max(-55.0, float(db.max()) - 40.0))) * n / sr
+    if sounding < CLIP_MIN_SOUND_S:
+        return "silent"
+    span = _sound_span(data, sr)
+    letters = sum(ch.isalnum() for ch in text)
+    if span and letters >= 12 and letters / ((span[1] - span[0]) / sr) > CLIP_MAX_LETTERS_PER_S:
+        return "cut short"
+    return None
+
+
+def _clip_ms(path: Path) -> float:
+    try:
+        return sf.info(str(path)).duration * 1000.0
+    except Exception:
+        return 0.0
+
+
+def _play_at(src: Path, dst: Path, speed: float, sample_rate: int) -> None:
+    """Write src to dst played `speed` times faster (pitch kept), with a few-ms fade at each
+    end so it doesn't click against the silence around it."""
+    if speed > 1.0005:
+        stages, rest = [], speed
+        while rest > 2.0:
+            stages.append("atempo=2.0")
+            rest /= 2.0
+        stages.append(f"atempo={rest:.4f}")
+        run_ffmpeg(["ffmpeg", "-y", "-i", str(src), "-filter:a", ",".join(stages),
+                    "-ar", str(sample_rate), "-ac", "1", "-c:a", "pcm_s16le", str(dst)],
+                   f"Tempo for {src.name}")
+    else:
+        shutil.copyfile(str(src), str(dst))
+    _apply_micro_fades(dst)
 
 
 async def _maybe_await(value):
@@ -3373,102 +3590,239 @@ async def _prerender_parallel(subs, *, render, text_of, prefix, work_dir, min_by
         pbar.close()
 
 
+RENDER_ATTEMPTS = 3      # takes of one line before the run gives up on it, the first included
+GIVE_UP_AFTER = 3        # lines failed with none voiced yet: the engine is down, stop there
+SHORTEN_ATTEMPTS = 2     # shorter wordings asked for, per line that doesn't fit
+
+
+class _TimingRun:
+    """What one run's placement pass may use besides the engine: `shorten(text, max_chars)`,
+    the LLM translator rewording a line that doesn't fit into a shorter one (None when the run
+    has no LLM translator); the Whisper model its run-on check loads when faster-whisper isn't
+    installed; and, filled in as it goes, the lines it shortened, by index, which process_video
+    writes back into the translation and the subtitles."""
+
+    def __init__(self, shorten: Optional[Callable[[str, int], Optional[str]]] = None,
+                 whisper_model: str = "base"):
+        self.shorten = shorten
+        self.whisper_model = whisper_model
+        self.shortened: Dict[int, str] = {}
+
+
+_TIMING = _TimingRun()
+
+
+def _with_text(sub, text: str):
+    """The subtitle `sub` saying `text` instead."""
+    if hasattr(sub, "_replace"):
+        return sub._replace(text=text)
+    from types import SimpleNamespace
+    return SimpleNamespace(**{**vars(sub), "text": text})
+
+
 async def synthesize_timeline(subs, *, engine: str, prefix: str, sample_rate: int,
                               work_dir: Path, concat_list: list, temp_files: list,
                               render, text_of, desc: str, unit: str = "segment",
                               min_bytes: int = 1000, quality_gate: bool = False,
                               asr_model=None, gate_lang=None, on_ready=None,
                               media_ms: Optional[float] = None,
-                              concurrency: int = 1) -> int:
+                              concurrency: int = 1, enable_stretch: bool = True,
+                              check_run_on: bool = False) -> int:
     """Drive one TTS engine across the subtitle timeline (Template Method).
 
-    Every engine shares this loop — leading silence, cached synthesis, absolute-anchor
-    placement, drift tracking and optional quality scoring — and supplies only `render`:
-    how one line of text becomes one WAV file. Duplicating this loop per engine is what
-    let Piper silently miss both the no-slowdown and the anchored-placement fixes, and
-    hide a resume bug for months; there is now exactly one copy of it.
+    Every engine shares this loop, and so the same standard: each clip is checked before it is
+    used (sound, and enough of it for its words) and voiced again when it fails, up to
+    RENDER_ATTEMPTS takes; a line no take voices fails the run instead of leaving a gap. With
+    check_run_on (the cloning engines), what a model says after the line is cut off. Each clip
+    is then placed by _plan_line at its own tempo or a little faster, a line that doesn't fit
+    is shortened by the translator and voiced again (_TIMING), and nothing spoken is cut.
+    Duplicating this loop per engine is what let Piper silently miss earlier timing fixes;
+    there is exactly one copy of it.
 
-    `render(i, text, final_file, target_duration) -> bool` may be sync or async.
-    `on_ready(i, text, final_file, target_duration) -> Optional[Dict]` runs after synthesis
-    and before placement (XTTS re-rolls a flagged take there), returning a gate score if it
-    already computed one. Returns the number of segments placed.
+    `render(i, text, final_file, target_duration) -> bool` may be sync or async, and writes
+    the line's clip at its natural tempo (_prepare_clip). `on_ready(i, text, final_file,
+    target_duration) -> Optional[Dict]` runs after a clip passes its check and before
+    placement (XTTS re-rolls a take the quality gate flags there), returning a gate score if
+    it computed one. Returns the number of lines placed.
     """
-    # Phase A (opt-in): pre-synthesise all segments concurrently. The placement loop below
-    # then finds each WAV already on disk (via _has_content) and skips re-rendering, so the
-    # order-dependent drift/anchoring maths is untouched. concurrency<=1 skips Phase A, so
-    # the sequential default path is byte-identical to before.
+    # Phase A (opt-in): pre-synthesise every line concurrently. The pass below finds the
+    # clips on disk, checks them like any other and places them in order, so only the
+    # waiting overlaps.
     if concurrency > 1 and subs:
         await _prerender_parallel(subs, render=render, text_of=text_of, prefix=prefix,
                                   work_dir=work_dir, min_bytes=min_bytes,
                                   concurrency=concurrency, engine=engine, desc=desc,
                                   media_ms=media_ms)
 
+    # The quality gate's ASR when it is on, else one of the run-on check's own. It takes a
+    # second or two a line, against tens for a cloned line's synthesis.
+    run_on_asr = None
+    if check_run_on:
+        run_on_asr = asr_model or await asyncio.to_thread(_get_trail_asr,
+                                                          _TIMING.whisper_model)
+    max_speedup = MAX_SPEEDUP if enable_stretch else 1.0
     scores: List[Dict] = []
+    failed: List[Tuple[int, str, str]] = []
+    late: List[Tuple[int, float]] = []
+    faster: List[float] = []
     generated = 0
-    cursor_ms = 0.0
-    max_drift = 0.0
+    timeline_ms = 0.0          # how long the dub's track is so far
+    prev_end: Optional[float] = None
+    max_lag = 0.0
+    gave_up = False
+
+    def _drop(i: int) -> None:
+        for path in _line_files(work_dir, i):
+            _safe_unlink(path)
+
+    async def _voice(i: int, text: str, final_file: Path, target_duration: float,
+                     reuse: bool) -> Optional[str]:
+        """Make line i's clip (or take the one on disk, when reuse) and check it; on a failed
+        check, voice it again. Returns None once a take passes, else what was wrong."""
+        problem = None
+        for attempt in range(RENDER_ATTEMPTS):
+            if not (reuse and _has_content(final_file, min_bytes)):
+                try:
+                    ok = await _maybe_await(render(i, text, final_file, target_duration))
+                except Exception as e:
+                    _LOG.error(f"{engine} segment {i} error: {e}")
+                    ok = False
+                if not ok or not _has_content(final_file, min_bytes):
+                    problem = "no audio"
+                    _drop(i)
+                    reuse = False
+                    continue
+                if run_on_asr is not None:
+                    await asyncio.to_thread(_cut_trailing_speech, final_file, text,
+                                            run_on_asr, gate_lang, i)
+            problem = _clip_problem(final_file, text)
+            if problem is None:
+                return None
+            if attempt + 1 < RENDER_ATTEMPTS:
+                _LOG.warning(f"⚠️  {engine} segment {i}: the clip is {problem}; voicing it again")
+            _drop(i)
+            reuse = False
+        return problem
 
     for i, sub in enumerate(tqdm(subs, desc=desc, unit=unit)):
-        start_ms = _sub_start_ms(sub)
+        onset = _sub_start_ms(sub)
         end_ms = _sub_end_ms(sub)
         text = text_of(sub)
         if not text:
             continue
-        next_start_ms = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
-        # The final line has no next line to protect, so it may breathe out to the end of the
-        # media rather than be compressed to its own spoken window. Placement still uses
-        # next_start_ms (None here), whose last-segment branch lets the clip extend without trim.
-        target_next = next_start_ms if next_start_ms is not None else media_ms
-        target_duration = _dub_target_ms(end_ms - start_ms, start_ms, target_next) / 1000.0
-
-        # ── Silence up to this segment's source onset ───────
-        sil_ms = start_ms - cursor_ms
-        if sil_ms > 100:
-            sil_file = work_dir / f"{prefix}_sil_{i}.wav"
-            made = create_silence_wav(sil_ms / 1000.0, str(sil_file), sample_rate)
-            if made and sil_file.exists():
-                concat_list.append(f"file '{sil_file}'")
-                temp_files.append(str(sil_file))
-                cursor_ms += sil_ms
-        max_drift = max(max_drift, cursor_ms - start_ms)
-
+        next_onset = _sub_start_ms(subs[i + 1]) if i + 1 < len(subs) else None
+        target_next = next_onset if next_onset is not None else media_ms
+        target_duration = _dub_target_ms(end_ms - onset, onset, target_next) / 1000.0
         final_file = work_dir / f"{prefix}_fin_{i}.wav"
-        if not _has_content(final_file, min_bytes):
-            try:
-                ok = await _maybe_await(render(i, text, final_file, target_duration))
-            except Exception as e:
-                _LOG.error(f"{engine} segment {i} error: {e}")
-                ok = False
-            if not ok:
-                cursor_ms = end_ms
-                continue
 
+        problem = await _voice(i, text, final_file, target_duration, reuse=True)
+        if problem:
+            failed.append((i, problem, text))
+            # Nothing voiced and line after line failing is the engine, not the lines (a
+            # refused key, Edge's 403): trying each remaining line three times only delays
+            # the error.
+            if generated == 0 and len(failed) >= GIVE_UP_AFTER:
+                gave_up = True
+                break
+            continue
         gate_score = on_ready(i, text, final_file, target_duration) if on_ready else None
 
-        if _has_content(final_file, min_bytes):
-            cursor_ms = _place_speech_block(final_file, start_ms, end_ms, next_start_ms,
-                                            sample_rate, work_dir, i, concat_list, temp_files)
-            generated += 1
-            if quality_gate:
-                scores.append(gate_score if gate_score is not None
-                              else score_speech(str(final_file), text, asr_model=asr_model,
-                                                lang=gate_lang))
-        else:
-            cursor_ms = end_ms
+        clip_ms = _clip_ms(final_file)
+        plan = _plan_line(clip_ms, onset, prev_end, next_onset, media_ms, max_speedup)
 
-    # A total synthesis failure (e.g. a rejected API key) must not pass silently: the
-    # concat list is still full of the leading-silence entries, so the old "is the concat
-    # list empty?" check let a SILENT voiceover through and the run reported success while
-    # handing back the original video undubbed. Fail loudly instead — every engine goes
-    # through this loop, and process_video turns TTSError into a failed run.
-    if subs and generated == 0:
+        # Too long to fit at a natural pace: the translator says it in fewer words, and that
+        # is voiced. The take that was there is kept unless the new one is shorter.
+        said = sub.text
+        attempts = 0
+        while (_TIMING.shorten and _worth_shortening(clip_ms, plan)
+               and attempts < SHORTEN_ATTEMPTS):
+            attempts += 1
+            max_chars = min(len(said) - 1, int(len(said) * NATURAL_SPEEDUP / plan.needed * 0.95))
+            if max_chars < 1:
+                break
+            try:
+                shorter = await asyncio.to_thread(_TIMING.shorten, said, max_chars)
+            except Exception as e:
+                _LOG.warning(f"⚠️  segment {i}: couldn't get a shorter wording ({e})")
+                break
+            new_text = text_of(_with_text(sub, shorter)) if shorter else ""
+            if not new_text or len(new_text) >= len(text):
+                break
+            kept = work_dir / f"{prefix}_keep_{i}.wav"
+            shutil.copyfile(str(final_file), str(kept))
+            _drop(i)
+            if (await _voice(i, new_text, final_file, target_duration, reuse=False) is None
+                    and _clip_ms(final_file) < clip_ms):
+                _safe_unlink(kept)
+                _LOG.info(f"📝 segment {i}: {clip_ms / 1000:.1f}s of speech for "
+                          f"{(plan.end_ms - plan.start_ms) / 1000:.1f}s; said shorter "
+                          f"({len(said)} → {len(shorter)} characters): {shorter}")
+                said, text = shorter, new_text
+                _TIMING.shortened[i] = shorter
+                clip_ms = _clip_ms(final_file)
+                plan = _plan_line(clip_ms, onset, prev_end, next_onset, media_ms, max_speedup)
+                gate_score = None
+            else:
+                # Back to the take that was there. What the new wording left behind goes too
+                # (Edge's mp3 of it), or a later run would take it for this line's.
+                _drop(i)
+                shutil.move(str(kept), str(final_file))
+                break
+
+        if quality_gate:
+            scores.append(gate_score if gate_score is not None
+                          else score_speech(str(final_file), text, asr_model=asr_model,
+                                            lang=gate_lang))
+
+        # ── Silence up to the clip's start, then the clip at its tempo ──
+        gap = plan.start_ms - timeline_ms
+        if gap >= 1.0:
+            sil_file = work_dir / f"{prefix}_sil_{i}.wav"
+            if create_silence_wav(gap / 1000.0, str(sil_file), sample_rate) and sil_file.exists():
+                concat_list.append(f"file '{sil_file}'")
+                temp_files.append(str(sil_file))
+                timeline_ms += _clip_ms(sil_file)
+        placed = work_dir / f"{prefix}_put_{i}.wav"
+        _play_at(final_file, placed, plan.speed, sample_rate)
+        concat_list.append(f"file '{placed}'")
+        temp_files.append(str(placed))
+        max_lag = max(max_lag, timeline_ms - onset)
+        timeline_ms += _clip_ms(placed)
+        prev_end = timeline_ms
+        generated += 1
+        if plan.speed > NATURAL_SPEEDUP + 1e-6:
+            faster.append(plan.speed)
+        if plan.overrun_ms > 0:
+            late.append((i, plan.overrun_ms))
+
+    if failed:
+        shown = "; ".join(f'line {i + 1} "{t[:40]}" ({why})' for i, why, t in failed[:5])
+        more = f" and {len(failed) - 5} more" if len(failed) > 5 else ""
+        if generated == 0:
+            tried = (f"the first {len(failed)} of the {len(subs)} segments" if gave_up
+                     else f"any of the {len(subs)} segments")
+            raise TTSError(
+                f"{engine} produced no speech for {tried} — the dub would be silent. Check the "
+                f"engine's API key / endpoint and try again. ({shown}{more})")
         raise TTSError(
-            f"{engine} produced no speech for any of the {len(subs)} segments — the dub "
-            f"would be silent. Check the engine's API key / endpoint and try again."
-        )
+            f"❌ {engine} couldn't voice {len(failed)} of {len(subs)} lines in "
+            f"{RENDER_ATTEMPTS} tries: {shown}{more}. The dub would be silent there, so it "
+            f"wasn't made. The {generated} lines that worked are kept; running again voices "
+            f"only the rest.")
 
     _LOG.info(f"✓ {engine} generated {generated}/{len(subs)} segments")
-    _log_sync_drift(max_drift, engine)
+    if _TIMING.shortened:
+        _LOG.info(f"📝 {len(_TIMING.shortened)} line(s) said in fewer words to fit their time")
+    if faster:
+        _LOG.info(f"⏩ {len(faster)} line(s) played a little faster to fit "
+                  f"(at most {max(faster):.2f}×)")
+    for i, over_ms in late:
+        tip = "" if _TIMING.shorten else (
+            " An LLM translator (openai, anthropic, openrouter) would say it in fewer words.")
+        _LOG.warning(f"⚠️  line {i + 1} is {over_ms / 1000:.1f}s longer than its time even at "
+                     f"{max_speedup:.2f}×, so the lines after it start late until the next "
+                     f"pause.{tip}")
+    _log_sync_drift(max_lag, engine)
     if quality_gate:
         log_quality_report(scores, engine)
     return generated
@@ -3496,136 +3850,6 @@ def _apply_micro_fades(path: Path, fade_ms: float = 8.0):
         sf.write(str(path), _fade_ends(data, sr, fade_ms), sr, subtype="PCM_16")
     except Exception as e:
         _LOG.debug(f"micro-fade skipped for {path}: {e}")
-
-
-def _trim_wav(path: Path, max_ms: float):
-    """Trim a clip to at most max_ms (with a fade at the new end) so an over-run stays
-    inside its slot and cannot push the next segment past its source onset."""
-    try:
-        data, csr = sf.read(str(path), dtype="float32")
-        max_samples = int(max_ms / 1000.0 * csr)
-        cut = len(data) - max_samples
-        if cut > 0 and max_samples > 0:
-            sf.write(str(path), _fade_ends(data[:max_samples], csr), csr, subtype="PCM_16")
-            _LOG.info(f"✂️  trimmed {cut / csr * 1000:.0f}ms over-run to keep sync "
-                         f"(translation longer than its window)")
-    except Exception as e:
-        _LOG.debug(f"trim failed for {path}: {e}")
-
-
-def _place_speech_block(final_file: Path, start_ms: float, end_ms: float, next_start_ms,
-                        sr: int, work_dir: Path, tag, concat_list: list,
-                        temp_files: list) -> float:
-    """Place one speech clip ANCHORED to the source timeline (Pillar 1). When the next
-    segment's source onset is known, the slot is [start_ms, next_start_ms]: an over-running
-    clip is trimmed to fit (so it can never delay the next segment) and a short clip is
-    padded with trailing silence. Returns the cursor = next_start_ms, so drift cannot
-    accumulate. The last segment (no next onset) simply pads to its window."""
-    try:
-        actual_ms = sf.info(str(final_file)).duration * 1000.0
-    except Exception:
-        actual_ms = float(end_ms - start_ms)
-
-    if next_start_ms is not None:
-        # The slot maths lives in _plan_anchored_block so that the unit tests and the
-        # golden harness exercise the very code this path runs, not a copy of it.
-        trim_ms, pad_ms = _plan_anchored_block(actual_ms, float(start_ms), float(next_start_ms))
-        if trim_ms > 0:
-            _trim_wav(final_file, actual_ms - trim_ms)   # trim to exactly fit the slot (+ fades)
-        else:
-            _apply_micro_fades(final_file)
-        concat_list.append(f"file '{final_file}'")
-        temp_files.append(str(final_file))
-        if pad_ms > 20:
-            sil = work_dir / f"fill_{tag}.wav"
-            if create_silence_wav(pad_ms / 1000.0, str(sil), sr) and sil.exists():
-                concat_list.append(f"file '{sil}'")
-                temp_files.append(str(sil))
-        return float(next_start_ms)
-
-    # Last segment: no next onset to protect — pad to window, no trim.
-    _apply_micro_fades(final_file)
-    concat_list.append(f"file '{final_file}'")
-    temp_files.append(str(final_file))
-    pad_ms, cursor = _plan_block(actual_ms, float(start_ms), float(end_ms))
-    if pad_ms > 20:
-        sil = work_dir / f"fill_{tag}.wav"
-        if create_silence_wav(pad_ms / 1000.0, str(sil), sr) and sil.exists():
-            concat_list.append(f"file '{sil}'")
-            temp_files.append(str(sil))
-    return cursor
-
-
-# S0 scope: the safe, unambiguous win is "never slow down" — shorter-than-window speech
-# keeps its natural pace and the remainder is padded with silence instead of being dragged
-# out into long vowels. The speed-up ceiling stays at the previous 2.5x so long translations
-# still fit without truncation; tightening it toward ~1.25x is deferred to Phase S3, where
-# LLM length-aware translation shortens over-long lines so tempo isn't the only lever.
-STRETCH_MAX_SPEEDUP = 2.5
-
-
-def calculate_speed_factor(original_duration: float, target_duration: float,
-                           allow_slowdown: bool = True) -> float:
-    """Return the atempo factor to fit `original_duration` into `target_duration`.
-    ratio > 1 speeds up (speech longer than the window); ratio < 1 slows down.
-    With allow_slowdown=False, never slows below natural speed (pad silence instead)
-    and caps speed-up at STRETCH_MAX_SPEEDUP to avoid unnatural fast delivery."""
-    if target_duration <= 0:
-        return 1.0
-    ratio = original_duration / target_duration
-    if 0.95 <= ratio <= 1.05:
-        return 1.0
-    if not allow_slowdown:
-        if ratio < 1.0:
-            return 1.0                       # shorter than window → keep natural pace
-        return min(ratio, STRETCH_MAX_SPEEDUP)
-    return max(0.5, min(2.5, ratio))
-
-
-def stretch_audio_smart(input_file: str, output_file: str, target_duration: float,
-                        work_dir: Path, target_sr: int = 22050,
-                        allow_slowdown: bool = True) -> bool:
-    try:
-        data, sr = sf.read(input_file, dtype='float32')
-        current_duration = len(data) / sr
-        if current_duration == 0:
-            return False
-        ratio = calculate_speed_factor(current_duration, target_duration, allow_slowdown)
-        if ratio == 1.0:
-            if sr != target_sr:
-                subprocess.run([
-                    "ffmpeg", "-y", "-i", input_file,
-                    "-ar", str(target_sr), "-ac", "1", output_file
-                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            else:
-                sf.write(output_file, data, sr, subtype='PCM_16')
-            return True
-        filter_chain = []
-        remaining_ratio = ratio
-        while remaining_ratio > 2.0:
-            filter_chain.append("atempo=2.0")
-            remaining_ratio /= 2.0
-        while remaining_ratio < 0.5:
-            filter_chain.append("atempo=0.5")
-            remaining_ratio /= 0.5
-        filter_chain.append(f"atempo={max(0.5, min(2.0, remaining_ratio)):.4f}")
-        subprocess.run([
-            "ffmpeg", "-y", "-i", input_file,
-            "-filter:a", ",".join(filter_chain),
-            "-ar", str(target_sr), "-ac", "1", output_file
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        return True
-    except Exception as e:
-        _LOG.warning(f"Audio stretching failed: {e}, using original")
-        try:
-            subprocess.run([
-                "ffmpeg", "-y", "-i", input_file,
-                "-ar", str(target_sr), "-ac", "1", output_file
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            return True
-        except Exception as e:
-            _LOG.warning(f"Audio stretch fallback failed: {e}")
-            return False
 
 
 def reduce_noise(input_file: str, output_file: str) -> bool:
@@ -3807,8 +4031,7 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
 
         # S0: no noise reduction on clean synthetic speech - stationary NR on a clean
         # TTS signal only risks musical-noise artifacts. Fit straight from the WAV.
-        return _fit_to_window(wav_file, final_file, target_duration, work_dir,
-                              target_sr, enable_stretch)
+        return _prepare_clip(wav_file, final_file, target_sr)
 
     await synthesize_timeline(
         subs, engine="edge", prefix="edge", sample_rate=target_sr, work_dir=work_dir,
@@ -3816,7 +4039,7 @@ async def synthesize_speech_batch(subs, voice: str, work_dir: Path,
         text_of=lambda s: normalize_tts_text(s.text),
         desc="Edge TTS", unit="sentence", min_bytes=100,
         quality_gate=quality_gate, asr_model=asr_model, gate_lang=gate_lang,
-        media_ms=media_ms, concurrency=concurrency)
+        media_ms=media_ms, concurrency=concurrency, enable_stretch=enable_stretch)
 
     if emotion_stats:
         _LOG.info(f"🎭 Emotion usage: {emotion_stats}")
@@ -3975,6 +4198,57 @@ def _get_gate_asr(model_name: str = "tiny"):
                                    compute_type="float16" if device == "cuda" else "int8")
     _gate_asr_name = model_name
     return _gate_asr_model
+
+
+class _WhisperWords:
+    """openai-whisper behind the faster-whisper call the clip checks make:
+    transcribe(path, language=, word_timestamps=) -> (segments, info), each segment with .text
+    and .words, each word with .word, .start and .end."""
+
+    def __init__(self, model):
+        self.model = model
+
+    def transcribe(self, path, language=None, word_timestamps=False, **_):
+        from types import SimpleNamespace
+        result = self.model.transcribe(str(path), language=language, fp16=False,
+                                       word_timestamps=word_timestamps,
+                                       condition_on_previous_text=False)
+        segments = [SimpleNamespace(
+            text=seg.get("text", ""),
+            words=[SimpleNamespace(word=w["word"], start=w["start"], end=w["end"])
+                   for w in seg.get("words") or []])
+            for seg in result.get("segments", [])]
+        return segments, None
+
+
+_trail_asr = None
+_trail_asr_name = None
+
+
+def _get_trail_asr(whisper_model: str = "base"):
+    """The ASR the run-on check uses to hear where a line's last word ends: faster-whisper's
+    small model when it is installed, else openai-whisper's: the one the transcription used,
+    but small at least. On a real Turkish dub base found the end of 2 of the 4 lines Chatterbox
+    ran on after, small 3 (the fourth it had said wrong), at about 6 s a line on a laptop CPU
+    against 20 to 60 s for the line's synthesis. None if no ASR can be had."""
+    global _trail_asr, _trail_asr_name
+    if _has_module("faster_whisper"):
+        return _get_gate_asr("small")
+    if whisper is None:
+        return None
+    if whisper_model in ("tiny", "tiny.en", "base", "base.en"):
+        whisper_model = "small"
+    if _trail_asr is not None and _trail_asr_name == whisper_model:
+        return _trail_asr
+    try:
+        device = "cuda" if (torch is not None and torch.cuda.is_available()) else "cpu"
+        _trail_asr = _WhisperWords(whisper.load_model(whisper_model, device=device))
+        _trail_asr_name = whisper_model
+    except Exception as e:
+        _LOG.warning(f"⚠️  Couldn't load Whisper {whisper_model} to check where lines end ({e}); "
+                     f"what an engine says after a line won't be cut")
+        return None
+    return _trail_asr
 
 
 def score_speech(audio_path: str, expected_text: str, *, asr_model=None, lang=None,
@@ -4262,13 +4536,20 @@ def _similar_word(a: str, b: str) -> bool:
     return difflib.SequenceMatcher(None, a, b).ratio() >= 0.75
 
 
-def _trailing_speech_cut(words, expected_text: str) -> Optional[Tuple[float, List[str]]]:
+# A clip that goes on this long after its line's last word has something after it: Chatterbox
+# was measured adding 1.5 to 2.9 s of murmur after a pause, which no ASR writes down as words.
+RUN_ON_MIN_S = 0.35
+
+
+def _trailing_speech_cut(words, expected_text: str,
+                         clip_s: Optional[float] = None) -> Optional[Tuple[float, List[str]]]:
     """Where to cut a clip that runs on after its line. Some models (Chatterbox) add a few
-    words once the line is over, or say part of it again. The ASR's words (each with .word,
-    .start and .end) are walked in order against the line's, allowing the ASR to miss a couple,
-    to find where the line's last word is said; if speech follows it, this returns that word's
-    end time and the extra words. None when the clip ends with the line — or when its end
-    can't be found, so nothing is cut on a guess. Pure."""
+    words once the line is over, say part of it again, or murmur. The ASR's words (each with
+    .word, .start and .end) are walked in order against the line's, allowing the ASR to miss a
+    couple, to find where the line's last word is said; if words follow it, or (given clip_s,
+    the clip's length) more than RUN_ON_MIN_S of anything, this returns that word's end time
+    and the extra words. None when the clip ends with the line, or when its end can't be
+    found, so nothing is cut on a guess. Pure."""
     expected = _normalize_for_compare(expected_text).split()
     heard = [(token, w.end) for w in words
              if (token := _normalize_for_compare(getattr(w, "word", "")))]
@@ -4282,8 +4563,26 @@ def _trailing_speech_cut(words, expected_text: str) -> Optional[Tuple[float, Lis
                 break
         if j == len(expected):
             extra = [t for t, _ in heard[i + 1:]]
-            return (end, extra) if extra else None
+            if extra or (clip_s is not None and clip_s - end > RUN_ON_MIN_S):
+                return end, extra
+            return None
     return None
+
+
+def _run_on_cut_at(data, sr: int, word_end: float) -> int:
+    """The sample to cut a clip at, given where the ASR heard its line's last word end. An
+    ASR's word ends are rough, so the cut goes where the sound first drops away for 80 ms
+    within 0.4 s after it (the pause before whatever comes next; a consonant's closure is
+    shorter), and 0.12 s after it when it doesn't. Pure."""
+    db, n = _frame_db(data, sr)
+    hold = max(1, int(0.08 * sr / n))
+    if len(db):
+        quiet = float(db.max()) - 30.0
+        first, last = int(word_end * sr / n), int((word_end + 0.4) * sr / n)
+        for k in range(max(0, first), min(len(db) - hold + 1, last)):
+            if np.all(db[k:k + hold] < quiet):
+                return min(len(data), k * n + int(0.04 * sr))
+    return min(len(data), int((word_end + 0.12) * sr))
 
 
 def _cut_trailing_speech(path: Path, text: str, asr_model, lang: str, index: int) -> bool:
@@ -4292,22 +4591,24 @@ def _cut_trailing_speech(path: Path, text: str, asr_model, lang: str, index: int
     try:
         segments, _ = asr_model.transcribe(str(path), language=lang, word_timestamps=True)
         words = [w for seg in segments for w in (seg.words or [])]
+        clip_s = sf.info(str(path)).duration
     except Exception as e:
         _LOG.debug(f"trailing-speech check failed for segment {index}: {e}")
         return False
-    cut = _trailing_speech_cut(words, text)
+    cut = _trailing_speech_cut(words, text, clip_s)
     if cut is None:
         return False
     end, extra = cut
     data, sr = sf.read(str(path), dtype="float32")
-    clip = data[:min(len(data), int((end + 0.12) * sr))]
+    clip = data[:_run_on_cut_at(data, sr, end)]
     fade = min(len(clip), int(0.03 * sr))
     if fade:
         ramp = np.linspace(1.0, 0.0, fade, dtype="float32")
         clip[-fade:] *= ramp[:, None] if clip.ndim > 1 else ramp
     sf.write(str(path), clip, sr, subtype="PCM_16")
-    _LOG.info(f"✂️  segment {index}: cut {len(data) / sr - len(clip) / sr:.1f}s said after "
-              f"the line ended (\"{' '.join(extra)[:60]}\")")
+    said = f"(\"{' '.join(extra)[:60]}\")" if extra else "(no words, only sound)"
+    _LOG.info(f"✂️  segment {index}: cut {len(data) / sr - len(clip) / sr:.1f}s the engine added "
+              f"after the line ended {said}")
     return True
 
 
@@ -4346,15 +4647,6 @@ async def generate_chatterbox(subs, speaker_wav: str, lang_code: str, concat_lis
         raise TTSError(f"❌ {e}") from e
     sample_rate = info["sample_rate"]
     _LOG.info(f"🎙️  Chatterbox on {info['device']}, cloning from: {speaker_wav}")
-    # Chatterbox sometimes keeps talking after the line. A word-timed transcript of each clip
-    # finds where the line ends so the rest can be cut — the quality gate's ASR if it is on,
-    # else a small one of its own. It takes a second or two, against tens for the synthesis.
-    trail_asr = asr_model
-    if trail_asr is None and _has_module("faster_whisper"):
-        trail_asr = await asyncio.to_thread(_get_gate_asr, "small")
-    if trail_asr is None:
-        _LOG.info("ℹ️  Speech Chatterbox adds after a line can't be cut without faster-whisper: "
-                  + _install_hint("faster"))
 
     def _render(i, text, final_file, target_duration):
         raw_file = work_dir / f"cbx_raw_{i}.wav"
@@ -4369,11 +4661,8 @@ async def generate_chatterbox(subs, speaker_wav: str, lang_code: str, concat_lis
             return False
         if not _has_content(raw_file, 1000):
             return False
-        if trail_asr is not None:
-            _cut_trailing_speech(raw_file, text, trail_asr, lang_code, i)
         temp_files.append(str(raw_file))
-        return _fit_to_window(raw_file, final_file, target_duration, work_dir,
-                              sample_rate, enable_stretch)
+        return _prepare_clip(raw_file, final_file, sample_rate)
 
     try:
         await synthesize_timeline(
@@ -4382,7 +4671,7 @@ async def generate_chatterbox(subs, speaker_wav: str, lang_code: str, concat_lis
             render=_render, text_of=lambda s: normalize_tts_text(s.text),
             desc="Chatterbox", unit="phrase",
             quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code,
-            media_ms=media_ms)
+            media_ms=media_ms, enable_stretch=enable_stretch, check_run_on=True)
     finally:
         worker.close()
 
@@ -4452,8 +4741,7 @@ async def generate_voxcpm(subs, speaker_wav: str, lang_code: str, concat_list: l
         if not _has_content(raw_file, 1000):
             return False
         temp_files.append(str(raw_file))
-        return _fit_to_window(raw_file, final_file, target_duration, work_dir,
-                              sample_rate, enable_stretch)
+        return _prepare_clip(raw_file, final_file, sample_rate)
 
     try:
         await synthesize_timeline(
@@ -4462,7 +4750,7 @@ async def generate_voxcpm(subs, speaker_wav: str, lang_code: str, concat_list: l
             render=_render, text_of=lambda s: normalize_tts_text(s.text),
             desc="VoxCPM2", unit="phrase",
             quality_gate=quality_gate, asr_model=asr_model, gate_lang=lang_code,
-            media_ms=media_ms)
+            media_ms=media_ms, enable_stretch=enable_stretch, check_run_on=True)
     finally:
         worker.close()
 
@@ -4655,33 +4943,99 @@ def duck_background(background: Path, voice: Path, out: Path, background_volume:
     return len(plan), stretches, deepest
 
 
+# amix (normalize=1) gives each of its two inputs half of the output, so a dub over a
+# background plays at voice_volume / 2. A dub with nothing under it gets the same share: it is
+# as loud with --separate as without, and the voice, normalized to -16 LUFS at -1.5 dBTP,
+# can't clip (at the whole 1.5 a dub without a bed peaked at +2 dBTP).
+_MIX_SHARE = 0.5
+
+
+# Demucs can leave some of the original voice in the background it separates. In a stretch
+# where the original speaks, a background whose level rises and falls with that voice
+# (correlation of the two levels at least LEAK_CORRELATION) carries it; one that doesn't, music
+# or ambience, is left alone. A background quieter than LEAK_FLOOR_DB can't be heard anyway.
+LEAK_CORRELATION = 0.5
+LEAK_FLOOR_DB = -60.0
+_LEAK_MUTE_DB = 90.0
+
+
+def _leak_plan(speech_db, bg_db, min_frames: int = 6) -> Tuple[List[Tuple[int, int, float]], int]:
+    """The original's spoken stretches in which the background carries its voice, from the
+    two separated tracks' levels per 50 ms frame (dBFS). Returns (first, last + 1, gain_db)
+    frame ranges that mute those stretches, for _duck_curve, and how many spoken stretches
+    there were. Pure."""
+    plan = []
+    stretches = _speech_stretches(speech_db)
+    for first, last in stretches:
+        if last + 1 - first < min_frames:
+            continue
+        voice = np.asarray(speech_db[first:last + 1], dtype=float)
+        under = np.asarray(bg_db[first:last + 1], dtype=float)
+        level = 10 * math.log10(float(np.mean(10 ** (under / 10))) + 1e-12)
+        if level < LEAK_FLOOR_DB or voice.std() < 1e-6 or under.std() < 1e-6:
+            continue
+        if float(np.corrcoef(voice, under)[0, 1]) >= LEAK_CORRELATION:
+            plan.append((first, last + 1, -_LEAK_MUTE_DB))
+    return plan, len(stretches)
+
+
+def gate_vocal_leakage(background: Path, speech: Path,
+                       out: Path) -> Optional[Tuple[int, int]]:
+    """Write `background` with the stretches where it carries the original's voice muted (see
+    _leak_plan), so the original's speech can't be heard in the dub even where Demucs didn't
+    take all of it out. Read and written a block at a time. Returns (stretches muted, spoken
+    stretches checked), or None when there is no speech track to check it against: then it
+    can't be shown to be free of the voice, and isn't written."""
+    if not Path(speech).exists():
+        return None
+    speech_db, _ = _frame_levels(Path(speech), 1.0)
+    bg_db, rate = _frame_levels(Path(background), 1.0)
+    frames = min(len(speech_db), len(bg_db))
+    plan, stretches = _leak_plan(speech_db[:frames], bg_db[:frames])
+    if not plan:
+        shutil.copyfile(str(background), str(out))
+        return 0, stretches
+    curve = _duck_curve(plan, len(bg_db), attack_s=0.1, release_s=0.15)
+    centres = (np.arange(len(curve)) + 0.5) * _DUCK_FRAME_S
+    info = sf.info(str(background))
+    with sf.SoundFile(str(out), "w", samplerate=rate, channels=info.channels,
+                      subtype="PCM_16") as dst:
+        done = 0
+        for block in sf.blocks(str(background), blocksize=rate * 10, dtype="float32",
+                               always_2d=True):
+            times = (done + np.arange(len(block))) / rate
+            gain = 10 ** (np.interp(times, centres, curve) / 20)
+            dst.write(block * gain[:, None].astype(np.float32))
+            done += len(block)
+    return len(plan), stretches
+
+
 def _assemble_final_video(video_path, voiceover_path, output_file,
                           background_volume: float, voice_volume: float,
                           background_path=None) -> None:
-    """Mix the dubbed voiceover over a bed and mux it onto the copied video. The bed is the
-    source as it is, or with --separate its music and effects alone (background_path).
-    amix duration=longest (not first): a final line that runs past the source *audio* stream —
-    which can be shorter than the video — must not be truncated. A silent source (voiced from
-    --subtitles) has no bed to mix, so the dub is its only track. Extracted so the smoke test
-    can exercise the real mux without the whole pipeline."""
-    if background_path is None and _has_audio(video_path) is False:
+    """Put the dub on the copied video, over the original's music and effects when --separate
+    split them off (background_path). The original's own sound is never mixed in: it carries
+    the speech the dub replaces, and under the dub that was heard wherever the dub paused.
+    amix duration=longest (not first): a final line that runs past the background must not be
+    truncated. Extracted so the smoke test can exercise the real mux without the pipeline."""
+    if background_path is None or background_volume <= 0:
         run_ffmpeg([
             "ffmpeg", "-y", "-i", str(video_path), "-i", str(voiceover_path),
-            "-filter_complex", f"[1:a]volume={voice_volume}[fg]",
+            "-filter_complex", f"[1:a]volume={voice_volume * _MIX_SHARE:g}[fg]",
             "-map", "0:v:0", "-map", "[fg]",
             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", str(output_file)
         ], "Final video assembly")
         return
-    bed = "[0:a]" if background_path is None else "[2:a]"
     run_ffmpeg([
         "ffmpeg", "-y",
         "-i", str(video_path),
         "-i", str(voiceover_path),
-        *(["-i", str(background_path)] if background_path is not None else []),
+        "-i", str(background_path),
         "-filter_complex",
-        f"{bed}volume={background_volume}[bg];[1:a]volume={voice_volume}[fg];"
-        f"[bg][fg]amix=inputs=2:duration=longest:dropout_transition=2",
-        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-map", "0:v:0",
+        f"[2:a]volume={background_volume}[bg];[1:a]volume={voice_volume}[fg];"
+        f"[bg][fg]amix=inputs=2:duration=longest:dropout_transition=2[mix]",
+        "-map", "0:v:0", "-map", "[mix]",
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
         str(output_file)
     ], "Final video assembly")
 
@@ -4918,10 +5272,9 @@ async def process_video(video_path: str, args, logger: Logger):
                         f"(model: {llm_model}, batch: {args.llm_batch_size})")
             indexed = [seg for seg in merged_segments if seg['text'].strip()]
             texts = [seg['text'].strip() for seg in indexed]
-            # SY3: length-budget each line to its source duration so the dub fits at a
-            # natural pace (isochrony) — minimizes downstream time-stretch and trimming.
-            max_chars = [_duration_to_max_chars(max(0.0, seg['end'] - seg['start']),
-                                                args.speech_rate) for seg in indexed]
+            # SY3: length-budget each line to the time placement gives it, so the dub fits at
+            # a natural pace and placement seldom has to play a line faster.
+            max_chars = _line_budgets(indexed, args.speech_rate)
             translated_texts = translate_llm_batch(
                 texts, args.target_lang, args.translator, model=llm_model,
                 api_key=llm_api_key, batch_size=args.llm_batch_size, max_chars=max_chars,
@@ -4974,11 +5327,7 @@ async def process_video(video_path: str, args, logger: Logger):
         state.mark_completed('translation', translation_sig)
 
     # Generate SRT
-    with open(srt_file, 'w', encoding='utf-8') as f:
-        for i, seg in enumerate(translated_segments):
-            f.write(f"{i+1}\n")
-            f.write(f"{format_timestamp(seg['start'])} --> {format_timestamp(seg['end'])}\n")
-            f.write(f"{seg['text']}\n\n")
+    _write_line_srt(translated_segments, srt_file)
 
     # The subtitles to read: the lines above, cut into captions that fit on screen. They are
     # what a subtitle file and a subtitled video carry; the SRT above stays one cue per line
@@ -5065,12 +5414,28 @@ async def process_video(video_path: str, args, logger: Logger):
         if spec is None:
             logger.error(f"Unknown TTS engine: {args.tts}")
             return 1
+        _TIMING.shorten = _line_shortener(args)
+        _TIMING.whisper_model = args.whisper_model
+        _TIMING.shortened = {}
         try:
             concat_list, temp_files = await spec["synthesize"](
                 subs, args, work_dir, video_path, gate_asr, logger)
         except TTSError as exc:
             logger.error(str(exc))
             return 1
+        finally:
+            # A line said in fewer words is kept that way, also when other lines failed: its
+            # clip is kept for the next run, and the subtitles must show what it says.
+            if _keep_shortened(_TIMING.shortened, subs, translated_segments, spoken):
+                with open(translated_json, 'w', encoding='utf-8') as f:
+                    json.dump(translated_segments, f, ensure_ascii=False, indent=2)
+                _write_line_srt(translated_segments, srt_file)
+                write_srt(caption_cues(translated_segments), captions)
+                lines_file.write_text(json.dumps(spoken, ensure_ascii=False), encoding="utf-8")
+                if args.translator in LLM_PROVIDERS:
+                    log_llm_usage_summary(args.translator,
+                                          getattr(args, f"{args.translator}_model"))
+            _TIMING.shorten, _TIMING.shortened = None, {}
 
         if not concat_list:
             logger.error("No audio generated!")
@@ -5107,8 +5472,32 @@ async def process_video(video_path: str, args, logger: Logger):
     # so they stay at full volume.
     background = background_wav if separate and background_wav.exists() else None
     background_volume = args.background_volume
-    if background_volume is None:
-        background_volume = 1.0 if background else 0.05
+    if background is None:
+        # Without --separate there is no bed at all: the original's sound carries its speech,
+        # and under the dub that was heard wherever the dub paused (measured: the original
+        # alone, 32 dB down, for the 4.5 s a short line left free).
+        if background_volume:
+            logger.warning("⚠️  --background-volume is ignored without --separate: the "
+                           "original's sound has its speech in it, and that must not be "
+                           "heard under the dub. --separate keeps its music and effects.")
+        background_volume = 0.0
+    else:
+        if background_volume is None:
+            background_volume = 1.0
+        # Demucs can leave some of the voice in the background. Where it did, the background
+        # is muted while the original speaks, so no word of it reaches the dub.
+        clean = work_dir / "background_clean.wav"
+        checked = gate_vocal_leakage(background, speech_wav, clean)
+        if checked is None:
+            logger.warning("⚠️  The separated speech is missing, so the background can't be "
+                           "checked for the original's voice; it is left out of the dub.")
+            background, background_volume = None, 0.0
+        else:
+            muted, stretches = checked
+            if muted:
+                logger.info(f"🔇 Muted the background in {muted} of the original's {stretches} "
+                            f"spoken stretches, where its voice was left in it")
+            background = clean
     # At its own level a loud background can cover the dub, so where the dub speaks it is
     # lowered just enough to stay DUCK_MARGIN_DB under it; between lines it plays as it was.
     if background and not getattr(args, "no_duck", False):
@@ -5133,7 +5522,8 @@ async def process_video(video_path: str, args, logger: Logger):
     if not args.keep_temp:
         logger.info("🧹 Cleaning up temporary files...")
         for pattern in ['*_raw.*', 'silence_*.wav', 'xtts_sil_*.wav', 'speech_*_processed.*',
-                        'background_ducked.wav']:
+                        'background_ducked.wav', 'background_clean.wav', '*_put_*.wav',
+                        '*_sil_*.wav']:
             for f in work_dir.glob(pattern):
                 f.unlink(missing_ok=True)
 
@@ -5332,7 +5722,10 @@ Examples:
                              "API tier allows; set 1 to synthesize one segment at a time.")
 
     parser.add_argument("--no-stretch", action="store_true",
-                        help="Disable audio time-stretching")
+                        help="Never play a line faster. By default a line too long for its "
+                             "time is played up to 1.25x faster (and first shortened by an "
+                             "LLM translator, when there is one); with this it runs on and "
+                             "starts the next lines late instead")
     parser.add_argument("--detect-emotion", action="store_true",
                         help="Expressive delivery: edge TTS voice styles, and for OpenAI TTS "
                              "an LLM tags each line with a delivery direction (A2 T1)")
@@ -5350,12 +5743,10 @@ Examples:
                              "it is lowered where it would cover the dub, so it stays 10 dB "
                              "under the dub while the dub speaks")
     parser.add_argument("--background-volume", type=float, default=None,
-                        help="Original audio volume (0.0-1.0, default: 0.05 — keeps the "
-                             "source as a faint ambience bed ~35 dB under the dub, so the "
-                             "original speech is not intelligible; raise toward 0.15 to "
-                             "hear more of the original, 0.0 to mute it entirely). With "
-                             "--separate the default is 1.0, since only music and effects "
-                             "are left")
+                        help="With --separate, the volume of the original's music and effects "
+                             "under the dub (0.0-1.0, default: 1.0). Without --separate the "
+                             "original's sound isn't used at all: its speech would be heard "
+                             "under the dub")
     parser.add_argument("--voice-volume", type=float, default=1.5,
                         help="Dubbed voice volume (0.0-2.0, default: 1.5)")
 

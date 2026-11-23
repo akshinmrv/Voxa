@@ -2,8 +2,8 @@
 
 Locks the deterministic, engine-free half of the pipeline against a recorded golden
 output: transcription hygiene (word-onset refinement SY5, non-speech filtering SY4),
-sentence merging, translation length budgets (A1), SRT timestamps, and the anchored
-placement math (SY2). No whisper / ffmpeg / TTS / network / API key is needed, so this
+sentence merging, translation length budgets (A1), SRT timestamps, and the placement math
+(_plan_line: start, tempo, lag). No whisper / ffmpeg / TTS / network / API key is needed, so this
 runs everywhere — including CI.
 
 Unit tests check each function alone; this harness checks them *composed*, which is
@@ -24,7 +24,7 @@ UPDATE = os.environ.get("UPDATE_GOLDEN") == "1"
 
 # Synthetic speaking rates used to derive a dub duration from a line's length, so the
 # placement math is exercised without synthesizing audio. 15 cps ≈ natural (clips fit);
-# 8 cps ≈ a verbose translation that over-runs its slot and must be trimmed.
+# 8 cps ≈ a verbose translation that over-runs its slot, so it is played faster and runs on.
 NATURAL_CPS = 15.0
 VERBOSE_CPS = 8.0
 
@@ -51,21 +51,18 @@ def _r(value, digits=3):
 
 
 def _plans(merged, cps):
-    """Anchored placement plan per block (SY2), given a synthetic dub duration."""
-    plans = []
+    """The placement plan per line (_plan_line), given a synthetic dub duration, run in
+    order as synthesize_timeline runs it. The last line has the media to its own end."""
+    plans, prev_end = [], None
     for i, m in enumerate(merged):
-        actual_ms = len(m["text"]) / cps * 1000.0
-        start_ms = m["start"] * 1000.0
-        if i + 1 < len(merged):
-            next_start_ms = merged[i + 1]["start"] * 1000.0
-            trim_ms, pad_ms = voxa._plan_anchored_block(actual_ms, start_ms, next_start_ms)
-            cursor_ms = next_start_ms
-        else:
-            # Last block has no next onset to protect: pad to its own window, never trim.
-            trim_ms = 0.0
-            pad_ms, cursor_ms = voxa._plan_block(actual_ms, start_ms, m["end"] * 1000.0)
-        plans.append({"trim_ms": _r(trim_ms, 1), "pad_ms": _r(pad_ms, 1),
-                      "cursor_ms": _r(cursor_ms, 1)})
+        clip_ms = len(m["text"]) / cps * 1000.0
+        next_onset = merged[i + 1]["start"] * 1000.0 if i + 1 < len(merged) else None
+        plan = voxa._plan_line(clip_ms, m["start"] * 1000.0, prev_end, next_onset,
+                               media_end_ms=m["end"] * 1000.0)
+        prev_end = plan.end_ms
+        plans.append({"start_ms": _r(plan.start_ms, 1), "speed": _r(plan.speed),
+                      "end_ms": _r(plan.end_ms, 1), "lag_ms": _r(plan.lag_ms, 1),
+                      "overrun_ms": _r(plan.overrun_ms, 1)})
     return plans
 
 
@@ -85,8 +82,8 @@ def run_transcript_pipeline(raw_segments):
     kept = voxa.filter_nonspeech_segments(refined, threshold=0.6)
     # Merge into sentences (punctuation, >0.5s pause, or max duration).
     merged = voxa.merge_segments_into_sentences(kept, max_duration=10.0)
-    # A1: per-line translation length budget so the dub fits at a natural pace.
-    budgets = [voxa._duration_to_max_chars(m["end"] - m["start"]) for m in merged]
+    # A1: per-line translation length budget, for the time placement gives each line.
+    budgets = voxa._line_budgets(merged)
     # SRT block timing.
     srt = [f"{voxa.format_timestamp(m['start'])} --> {voxa.format_timestamp(m['end'])}"
            for m in merged]

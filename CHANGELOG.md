@@ -17,6 +17,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **How a line is fitted into its time.** A line that is too long for the time it has is now
+  played at most 1.25 times faster, where it used to be up to 2.5 times; it may start the next
+  line up to 0.4 s late, which the next pause takes back; and with an LLM translator it is
+  said again in fewer words and voiced again, the shorter wording going into the translation
+  and the subtitles too. Nothing spoken is cut off any more: before, whatever didn't fit at
+  2.5x was trimmed at the next line's start. In a real Turkish dub with Chatterbox, one line
+  was played 2.5x faster and then cut by 724 ms, and Whisper heard a different word in what was
+  left. What still doesn't fit plays in full and starts the following lines late until a pause,
+  and the log names the line. The LLM translator's character budget is now the time up to the
+  next line, not only the time the speaker took. `--no-stretch` now means a line is never
+  played faster and runs on instead. Work folders voice their lines again once, since the
+  clips they hold were made for the old placement.
+- **The original's sound is never under the dub.** Without `--separate` the whole original used
+  to play at 5% under the dub, and wherever the dub paused, its speech could be heard alone
+  (measured in a real dub: 4.5 s of the original's voice, 32 dB down, while a short line left
+  its time free). Now the dub is the only sound, and `--background-volume` applies only to the
+  separated background. With `--separate`, where Demucs left some of the voice in the
+  background, the background is muted while the original speaks.
+
 - **The README, rewritten in English, Azerbaijani and Turkish.** It is about a quarter of its
   old length and starts where most people do: VoxaSetup.exe and Voxa Studio, then the command
   line. It now says what leaves your computer and what doesn't, and lists what is known not to
@@ -33,6 +52,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A line could be left out of a dub that was reported finished.** When an engine failed on a
+  line, or gave back a silent clip, the line was skipped and the dub completed with a gap there
+  (and, before the change above, the original's voice in it). Every clip is now checked: it must
+  have sound, and enough of it for its words. A clip that fails is voiced again, up to three
+  times, and a line that still fails stops the run with the line named; the lines that worked
+  are kept, so running again voices only that one.
+- **What Chatterbox says after a line was played as part of it.** Chatterbox often keeps going
+  after a pause: in a real dub, 1.5 to 2.9 s of murmur after lines of 1 to 2 s. It wasn't cut,
+  because the check only looked for extra *words*, and it only ran with faster-whisper, which
+  VoxaSetup doesn't install. So the line counted as twice its length and was played twice as
+  fast. Whisper now finds where the line's last word ends and the clip is cut in the pause
+  after it, with openai-whisper when faster-whisper isn't there, for VoxCPM2 and XTTS as well.
+- **Chatterbox couldn't say a line of five tokens or fewer** ("3.", "Evet."): it raised
+  `IndexError: max(): Expected reduction dim 1 to have non-zero size` on every one. Voxa's worker
+  now steps around that check in Chatterbox 0.1.7.
+- **The engines' own silence counted as speech.** The silence an engine leaves before and after
+  a line was part of its length, so a short line was sped up to make room for its own silence.
+  It is taken off before the line is placed.
+- **A dub without a bed could clip.** A video with no sound of its own got the dub at 1.5 times
+  its normalized level, up to +2 dBTP; it now gets the same level as a dub over a background.
+- **Changing the language or voice of a Chatterbox or VoxCPM2 dub reused the old clips.** The
+  clips those two engines make weren't cleared when a run's speech settings changed.
 - **The website's brief for AI search engines (`/llms.txt`) said `pip install "voxa"`.** There
   is no such package on PyPI; Voxa's is `voxa-dub`. It now lists VoxaSetup.exe, the one-line
   installers and `pipx install "voxa-dub[serve]"`. The site's structured data said version

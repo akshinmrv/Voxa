@@ -94,8 +94,9 @@ def test_a_review_job_stops_with_its_lines_kept(ws, voxa_runs):
     view = TestClient(srv.app).get("/api/jobs/j1/translation").json()
     assert view["editable"] is True
     assert view["lines"] == [
+        # 10 characters a second for the 1.35 s up to the next line (its gap kept)
         {"start": 0.5, "end": 1.5, "text": "Sabahınız xeyir.", "source": "Good morning.",
-         "speaker": None, "maxChars": 20},
+         "speaker": None, "maxChars": 13},
         {"start": 2.0, "end": 5.0, "text": "Sabah görüşərik.", "source": "See you tomorrow.",
          "speaker": "SPEAKER_01", "maxChars": 30}]
 

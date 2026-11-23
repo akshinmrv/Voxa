@@ -71,9 +71,10 @@ def _max_volume(path) -> float:
     return float(out.split("max_volume:")[1].split("dB")[0])
 
 
-def test_with_separate_the_bed_is_the_background_not_the_original(tmp_path):
-    # The original's own track (a loud tone here) must not be mixed in: with --separate the
-    # bed is the separated background, silent in this test, so the result is silent too.
+def test_the_original_sound_is_never_under_the_dub(tmp_path):
+    # The original's own track (a loud tone here) must not be mixed in, with --separate or
+    # without: it carries the speech the dub replaces. The dub and the separated background
+    # are silent in this test, so the result must be silent too.
     src = tmp_path / "src.mp4"
     _run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=320x240:d=3",
           "-f", "lavfi", "-i", "sine=frequency=1000:duration=3",
@@ -86,8 +87,8 @@ def test_with_separate_the_bed_is_the_background_not_the_original(tmp_path):
     faint, separated = tmp_path / "faint.mp4", tmp_path / "separated.mp4"
     voxa._assemble_final_video(str(src), str(vo), str(faint), 1.0, 1.0)
     voxa._assemble_final_video(str(src), str(vo), str(separated), 1.0, 1.0, bg)
-    assert _max_volume(faint) > -40                     # the tone is there without it
-    assert _max_volume(separated) < -80
+    assert _max_volume(faint) < -80                     # no bed without --separate
+    assert _max_volume(separated) < -80                 # and with it, only the background
 
 
 def test_assemble_does_not_truncate_a_long_final_line(tmp_path):

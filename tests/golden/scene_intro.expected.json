@@ -26,8 +26,8 @@
     }
   ],
   "max_chars": [
-    39,
-    46,
+    41,
+    60,
     49
   ],
   "srt": [
@@ -37,36 +37,48 @@
   ],
   "plans_natural": [
     {
-      "trim_ms": 0.0,
-      "pad_ms": 1063.3,
-      "cursor_ms": 19950.0
+      "start_ms": 17020.0,
+      "speed": 1.0,
+      "end_ms": 18886.7,
+      "lag_ms": 0.0,
+      "overrun_ms": 0.0
     },
     {
-      "trim_ms": 0.0,
-      "pad_ms": 2483.3,
-      "cursor_ms": 24100.0
+      "start_ms": 19950.0,
+      "speed": 1.0,
+      "end_ms": 21616.7,
+      "lag_ms": 0.0,
+      "overrun_ms": 0.0
     },
     {
-      "trim_ms": 0.0,
-      "pad_ms": 1320.0,
-      "cursor_ms": 27420.0
+      "start_ms": 24100.0,
+      "speed": 1.0,
+      "end_ms": 26100.0,
+      "lag_ms": 0.0,
+      "overrun_ms": 0.0
     }
   ],
   "plans_verbose": [
     {
-      "trim_ms": 570.0,
-      "pad_ms": 0.0,
-      "cursor_ms": 19950.0
+      "start_ms": 17020.0,
+      "speed": 1.101,
+      "end_ms": 20200.0,
+      "lag_ms": 0.0,
+      "overrun_ms": 0.0
     },
     {
-      "trim_ms": 0.0,
-      "pad_ms": 1025.0,
-      "cursor_ms": 24100.0
+      "start_ms": 20350.0,
+      "speed": 1.0,
+      "end_ms": 23475.0,
+      "lag_ms": 400.0,
+      "overrun_ms": 0.0
     },
     {
-      "trim_ms": 0.0,
-      "pad_ms": 0.0,
-      "cursor_ms": 27850.0
+      "start_ms": 24100.0,
+      "speed": 1.13,
+      "end_ms": 27420.0,
+      "lag_ms": 0.0,
+      "overrun_ms": 0.0
     }
   ]
 }

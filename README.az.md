@@ -37,10 +37,12 @@ sətir nadir hallarda orijinal qədər olur. Bir az uzun çıxan klip ondan sonr
 az geri itələyir və bu xəta yığılır. Üç dəqiqəlik videoda ölçdük: belə alət sonda danışandan
 18 saniyə geri qalırdı.
 
-Voxa gecikməni cəmləmir. Hər sətrə orijinalda öz başlanğıcından növbəti sətrin başlanğıcına
-qədər olan vaxt verilir və sətir bu aralığın əvvəlinə qoyulur. Uzun sətir özündən sonrakı
-fasiləyə keçə bilər. Yenə sığmırsa, bir az sürətli deyilir, sonra kəsilir, amma heç vaxt
-növbəti sətri geri itələmir. Eyni videoda sürüşmə 0,0 saniyə olaraq qalır.
+Voxa gecikməni cəmləmir. Hər sətir orijinalda başladığı anda başlayır və növbəti sətir
+başlamazdan bir az əvvələ qədər vaxtı var. Uzun sətir özündən sonrakı fasiləyə keçə bilər.
+Bu da çatmasa, bir az sürətli səslənir, amma heç vaxt 1,25 dəfədən çox yox. Növbəti sətri ən
+çox 0,4 saniyə gecikdirə bilər, sonrakı fasilə bu gecikməni geri alır, ona görə gecikmə
+yığılmır. Yenə sığmayan sətri LLM tərcüməçi daha az sözlə yenidən deyir. Deyilən heç bir söz
+kəsilmir.
 
 Bu qərardan daha iki şey çıxır. LLM tərcüməçiləri hər sətir üçün simvol limiti alır, ona görə
 tərcümə sonradan sıxışdırılmır, əvvəldən vaxta sığan şəkildə yazılır. Nitq isə yalnız

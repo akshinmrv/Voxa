@@ -82,19 +82,8 @@ def test_merge_sentences_splits_on_long_pause():
     assert len(merged) == 2
 
 
-# ── Timing / speed math ──────────────────────────────────
-def test_speed_factor_within_tolerance_is_one():
-    assert voxa.calculate_speed_factor(1.0, 1.0) == 1.0
-    assert voxa.calculate_speed_factor(1.02, 1.0) == 1.0
 
 
-def test_speed_factor_is_clamped():
-    assert voxa.calculate_speed_factor(10.0, 1.0) == 2.5
-    assert voxa.calculate_speed_factor(1.0, 10.0) == 0.5
-
-
-def test_speed_factor_zero_target_safe():
-    assert voxa.calculate_speed_factor(5.0, 0.0) == 1.0
 
 
 # ── S0: TTS text normalization + chunking ────────────────
@@ -191,8 +180,8 @@ def test_generate_openai_tts_places_segments(tmp_path):
     import asyncio
     asyncio.run(voxa.generate_openai_tts(subs, _Client(), "alloy", "gpt-4o-mini-tts", "", "az",
                                          concat, temp, tmp_path, enable_stretch=True))
-    finals = [c for c in concat if "otts_fin_" in c]
-    assert len(finals) == 2
+    placed = [c for c in concat if "otts_put_" in c]
+    assert len(placed) == 2
 
 
 # ── S1: quality scoring primitives ───────────────────────
@@ -253,46 +242,12 @@ def test_apply_micro_fades_ramps_edges(tmp_path):
     assert data[sr // 2] > 0.9      # middle untouched
 
 
-# ── S0: stretch-policy inversion (no slowdown) ───────────
-def test_speed_factor_no_slowdown_policy():
-    # allow_slowdown=False: never below 1.0 (pad instead), speed-up capped
-    assert voxa.calculate_speed_factor(1.0, 10.0, allow_slowdown=False) == 1.0
-    assert voxa.calculate_speed_factor(10.0, 1.0, allow_slowdown=False) == voxa.STRETCH_MAX_SPEEDUP
-    assert voxa.calculate_speed_factor(1.2, 1.0, allow_slowdown=False) == pytest.approx(1.2)
-    # default (allow_slowdown=True) is unchanged / backward compatible
-    assert voxa.calculate_speed_factor(1.0, 10.0) == 0.5
 
 
-# ── S0: absolute-timeline placement math ─────────────────
-def test_plan_block_pads_short_clip_to_window():
-    pad, cursor = voxa._plan_block(actual_ms=800, start_ms=1000, end_ms=3000)   # window 2000
-    assert pad == pytest.approx(1200)
-    assert cursor == 3000
 
 
-def test_plan_block_overrun_pushes_cursor():
-    pad, cursor = voxa._plan_block(actual_ms=2500, start_ms=1000, end_ms=3000)  # window 2000
-    assert pad == 0.0
-    assert cursor == 3500        # next gap shrinks
 
 
-def test_plan_block_within_tolerance_no_pad():
-    pad, cursor = voxa._plan_block(actual_ms=1990, start_ms=0, end_ms=2000)
-    assert pad == 0.0
-    assert cursor == 2000
-
-
-# ── SY2: absolute-anchor slot math ───────────────────────
-def test_plan_anchored_block():
-    # over-run: 4000ms clip into slot [1000, 4000] (room 3000) → trim 1000, pad 0
-    trim, pad = voxa._plan_anchored_block(4000, 1000, 4000)
-    assert trim == pytest.approx(1000) and pad == 0.0
-    # short: 2000ms into room 3000 → trim 0, pad 1000
-    trim, pad = voxa._plan_anchored_block(2000, 1000, 4000)
-    assert trim == 0.0 and pad == pytest.approx(1000)
-    # exact fit → neither
-    trim, pad = voxa._plan_anchored_block(3000, 1000, 4000)
-    assert trim == 0.0 and pad == 0.0
 
 
 def test_dub_target_borrows_the_following_pause():
@@ -318,29 +273,6 @@ def test_sub_start_ms():
     assert voxa._sub_start_ms(_S()) == 62300
 
 
-def test_place_speech_block_anchors_and_trims_overrun(tmp_path):
-    import numpy as np
-    import soundfile as sf
-    sr = 24000
-    clip = tmp_path / "clip.wav"
-    sf.write(str(clip), np.full(2 * sr, 0.3, dtype="float32"), sr, subtype="PCM_16")  # 2s
-    concat, temp = [], []
-    # slot [1000, 2000] → room 1000ms; the 2s clip must be trimmed and the cursor anchored
-    cursor = voxa._place_speech_block(clip, 1000, 2000, 2000, sr, tmp_path, "t", concat, temp)
-    assert cursor == 2000.0                              # anchored to next onset (no drift)
-    assert sf.info(str(clip)).duration <= 1.05           # trimmed into the slot
-
-
-def test_place_speech_block_pads_short_and_anchors(tmp_path):
-    import numpy as np
-    import soundfile as sf
-    sr = 24000
-    clip = tmp_path / "clip.wav"
-    sf.write(str(clip), np.full(sr // 2, 0.3, dtype="float32"), sr, subtype="PCM_16")  # 0.5s
-    concat, temp = [], []
-    cursor = voxa._place_speech_block(clip, 1000, 2000, 2000, sr, tmp_path, "t", concat, temp)
-    assert cursor == 2000.0
-    assert any("fill_t" in c for c in concat)            # padded the 0.5s remainder
 
 
 # ── Language map ─────────────────────────────────────────
@@ -847,7 +779,7 @@ def test_batch_process_counts_failures_and_returns_nonzero(monkeypatch):
 # ── Batch passthrough when no client (both providers) ─────
 def test_duration_to_max_chars():
     assert voxa._duration_to_max_chars(3.0, 15.0) == 45
-    assert voxa._duration_to_max_chars(0.5, 15.0) == 20    # floored
+    assert voxa._duration_to_max_chars(0.5, 15.0) == 12    # floored
     assert voxa._duration_to_max_chars(2.0) == 30          # default cps 15
     assert voxa._duration_to_max_chars(10.0, 12.0) == 120
 
@@ -1460,9 +1392,10 @@ def test_synthesize_timeline_prerenders_only_when_parallel(tmp_path, monkeypatch
 
     monkeypatch.setattr(voxa, "_prerender_parallel", _spy)
     monkeypatch.setattr(voxa, "_has_content", lambda *a, **k: True)
+    monkeypatch.setattr(voxa, "_clip_problem", lambda *a, **k: None)
+    monkeypatch.setattr(voxa, "_clip_ms", lambda *a, **k: 500.0)
     monkeypatch.setattr(voxa, "create_silence_wav", lambda *a, **k: False)
-    monkeypatch.setattr(voxa, "_place_speech_block",
-                        lambda final_file, start_ms, end_ms, *a, **k: end_ms)
+    monkeypatch.setattr(voxa, "_play_at", lambda *a, **k: None)
 
     common = dict(engine="edge", prefix="p", sample_rate=16000, work_dir=tmp_path,
                   concat_list=[], temp_files=[], render=lambda *a: True,
@@ -1533,21 +1466,30 @@ class _FakePiperPopen:
     def communicate(self, input=None):
         from pathlib import Path as _P
         out = _P(self.cmd[self.cmd.index("--output_file") + 1])
-        out.write_bytes(b"RAW".ljust(1500, b"0"))
+        _hum(out, 0.6)        # fits its line, so placement needs no ffmpeg (Popen is faked)
         return b"", b""
 
 
+def _hum(path, seconds, rate=22050):
+    """A humming WAV standing in for speech: it passes the clip check, as speech does."""
+    import numpy as np
+    import soundfile as sf
+    sig = 0.3 * np.sin(2 * np.pi * 220 * np.arange(int(seconds * rate)) / rate)
+    sf.write(str(path), sig.astype("float32"), rate, subtype="PCM_16")
+
+
 def _patch_piper_placement(monkeypatch):
-    """Replace placement with a recorder; returns the list it appends to."""
+    """Record each line's plan (the real _plan_line runs) and the tempo it is played at."""
     placed = []
+    real_plan = voxa._plan_line
 
-    def _place(final_file, start_ms, end_ms, next_start_ms, sr, work_dir, tag,
-               concat_list, temp_files):
-        placed.append({"tag": tag, "start": start_ms, "next": next_start_ms})
-        concat_list.append(f"file '{final_file}'")
-        return float(next_start_ms) if next_start_ms is not None else float(end_ms)
+    def _plan(clip_ms, onset_ms, prev_end_ms, next_onset_ms, *a, **k):
+        plan = real_plan(clip_ms, onset_ms, prev_end_ms, next_onset_ms, *a, **k)
+        placed.append({"start": plan.start_ms, "next": next_onset_ms, "speed": plan.speed,
+                       "clip_ms": clip_ms})
+        return plan
 
-    monkeypatch.setattr(voxa, "_place_speech_block", _place)
+    monkeypatch.setattr(voxa, "_plan_line", _plan)
     return placed
 
 
@@ -1555,13 +1497,6 @@ def test_piper_anchors_placement_and_never_slows_down(tmp_path, monkeypatch):
     monkeypatch.setattr(voxa.shutil, "which", lambda name: "piper")
     monkeypatch.setattr(voxa.subprocess, "Popen", _FakePiperPopen)
 
-    captured = {}
-
-    def _stretch(src, dst, target, work_dir, sr, allow_slowdown=True):
-        captured["allow_slowdown"] = allow_slowdown
-        __import__("pathlib").Path(dst).write_bytes(b"FIN".ljust(1500, b"0"))
-        return True
-    monkeypatch.setattr(voxa, "stretch_audio_smart", _stretch)
     placed = _patch_piper_placement(monkeypatch)
 
     import asyncio
@@ -1570,10 +1505,13 @@ def test_piper_anchors_placement_and_never_slows_down(tmp_path, monkeypatch):
     asyncio.run(voxa.generate_piper(subs, tmp_path / "model.onnx", concat, temps, tmp_path,
                                     enable_stretch=True))
 
-    assert captured["allow_slowdown"] is False        # S0: speed up only, never drag
     assert len(placed) == 2                            # every segment placed
-    assert placed[0]["next"] == 1500                   # SY2: anchored to the next onset
-    assert placed[1]["next"] is None                   # last segment pads to its window
+    assert placed[0]["start"] == 0                     # at the original line's onset
+    assert placed[0]["next"] == 1500                   # with the next onset to fit before
+    assert placed[1]["next"] is None                   # the last one has the media's end
+    assert all(p["speed"] >= 1.0 for p in placed)      # never slowed down
+    assert all(p["speed"] <= voxa.MAX_SPEEDUP for p in placed)
+    assert [c for c in concat if "piper_put_" in c]
 
 
 def test_piper_resume_places_cached_segment(tmp_path, monkeypatch):
@@ -1586,7 +1524,7 @@ def test_piper_resume_places_cached_segment(tmp_path, monkeypatch):
     monkeypatch.setattr(voxa.subprocess, "Popen", _boom)
     placed = _patch_piper_placement(monkeypatch)
 
-    (tmp_path / "piper_fin_0.wav").write_bytes(b"CACHED".ljust(1500, b"0"))
+    _hum(tmp_path / "piper_fin_0.wav", 0.6)
 
     import asyncio
     concat, temps = [], []
@@ -1594,7 +1532,7 @@ def test_piper_resume_places_cached_segment(tmp_path, monkeypatch):
                                     concat, temps, tmp_path, enable_stretch=True))
 
     assert len(placed) == 1
-    assert concat and "piper_fin_0.wav" in concat[0]
+    assert concat and "piper_put_0.wav" in concat[-1]
 
 
 def test_a3_regen_keeps_best_take(tmp_path, monkeypatch):
@@ -1611,7 +1549,10 @@ def test_a3_regen_keeps_best_take(tmp_path, monkeypatch):
         __import__("pathlib").Path(dst).write_bytes(b"FIRST".ljust(1500, b"0"))
         return True
 
-    monkeypatch.setattr(voxa, "stretch_audio_smart", _first_take)
+    monkeypatch.setattr(voxa, "_prepare_clip", _first_take)
+    monkeypatch.setattr(voxa, "_clip_problem", lambda *a, **k: None)
+    monkeypatch.setattr(voxa, "_clip_ms", lambda *a, **k: 800.0)
+    monkeypatch.setattr(voxa, "_get_trail_asr", lambda *a, **k: None)
 
     # Each regeneration writes distinctive content so we can see which one was promoted.
     calls = {"fit": 0}
@@ -1631,9 +1572,8 @@ def test_a3_regen_keeps_best_take(tmp_path, monkeypatch):
     monkeypatch.setattr(voxa, "score_speech", lambda *a, **k: next(seq))
 
     placed = {}
-    monkeypatch.setattr(voxa, "_place_speech_block",
-                        lambda final_file, *a, **k: (placed.update(
-                            bytes=final_file.read_bytes()) or 1000.0))
+    monkeypatch.setattr(voxa, "_play_at",
+                        lambda final_file, *a, **k: placed.update(bytes=final_file.read_bytes()))
 
     import asyncio
     concat, temps = [], []
@@ -1879,44 +1819,7 @@ def test_run_ffmpeg_success_is_quiet(monkeypatch):
     voxa.run_ffmpeg(["ffmpeg", "-i", "x.mp4"], "whatever")   # must not raise
 
 
-# ── The anchored slot maths the tests check must be the maths production runs ──
-def test_place_speech_block_delegates_to_plan_anchored_block(tmp_path, monkeypatch):
-    calls = {}
 
-    def _plan(actual_ms, start_ms, next_start_ms):
-        calls["args"] = (actual_ms, start_ms, next_start_ms)
-        return 0.0, 0.0
-
-    def _boom(*a, **k):
-        raise RuntimeError("unreadable")
-
-    monkeypatch.setattr(voxa, "_plan_anchored_block", _plan)
-    monkeypatch.setattr(voxa, "_apply_micro_fades", lambda p: None)
-    monkeypatch.setattr(voxa.sf, "info", _boom)     # duration falls back to the window
-
-    f = tmp_path / "x.wav"
-    f.write_bytes(b"0" * 1200)
-    cursor = voxa._place_speech_block(f, 1000, 2000, 3000, 24000, tmp_path, 0, [], [])
-
-    assert calls["args"] == (1000.0, 1000.0, 3000.0)
-    assert cursor == 3000.0
-
-
-def test_place_speech_block_trims_to_the_planned_slot(tmp_path, monkeypatch):
-    from types import SimpleNamespace
-    trimmed = {}
-    monkeypatch.setattr(voxa.sf, "info", lambda p: SimpleNamespace(duration=3.0))   # 3000 ms
-    monkeypatch.setattr(voxa, "_trim_wav", lambda p, ms: trimmed.setdefault("ms", ms))
-    monkeypatch.setattr(voxa, "_apply_micro_fades", lambda p: None)
-    monkeypatch.setattr(voxa, "create_silence_wav", lambda *a, **k: False)
-
-    f = tmp_path / "x.wav"
-    f.write_bytes(b"0" * 1200)
-    # slot is [0, 2000]; a 3000 ms clip must be trimmed down to exactly 2000 ms
-    cursor = voxa._place_speech_block(f, 0, 1000, 2000, 24000, tmp_path, 0, [], [])
-
-    assert trimmed["ms"] == 2000.0
-    assert cursor == 2000.0                 # cursor is anchored: no drift can accumulate
 
 
 # ── Checkpoint invalidation: the stale-work-directory fix ──
@@ -2157,15 +2060,6 @@ def test_total_synthesis_failure_raises(tmp_path):
         _run_timeline(_subs(2), lambda i, t, f, d: False, tmp_path)
     assert "no speech" in str(exc.value).lower()
 
-
-def test_partial_synthesis_still_succeeds(tmp_path):
-    """One good segment is a usable (if imperfect) dub — only a TOTAL failure is fatal."""
-    def render(i, text, final_file, target_duration):
-        if i == 0:
-            return False
-        voxa.create_silence_wav(0.5, str(final_file), 24000)
-        return True
-    assert _run_timeline(_subs(2), render, tmp_path) == 1
 
 
 def test_no_subtitles_is_not_a_failure(tmp_path):

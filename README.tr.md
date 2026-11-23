@@ -37,10 +37,12 @@ satır nadiren orijinali kadar sürer. Biraz uzun çıkan bir klip kendisinden s
 geriye iter ve hata birikir. Üç dakikalık bir videoda ölçtük: bu yöntem sonunda konuşanın 18
 saniye gerisinde kalıyordu.
 
-Voxa gecikmeyi toplamaz. Her satıra, orijinalde kendi başlangıcından bir sonraki satırın
-başlangıcına kadar olan süre verilir ve satır bu aralığın başına yerleştirilir. Uzun bir satır
-arkasındaki duraksamayı kullanabilir. Yine sığmazsa biraz hızlı söylenir, sonra kırpılır; ama
-bir sonraki satırı asla geriye itmez. Aynı videoda kayma 0,0 saniyede kalır.
+Voxa gecikmeyi toplamaz. Her satır, orijinalde başladığı anda başlar ve bir sonraki satır
+başlamadan biraz öncesine kadar süresi vardır. Uzun bir satır arkasındaki duraksamayı
+kullanabilir. Bu da yetmezse biraz hızlı çalınır, ama asla 1,25 kattan fazla değil. Bir sonraki
+satırı en fazla 0,4 saniye geciktirebilir; ardından gelen duraksama bu gecikmeyi geri alır,
+böylece gecikme birikmez. Yine sığmayan satırı LLM çevirmeni daha az kelimeyle yeniden söyler.
+Söylenen hiçbir kelime kesilmez.
 
 Bu karardan iki şey daha çıkar. LLM çevirmenleri her satır için bir karakter bütçesi alır, böylece
 çeviri sonradan sıkıştırılmaz, en baştan süreye sığacak şekilde yazılır. Konuşma da yalnızca

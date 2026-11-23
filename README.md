@@ -37,10 +37,12 @@ is rarely as long as the original, so a clip that runs a little long pushes ever
 a little later, and the error adds up. On a three-minute clip we measured that approach ending
 18 seconds behind the speaker.
 
-Voxa keeps no running total. Each line gets the time from its own start in the original to the
-start of the next line, and it is placed at the beginning of that slot. A long line can use the
-pause after it. If it still doesn't fit, it's spoken faster and then trimmed, but it can never
-push the next line later. On the same clip, the drift stays at 0.0 seconds.
+Voxa keeps no running total. Each line starts where its original line started, and has until
+just before the next line begins. A long line can use the pause after it. If that isn't enough,
+it is played a little faster, never more than 1.25 times, and may start the next line up to
+0.4 seconds late, which the next pause takes back, so the lag never adds up. A line that still
+doesn't fit is said again in fewer words by the LLM translator. Nothing that is said is cut
+off.
 
 Two smaller choices follow from this. The LLM translators get a character budget for each line,
 so the translation is written to fit instead of being squeezed afterwards. And speech is only

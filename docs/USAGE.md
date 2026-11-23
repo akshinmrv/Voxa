@@ -59,8 +59,11 @@ voxa talk.mp4 --target_lang de --translation lines.de.srt
 The LLM translators get lines in blocks, so names, pronouns and tone stay consistent across a
 scene, and each line comes with a character budget so the translation fits the time the
 speaker took. That matters most when the target language is wordier than the source (English
-into Turkish or Russian, say). Google translates line by line and knows nothing about time, so
-a long line ends up spoken faster.
+into Turkish or Russian, say). When a line still comes out too long once it is voiced, an LLM
+translator says it again in fewer words, keeping its meaning, and the shorter line goes into
+the subtitles too. Google translates line by line and knows nothing about time, so with it a
+long line is played up to 1.25 times faster, and past that it runs into the time of the lines
+after it; the log says which lines.
 
 `--fallback-translator google` takes over the lines an LLM translator leaves untranslated,
 after an outage or with a bad key. `--translation-prompt` adds your own guidance on tone,
@@ -161,9 +164,12 @@ Each speaker gets their own voice. It needs a Hugging Face token and `voxa-dub[d
 
 ## The original's music
 
-By default the dub sits on top of the whole original, turned down low. With Demucs installed
-(`voxa engines install demucs`), `--separate` removes the original speech first and keeps the
-music and effects at full volume. `--background-volume` and `--voice-volume` set the balance.
+By default the dub replaces the original's sound entirely. That sound carries the speech the
+dub replaces, and Voxa doesn't let any of it be heard under the dub. With Demucs installed
+(`voxa engines install demucs`), `--separate` takes the original speech out and keeps the music
+and effects. Demucs can leave some of the voice behind: where the background rises and falls
+with the original voice, it is muted while the original speaks. `--background-volume` sets the
+background's level and `--voice-volume` the dub's.
 Measurements are in [INSTALL](INSTALL.md#engines-in-environments-of-their-own).
 
 ## Configuration

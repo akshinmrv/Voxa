@@ -44,33 +44,42 @@ stationary noise reduction over it introduces musical-noise artifacts.
 This is the part worth understanding before changing anything in step 6.
 
 A naive dubber appends clips end to end. A clip that runs 200 ms long pushes every later clip
-200 ms late, and the errors add up. Voxa instead anchors each clip to the **source** timeline.
+200 ms late, and the errors add up. Voxa instead starts each line where the **source** line
+started, and gives it until `MIN_INTER_LINE_GAP_MS` (150 ms) before the next line's onset.
 
-For subtitle *i*, the slot is `[start_i, start_{i+1}]` — from this line's onset to the *next
-line's* onset:
+Each clip arrives at the tempo the engine spoke it, with the engine's leading and trailing
+silence taken off (`_prepare_clip`), so its length is the speech's. `_plan_line` then decides
+where it goes and how fast it plays:
 
 ```python
-trim_ms, pad_ms = _plan_anchored_block(actual_ms, start_ms, next_start_ms)
+plan = _plan_line(clip_ms, onset_ms, prev_end_ms, next_onset_ms, media_end_ms, max_speedup)
 ```
 
-- The clip over-runs the slot → it is trimmed (with a fade) to fit.
-- The clip is shorter → trailing silence pads the remainder.
-- Either way the cursor becomes `next_start_ms` exactly.
+1. If it fits, it plays as spoken; silence fills the rest of its time.
+2. If not, it plays up to `NATURAL_SPEEDUP` (1.10x) faster, which isn't heard as hurried.
+3. Then it may end up to `MAX_LAG_MS` (400 ms) past the next onset; the next line starts that
+   much late (`start = max(onset, prev_end + gap)`) and gives the lag back in the next pause.
+4. Then faster again, up to `MAX_SPEEDUP` (1.25x).
+5. A line that would need more than `SHORTEN_ABOVE` (1.15x) is said again in fewer words by
+   the LLM translator, when the run has one (`_TimingRun.shorten`), and voiced again.
+6. What still doesn't fit plays at 1.25x in full and starts the following lines late until a
+   pause takes the lag up; the log names the line.
 
-Because the cursor is *assigned*, not *accumulated*, drift is structurally impossible. The
-last segment has no next onset to protect, so it pads to its own window and may over-run.
+Nothing spoken is ever cut off, and nothing is played faster than 1.25x. Both used to happen:
+clips were sped up to 2.5x and then trimmed at the next onset. Measured on a real dub, a
+Chatterbox line that had 1.4 s of words in 4.3 s of audio was played 2.5x faster and cut by
+724 ms, and Whisper heard a different word in what was left.
 
 Two supporting rules:
 
-- **Never slow speech down** (`stretch_audio_smart(..., allow_slowdown=False)`). Speeding up
-  to fit sounds fine; slowing down sounds dragged. Short clips get silence, not stretching.
-- **Length-budget the translation** (`_duration_to_max_chars`). The translator is told roughly
-  how many characters fit in each line's slot, so the fix happens in the text rather than in
-  the tempo. Trimming is the safety net, not the plan.
+- **Never slow speech down.** Speeding up a little sounds fine; slowing down sounds dragged.
+  A short clip gets silence after it, not stretching.
+- **Length-budget the translation** (`_line_budgets`). The LLM translator is told about how
+  many characters fit in the time each line has, up to the next line, so most of the fitting
+  happens in the text and not in the tempo.
 
-`_plan_block` and `_plan_anchored_block` are pure functions. They are unit-tested *and*
-exercised by the golden harness — and `_place_speech_block` calls them, rather than
-re-implementing the maths, precisely so those tests protect the real code path.
+`_plan_line` is a pure function. It is unit-tested *and* run by the golden harness, and the
+placement pass in `synthesize_timeline` calls it, so those tests protect the real code path.
 
 ---
 
@@ -120,8 +129,9 @@ Demucs (`--separate`) runs the same way, before transcription.
 
 ## `synthesize_timeline`: the Template Method
 
-Every engine needs the same loop: leading silence, cached synthesis, fit-to-window, anchored
-placement, drift tracking, optional quality scoring. That loop lives in exactly one place.
+Every engine needs the same loop: cached synthesis, the clip checks, the run-on cut,
+placement, shortening, drift tracking and optional quality scoring. That loop lives in exactly
+one place, so every engine is held to the same standard.
 
 An engine supplies only:
 
@@ -130,8 +140,22 @@ render(i, text, final_file, target_duration) -> bool     # sync or async
 on_ready(i, text, final_file, target_duration) -> score  # optional
 ```
 
-`render` turns one line of text into one WAV. `on_ready` runs after synthesis and before
-placement; XTTS uses it to re-roll a badly-scored take (see below).
+`render` turns one line of text into one WAV at its natural tempo (`_prepare_clip`).
+`on_ready` runs after synthesis and before placement; XTTS uses it to re-roll a badly-scored
+take (see below).
+
+Before a clip is used, `_clip_problem` checks it: it must have sound, and enough of it for its
+words (a clip that would need reading faster than 25 letters a second was cut off by the
+engine). A clip that fails is voiced again, up to `RENDER_ATTEMPTS` (3) takes; a line no take
+voices fails the run with the line named, instead of leaving a silent gap in a finished dub.
+The clips that worked are kept, so running again voices only that line.
+
+The cloning engines (Chatterbox, VoxCPM2, XTTS) pass `check_run_on=True`. They sometimes keep
+going after the line, with extra words or a wordless murmur after a short pause. Whisper
+(faster-whisper's small model when installed, else openai-whisper's, the one the run
+transcribed with but small at least) finds where the line's last word ends, and
+`_cut_trailing_speech` cuts the clip in the pause after it. A line whose end it can't find is
+left as it is: nothing is cut on a guess.
 
 **This is not decoration.** Each engine used to carry its own copy of the loop, and Piper's
 copy silently missed both the no-slowdown fix and the anchored-placement fix — while hiding a
@@ -155,7 +179,7 @@ Two things learned the hard way, both documented in the CLI help:
 - XTTS is **stochastic**, so a bad take is a dice roll rather than a defect. With the gate on,
   a flagged XTTS segment is re-synthesized up to `XTTS_REGEN_ATTEMPTS` times and the best take
   (`_score_better`: passes the gate > fewer failed checks > lower WER) is kept. Scoring happens
-  *before* placement, because placement trims over-runs and that would skew the round-trip.
+  *before* placement, on the clip as the engine spoke it.
 
 OpenAI TTS gets one retry of its own: when a line was rendered with a style or an emotion
 hint and scores badly, it is rendered once more with neutral delivery, and the better take is
@@ -214,7 +238,8 @@ the engines already read, so no engine code changed.
 
 | Layer | What it protects |
 |-------|------------------|
-| `tests/test_voxa.py` | Individual functions: parsing, timing maths, scoring, registries, adapters |
+| `tests/test_voxa.py` | Individual functions: parsing, scoring, registries, adapters |
+| `tests/test_timing.py` | Placement, the clip checks, the run-on cut, shortening, and the original kept out of the mix |
 | `tests/test_golden.py` | The same functions composed, which is where cross-stage regressions hide |
 | `tests/test_*_server.py`, `test_job_control.py`, `test_history.py`, ... | `voxa serve`: jobs, review, preview, stopping, history, access |
 | `tests/test_studio.py` | The Studio window's process handling (the Windows Job Object is tested for real on Windows) |
@@ -244,8 +269,9 @@ video before it lands — see [CONTRIBUTING.md](../CONTRIBUTING.md).
 | Transcription | `transcribe_audio`, `_refine_bounds`, `filter_nonspeech_segments` |
 | Translation | `LLM_PROVIDERS`, `translate_llm_batch`, `_llm_translate_chunk` |
 | Speech | `TTS_PROVIDERS`, `synthesize_timeline`, `generate_*` |
-| Timeline maths | `_plan_block`, `_plan_anchored_block`, `_place_speech_block` |
-| Audio | `stretch_audio_smart`, `_fit_to_window`, `normalize_audio`, `_apply_micro_fades` |
+| Timeline maths | `_plan_line`, `_line_budgets`, `_TimingRun` |
+| Clips | `_prepare_clip`, `_clip_problem`, `_cut_trailing_speech`, `_play_at` |
+| Mix | `gate_vocal_leakage`, `duck_background`, `_assemble_final_video`, `normalize_audio` |
 | Quality | `score_speech`, `_score_better`, `log_quality_report` |
 | Infrastructure | `_try_import`, `Logger`, `StateManager`, `load_dotenv`, `run_ffmpeg` |
 | Engines in their own environments | `voxa_engines.ENGINES`, `start_worker`, `voxa_engines/workers/` |

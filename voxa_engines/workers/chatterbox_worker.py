@@ -17,6 +17,38 @@ import sys
 import traceback
 
 
+def guard_short_lines() -> None:
+    """Chatterbox (0.1.7), once a line is said, looks for repetition among its text's tokens
+    but the last five (A[..., :-5]). On a line of five tokens or fewer ("3.", "Evet.") that is
+    nothing, and it raises IndexError, so such a line was never voiced. There the step goes on
+    without the repetition check, still ending the line by Chatterbox's own rule for a last
+    token held too long (200 ms); Voxa measures and checks the clip itself."""
+    try:
+        import torch
+        from chatterbox.models.t3.inference.alignment_stream_analyzer import AlignmentStreamAnalyzer
+    except ImportError:
+        return
+    step = AlignmentStreamAnalyzer.step
+    if getattr(step, "voxa_guarded", False):
+        return
+
+    def guarded(self, logits, *args, **kwargs):
+        try:
+            return step(self, logits, *args, **kwargs)
+        except IndexError:
+            spoken = self.alignment
+            if spoken.shape[1] > 5 or not self.complete:
+                raise
+            if spoken[self.completed_at:, -3:].sum(dim=0).max() >= 5:
+                logits = -(2 ** 15) * torch.ones_like(logits)
+                logits[..., self.eos_idx] = 2 ** 15
+            self.curr_frame_pos += 1
+            return logits
+
+    guarded.voxa_guarded = True
+    AlignmentStreamAnalyzer.step = guarded
+
+
 def main() -> None:
     # The protocol gets the real stdout to itself; anything the libraries print (progress
     # bars, notices) is sent to stderr instead, where it can't corrupt a reply.
@@ -37,6 +69,7 @@ def main() -> None:
                 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
                 device = request.get("device") or ("cuda" if torch.cuda.is_available() else "cpu")
                 model = ChatterboxMultilingualTTS.from_pretrained(device=device)
+                guard_short_lines()
                 reply = {"ok": True, "sample_rate": model.sr, "device": device}
             elif command == "speak":
                 if model is None:
