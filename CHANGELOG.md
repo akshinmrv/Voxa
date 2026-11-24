@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-11-24
+
 ### Fixed
 
 - **Chatterbox and VoxCPM2 couldn't be installed on newer NVIDIA drivers, and an engine could
@@ -1205,7 +1207,8 @@ version number restarts at 1.0.0 rather than continuing a history nobody can see
 - Synthesis requests are issued sequentially. For network-bound engines this is the main
   remaining performance headroom.
 
-[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v2.1.1...HEAD
+[Unreleased]: https://github.com/akshinmrv/Voxa/compare/v2.1.2...HEAD
+[2.1.2]: https://github.com/akshinmrv/Voxa/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/akshinmrv/Voxa/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/akshinmrv/Voxa/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/akshinmrv/Voxa/compare/v1.18.0...v2.0.0
