@@ -147,7 +147,8 @@ function InstallableCard({
         </p>
       )}
 
-      {installing && lines.length > 0 && (
+      {/* The log stays after a failure: its last lines are what says why. */}
+      {(installing || engine.install.status === "failed") && lines.length > 0 && (
         <pre
           ref={log}
           aria-label={t("log")}

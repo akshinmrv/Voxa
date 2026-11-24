@@ -589,7 +589,7 @@
         "title": "Gelişmiş",
         "desc": "İleri düzey kullanıcılar için güvenilirlik ve zamanlama ayarları. Varsayılanlar önerilir.",
         "fallbackLabel": "Yedek çevirmen",
-        "fallbackHint": "Ana LLM çevirmen çoğu satırda başarısız olursa (kesinti veya hatalı anahtar), o satırlar bununla yeniden denenir.",
+        "fallbackHint": "Ana çevirmen çoğu satırda başarısız olursa (kesinti, hatalı anahtar veya Google ağınızı reddederse), o satırlar bununla yeniden denenir.",
         "fallbackNone": "Yok",
         "rateLabel": "Konuşma hızı (karakter/saniye)",
         "rateHint": "Saniyede ne kadar çeviri metni bütçelenir. Varsayılan 15; aralık 8–30. Düşük daha çok sıkıştırır, yüksek aceleye getirir.",

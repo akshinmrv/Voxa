@@ -159,3 +159,24 @@ def test_open_waits_for_a_bundled_console(tmp_path, monkeypatch):
     assert srv.run_from_cli(["--open", *env]) == 0
     assert len(opened) == 1                                  # nothing to open without a build
     assert srv.ACCESS.token is None                          # on 127.0.0.1 it asks for none
+
+
+def test_an_update_s_console_is_not_taken_from_the_cache(tmp_path):
+    # Without Cache-Control a window kept a page for a tenth of its file's age, so after an
+    # update it ran the console it had before (2.1.1's language fix ran as 2.0.0's code).
+    pytest.importorskip("fastapi")
+    from starlette.applications import Starlette
+    from starlette.testclient import TestClient
+
+    import voxa_server
+    (tmp_path / "tr" / "app").mkdir(parents=True)
+    (tmp_path / "tr" / "app" / "index.html").write_text("<p>console</p>", encoding="utf-8")
+    chunks = tmp_path / "_next" / "static" / "chunks"
+    chunks.mkdir(parents=True)
+    (chunks / "3d7kx_lk4c0an.js").write_text("1", encoding="utf-8")
+    app = Starlette()
+    app.mount("/", voxa_server.ConsoleFiles(directory=str(tmp_path), html=True))
+    client = TestClient(app)
+    assert client.get("/tr/app/").headers["cache-control"] == "no-cache"
+    assert "immutable" in client.get("/_next/static/chunks/3d7kx_lk4c0an.js").headers[
+        "cache-control"]

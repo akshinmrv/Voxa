@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import threading
+from collections import deque
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -190,17 +191,41 @@ def find_uv() -> Optional[str]:
     return str(local) if local.is_file() else None
 
 
+# What uv's exit codes mean, to say after its own words. Measured with uv 0.13.8: packages that
+# can't be installed together end it with 1, a download that fails (an index it can't reach,
+# a connection that drops) with 2.
+_UV_EXIT = {
+    1: "These packages can't be installed together here.",
+    2: "A download failed: check the connection, and that pypi.org and download.pytorch.org "
+       "can be reached from this network, then install again.",
+}
+_ERROR_LINE = ("error", "caused by", "cause:", "×", "╰─▶", "help:")
+
+
+def _failure(cmd: List[str], code: int, tail: List[str]) -> str:
+    """Why an install step failed, in one message that stands on its own: the console shows it
+    where the step's output may not be on screen. uv's own error lines, then what its exit
+    code means. Pure."""
+    said = [line.strip() for line in tail if line.strip().lower().startswith(_ERROR_LINE)]
+    said = said or [line.strip() for line in tail if line.strip()][-3:]
+    step = f"`{Path(cmd[0]).name} {' '.join(cmd[1:3])}` failed (exit code {code})"
+    meaning = _UV_EXIT.get(code) if Path(cmd[0]).stem.lower() == "uv" else None
+    return " ".join([step + (":" if said else "."), *said[-6:]] +
+                    ([meaning] if meaning else []))[:900]
+
+
 def _run(cmd: List[str], log: Callable[[str], None]) -> None:
     """Run one install step, passing its output to `log` line by line."""
     log("$ " + " ".join(cmd))
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, encoding="utf-8", errors="replace")
     assert proc.stdout is not None
+    tail: deque = deque(maxlen=40)
     for line in proc.stdout:
         log(line.rstrip())
+        tail.append(line.rstrip())
     if proc.wait() != 0:
-        raise EngineError(f"`{Path(cmd[0]).name} {' '.join(cmd[1:3])}` failed "
-                          f"(exit code {proc.returncode}); the lines above say why")
+        raise EngineError(_failure(cmd, proc.returncode, list(tail)))
 
 
 def install(engine_id: str, log: Callable[[str], None] = print) -> None:

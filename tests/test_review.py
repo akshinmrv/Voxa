@@ -201,3 +201,40 @@ def test_a_translation_file_is_checked_before_anything_runs(clip, speech, monkey
         capsys.readouterr().out
     assert _dub(monkeypatch, "--translation", "missing.json") == 1
     assert not (clip / "clip_work").exists()
+
+
+class _GoogleTurnsUsAway:
+    """deep-translator's GoogleTranslator as it answers a network Google has flagged: every
+    request ends on Google's captcha page, raised as TooManyRequests (measured: the very first)."""
+
+    def __init__(self, *a, **k):
+        pass
+
+    def translate(self, text):
+        TooManyRequests = type("TooManyRequests", (Exception,), {})
+        raise TooManyRequests("Server Error: You made too many requests to the server.")
+
+
+@needs_ffmpeg
+def test_when_google_turns_the_network_away_the_fallback_translates(clip, speech, monkeypatch):
+    # The error a failed run stopped with told users to set a fallback translator, but it only
+    # ever backed up an LLM translator; with Google as the translator it was never asked.
+    monkeypatch.setattr(voxa, "GoogleTranslator", _GoogleTurnsUsAway)
+    monkeypatch.setattr(voxa, "translate_ollama", lambda *a: (_ for _ in ()).throw(
+        ConnectionError("Ollama isn't running")))                 # as on most computers
+    monkeypatch.setattr(voxa, "translate_llm_batch",
+                        lambda texts, *a, **k: ["AZ " + t for t in texts])
+    assert _dub(monkeypatch, "--translator", "google", "--fallback-translator", "openai") == 0
+    lines = json.loads((clip / "clip_work" / "translated.json").read_text(encoding="utf-8"))
+    assert lines and all(line["text"].startswith("AZ ") for line in lines)
+
+
+@needs_ffmpeg
+def test_when_google_turns_the_network_away_the_run_says_so(clip, speech, monkeypatch):
+    monkeypatch.setattr(voxa, "GoogleTranslator", _GoogleTurnsUsAway)
+    monkeypatch.setattr(voxa, "translate_ollama", lambda *a: (_ for _ in ()).throw(
+        ConnectionError("Ollama isn't running")))
+    assert _dub(monkeypatch, "--translator", "google") == 1
+    said = (clip / "clip_work" / "voxa.log").read_text(encoding="utf-8")
+    assert "Google turned the requests away" in said
+    assert "Settings › Translation" in said and "--fallback-translator" in said

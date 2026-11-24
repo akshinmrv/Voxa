@@ -2217,9 +2217,18 @@ async def install_engine(engine_id: str, _: None = Depends(require_local)) -> di
     state = {"status": "installing", "log": deque(maxlen=400), "error": None}
     ENGINE_INSTALLS[engine_id] = state
 
+    def _line(line: str) -> None:
+        state["log"].append(line)
+        # Into the server's output too, which the Studio keeps in studio.log: the console's
+        # copy is gone once the server stops, and a report needs the lines that say why.
+        try:
+            print(f"[{engine_id}] {line}", flush=True)
+        except Exception:
+            pass
+
     def _install() -> None:
         try:
-            voxa_engines.install(engine_id, log=state["log"].append)
+            voxa_engines.install(engine_id, log=_line)
             state["status"] = "done"
         except Exception as e:                       # shown in the console, not lost
             state["status"], state["error"] = "failed", str(e)
@@ -2297,7 +2306,15 @@ class ConsoleFiles(StaticFiles):
         nested = segment_payload_path(path)
         if nested is not None and self.lookup_path(nested)[1] is not None:
             path = nested
-        return await super().get_response(path, scope)
+        response = await super().get_response(path, scope)
+        # Without Cache-Control a browser keeps a page for a tenth of its file's age: after an
+        # update, the window ran the console it had before for hours (the language it forgot
+        # in 2.1.1 was 2.0.0's code). Pages and payloads are asked about each time (a 304 when
+        # unchanged); /_next/static/ files are named by their content, so they never change.
+        response.headers["Cache-Control"] = (
+            "public, max-age=31536000, immutable"
+            if path.replace("\\", "/").startswith("_next/static/") else "no-cache")
+        return response
 
 
 def mount_console(target: FastAPI, directory: Optional[Path]) -> bool:

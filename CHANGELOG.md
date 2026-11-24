@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **After an update, Voxa Studio could keep running the console it had before.** The server
+  sent the console's pages without Cache-Control, so the window kept them for a tenth of their
+  files' age, hours for an install a few days old; 2.1.1's language fix ran as 2.0.0's code
+  that way. Pages are now checked each time they open, and only the files named by their
+  content are kept.
+- **A failed engine install said "the lines above say why", with no lines above.** The install's
+  output was shown only while it ran. The message now carries uv's own error and what its exit
+  code means (2 is a download that failed, 1 packages that can't be installed together), the
+  output stays on the card, and it goes into studio.log too.
+- **The fallback translator didn't back up Google.** It only took over from an LLM translator,
+  though the error a failed translation stops with told everyone to set it. It now takes the
+  lines Google (or Ollama) gives back untranslated. When Google turns a network away (it sends
+  every request to its captcha page, from the first one), the run says so and what to do.
+
 ## [2.1.1] - 2026-11-24
 
 ### Fixed

@@ -589,7 +589,7 @@
         "title": "Ətraflı",
         "desc": "Təcrübəli istifadəçilər üçün etibarlılıq və vaxt ayarları. Defolt dəyərlər tövsiyə olunur.",
         "fallbackLabel": "Ehtiyat tərcüməçi",
-        "fallbackHint": "Əsas LLM tərcüməçi sətirlərin çoxunda uğursuz olsa (kəsinti və ya səhv açar), həmin sətirlər bununla yenidən tərcümə olunur.",
+        "fallbackHint": "Əsas tərcüməçi sətirlərin çoxunda uğursuz olsa (kəsinti, səhv açar və ya Google şəbəkənizi rədd edəndə), həmin sətirlər bununla yenidən tərcümə olunur.",
         "fallbackNone": "Yoxdur",
         "rateLabel": "Danışıq sürəti (simvol/saniyə)",
         "rateHint": "Saniyədə nə qədər tərcümə mətni büdcələnir. Defolt 15; aralıq 8–30. Aşağı daha çox sıxır, yuxarı tələsdirir.",

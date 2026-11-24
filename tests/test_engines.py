@@ -415,3 +415,33 @@ def test_voxa_engines_command(home, capsys, monkeypatch):
     with pytest.raises(SystemExit) as done:
         voxa.cli()
     assert done.value.code == 1 and "No engine called 'nope'" in capsys.readouterr().out
+
+
+def test_a_failed_install_says_why_on_its_own():
+    # The console showed "the lines above say why" once the install had failed and its log was
+    # gone. A user with an NVIDIA GPU saw exactly that for Chatterbox and Demucs, exit code 2.
+    import voxa_engines as ve
+    uv = ["C:/Voxa/uv.exe", "pip", "install", "--python", "env/python.exe"]
+    tail = ["Resolved 52 packages in 3.1s",
+            "error: Request failed after 3 retries in 14.1s",
+            "  Caused by: error sending request for url (https://download.pytorch.org/whl/cu126/torch/)"]
+    said = ve._failure(uv, 2, tail)
+    assert said.startswith("`uv.exe pip install` failed (exit code 2): error: Request failed")
+    assert "download.pytorch.org/whl/cu126" in said and "A download failed" in said
+    clash = ve._failure(uv, 1, ["  × No solution found when resolving dependencies:"])
+    assert "No solution found" in clash and "can't be installed together" in clash
+    other = ve._failure(["python", "-m", "venv"], 1, ["first", "", "last words"])
+    assert other.endswith("first last words")
+
+
+def test_an_install_step_that_fails_raises_with_its_own_lines():
+    import sys
+
+    import voxa_engines as ve
+    seen = []
+    cmd = [sys.executable, "-c", "print('working'); print('error: the disk is full'); "
+                                 "raise SystemExit(3)"]
+    with pytest.raises(ve.EngineError) as e:
+        ve._run(cmd, seen.append)
+    assert "exit code 3" in str(e.value) and "error: the disk is full" in str(e.value)
+    assert "working" in seen

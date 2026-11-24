@@ -2267,6 +2267,38 @@ def detect_emotion(text: str) -> Optional[str]:
     return None
 
 
+# Set when Google turns the requests away (deep-translator's TooManyRequests: Google sends the
+# request to its captcha page, google.com/sorry, which it does to a whole network's address,
+# from the first request on). The error a run then stops with says so.
+_GOOGLE_REFUSED = False
+
+
+def _google_refusal(seen: bool) -> None:
+    """Note (or, at the start of a translation, forget) that Google turned requests away."""
+    global _GOOGLE_REFUSED
+    _GOOGLE_REFUSED = seen
+
+
+def _google_refused(error: Exception) -> bool:
+    """Whether a Google translation error is Google turning this network away. Pure."""
+    return (type(error).__name__ == "TooManyRequests"
+            or "too many requests" in str(error).lower() or "/sorry/" in str(error))
+
+
+def _untranslated_reason(translator: str, target_lang: str) -> str:
+    """The end of the message a run stops with when its lines came back untranslated: why, as
+    far as the run knows, and what to do in the Studio or on the command line."""
+    other = ("choose another translator (OpenAI, Anthropic or OpenRouter with a key, or Ollama "
+             "on this computer), or set one as the fallback in Settings › Translation "
+             "(--fallback-translator)")
+    if translator == "google" and _GOOGLE_REFUSED:
+        return (f"Google turned the requests away: it does that to some networks, asking them "
+                f"for a captcha, and waiting rarely helps. To dub from this network, {other}.")
+    return (f"See the {translator} warnings above, or {other}. Nothing was saved, so running "
+            f"again retries it. If the video is already in '{target_lang}', there is nothing "
+            f"to translate.")
+
+
 def translate_with_retry(text: str, target_lang: str, translator_type: str,
                          ollama_model: str, max_retries: int = 3,
                          llm_model: Optional[str] = None,
@@ -2289,6 +2321,8 @@ def translate_with_retry(text: str, target_lang: str, translator_type: str,
                 if translated and translated.strip():
                     return translated
         except Exception as e:
+            if translator_type == "google" and _google_refused(e):
+                _google_refusal(True)
             if attempt == max_retries - 1:
                 _LOG.warning(f"Translation failed after {max_retries} attempts: {e}")
     try:
@@ -3025,11 +3059,12 @@ def _untranslated_lines(merged_segments: List[Dict],
 
 
 def _apply_translation_fallback(texts: List[str], translated: List[str], args, logger) -> List[str]:
-    """If the primary LLM translator left most lines untranslated — an outage or an invalid
-    key makes _llm_translate_* echo the source — re-translate those lines with the configured
-    --fallback-translator. Only triggers on a substantial failure (≥ half the lines), so a few
-    legitimately-identical lines (proper nouns, numbers) don't set it off; re-translating those
-    would be harmless anyway. Returns the (possibly repaired) list, same length and order."""
+    """If the primary translator left most lines untranslated (an outage or an invalid key
+    makes an LLM translator echo the source; Google gives it back when it turns a network
+    away), re-translate those lines with the configured --fallback-translator. Only triggers
+    on a substantial failure (≥ half the lines), so a few legitimately-identical lines
+    (proper nouns, numbers) don't set it off; re-translating those would be harmless anyway.
+    Returns the (possibly repaired) list, same length and order."""
     fb = getattr(args, "fallback_translator", None)
     if not fb or not texts:
         return translated
@@ -5270,6 +5305,7 @@ async def process_video(video_path: str, args, logger: Logger):
         with open(translated_json, 'r', encoding='utf-8') as f:
             translated_segments = json.load(f)
     else:
+        _google_refusal(False)
         logger.info(f"[5/7] ({_elapsed()}) Translating to {args.target_lang} "
                     f"with {args.translator}...")
         if args.translator in LLM_PROVIDERS:
@@ -5311,6 +5347,16 @@ async def process_video(video_path: str, args, logger: Logger):
                 translated_segments.append(
                     {'text': translated, 'start': seg['start'], 'end': seg['end'],
                      **({'speaker': seg['speaker']} if 'speaker' in seg else {})})
+        if args.translator not in LLM_PROVIDERS:
+            # Google and Ollama give the source back when they fail. The fallback translator
+            # takes those lines, as it does an LLM translator's; it used to back up only those,
+            # though the error a failed run stops with told every user to set it.
+            source = {(seg['start'], seg['end']): seg['text'].strip() for seg in merged_segments}
+            redone = _apply_translation_fallback(
+                [source.get((seg['start'], seg['end']), '') for seg in translated_segments],
+                [seg['text'] for seg in translated_segments], args, logger)
+            for seg, text in zip(translated_segments, redone):
+                seg['text'] = text
         _repair_foreign_scripts(merged_segments, translated_segments, args, logger)
         # A failing translator returns the source text, which would otherwise be spoken and
         # reported as a finished dub in the wrong language. Stop before anything is cached,
@@ -5319,10 +5365,8 @@ async def process_video(video_path: str, args, logger: Logger):
         if _translation_unusable(len(untranslated), checked):
             logger.error(
                 f"❌ Translation failed: {len(untranslated)}/{checked} lines came back "
-                f"untranslated, so the dub would be in the source language. See the "
-                f"{args.translator} warnings above (or set --fallback-translator); nothing "
-                f"was saved, so running again retries it. If the video is already in "
-                f"'{args.target_lang}', there is nothing to translate.")
+                f"untranslated, so the dub would be in the source language. "
+                f"{_untranslated_reason(args.translator, args.target_lang)}")
             return 1
         if untranslated:
             shown = "; ".join(f'"{t[:40]}"' for t in untranslated[:3])
