@@ -171,6 +171,15 @@ them next to Voxa would break one or the other, so `voxa engines install` puts e
 environment under `~/.voxa/engines`, and Voxa talks to it through a small worker process.
 `voxa engines remove <name>` deletes that folder and nothing else.
 
+With an NVIDIA GPU, the install picks the PyTorch build itself. It reads the GPU and the
+newest CUDA its driver runs from `nvidia-smi`, asks uv which PyTorch the engine's packages
+would get with each CUDA build, newest first, and takes the first whose PyTorch runs on that
+GPU. Then it computes something on the GPU to be sure, and if that fails it installs the CPU
+build instead. The install log says what it chose and why, and the engine's card says where it
+runs. Two cases end on the CPU: Chatterbox pins PyTorch 2.6, which has nothing for RTX 50
+cards, and an old driver can leave a pinned engine no CUDA build it runs (the log then says a
+newer driver may help).
+
 On a laptop CPU, Chatterbox took 40 to 60 seconds per sentence, so a GPU matters here. Every
 clip it makes carries Resemble AI's inaudible PerTh watermark. Chatterbox sometimes keeps
 going after a line, with extra words or a murmur; Voxa listens for the line's last word with

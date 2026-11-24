@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -25,7 +26,7 @@ from collections import deque
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, NamedTuple, Optional, Tuple
 
 WORKERS_DIR = Path(__file__).parent / "workers"
 
@@ -160,10 +161,12 @@ def status(engine_id: str) -> dict:
             "path": str(engine_dir(engine_id))}
     if info["installed"]:
         try:
-            info["installedAt"] = json.loads(_marker(engine_id).read_text("utf-8")).get(
-                "installed")
+            marker = json.loads(_marker(engine_id).read_text("utf-8"))
         except (OSError, ValueError):
-            pass
+            marker = {}
+        info["installedAt"] = marker.get("installed")
+        # Where it computes, when the install found out: "gpu" (on info["gpu"]) or "cpu".
+        info["runsOn"], info["gpu"] = marker.get("runsOn"), marker.get("gpu")
     return info
 
 
@@ -228,6 +231,171 @@ def _run(cmd: List[str], log: Callable[[str], None]) -> None:
         raise EngineError(_failure(cmd, proc.returncode, list(tail)))
 
 
+# ── Which PyTorch an engine gets ─────────────────────────
+# uv's --torch-backend auto takes the newest CUDA build the GPU's driver runs. An engine whose
+# packages pin PyTorch may have no such build: chatterbox-tts 0.1.7 pins torch 2.6.0, which
+# exists for CUDA 12.6 at most, and voxcpm 2.0.3 resolves for CUDA 12.6 and 13.0 only (both
+# measured with uv 0.13.8), so on a driver newer than that the install failed. And a build can
+# leave the GPU out: PyTorch's CUDA 13 builds start at Turing, RTX 50 cards need CUDA 12.8 and
+# PyTorch 2.7. So the build is chosen here, from the GPU, its driver and what the packages
+# resolve to, and checked on the GPU once installed.
+CUDA_BUILDS: Tuple[Tuple[str, Tuple[int, int]], ...] = (
+    ("cu130", (13, 0)), ("cu129", (12, 9)), ("cu128", (12, 8)), ("cu126", (12, 6)),
+    ("cu124", (12, 4)), ("cu121", (12, 1)), ("cu118", (11, 8)))
+
+
+class Gpu(NamedTuple):
+    name: str
+    capability: Optional[Tuple[int, int]]   # its compute capability, 8.9 for an RTX 4090
+    cuda: Optional[Tuple[int, int]]         # the newest CUDA its driver runs
+
+
+def parse_nvidia_smi(query: str, summary: str) -> Optional[Gpu]:
+    """The first GPU nvidia-smi lists, from `--query-gpu=name,compute_cap --format=csv,noheader`
+    and from its summary table, which says the newest CUDA the driver runs. Pure."""
+    line = next((ln.strip() for ln in query.splitlines() if ln.strip()), "")
+    if not line or "not a valid field" in line.lower() or "failed" in line.lower():
+        return None
+    name, _, cap = line.rpartition(",")
+    if not name:
+        name, cap = line, ""
+    found = re.match(r"\s*(\d+)\.(\d+)", cap)
+    cuda = re.search(r"CUDA Version:\s*(\d+)\.(\d+)", summary)
+    return Gpu(name.strip(),
+               (int(found[1]), int(found[2])) if found else None,
+               (int(cuda[1]), int(cuda[2])) if cuda else None)
+
+
+def nvidia_gpu() -> Optional[Gpu]:
+    """This computer's NVIDIA GPU, as nvidia-smi (installed with the driver) describes it, or
+    None without one."""
+    exe = shutil.which("nvidia-smi")
+    if not exe:
+        return None
+    try:
+        query = subprocess.run([exe, "--query-gpu=name,compute_cap", "--format=csv,noheader"],
+                               capture_output=True, text=True, timeout=20)
+        if query.returncode != 0:              # a driver older than the compute_cap field
+            query = subprocess.run([exe, "--query-gpu=name", "--format=csv,noheader"],
+                                   capture_output=True, text=True, timeout=20)
+        summary = subprocess.run([exe], capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return parse_nvidia_smi(query.stdout if query.returncode == 0 else "", summary.stdout)
+
+
+def _version(text: str) -> Tuple[int, int]:
+    found = re.match(r"(\d+)\.(\d+)", text or "")
+    return (int(found[1]), int(found[2])) if found else (0, 0)
+
+
+def torch_runs_on(build: str, torch_version: str,
+                  capability: Optional[Tuple[int, int]]) -> bool:
+    """Whether PyTorch `torch_version`'s `build` has the kernels for a GPU of `capability`, by
+    what PyTorch has published: Blackwell (10.0 and up) needs CUDA 12.8 and PyTorch 2.7; CUDA
+    13 builds start at Turing (7.5); CUDA 12.8 and 12.9 builds left out Maxwell and Pascal from
+    2.8, and Volta from 2.11; older builds run from Maxwell (5.0) on. An unknown capability
+    is taken to be fine: the GPU check after the install has the last word. Pure."""
+    cuda = dict(CUDA_BUILDS).get(build)
+    if cuda is None:
+        return False
+    if capability is None:
+        return True
+    torch = _version(torch_version)
+    if capability >= (10, 0):
+        return cuda >= (12, 8) and torch >= (2, 7)
+    if cuda >= (13, 0):
+        return capability >= (7, 5)
+    if cuda >= (12, 8) and torch >= (2, 11):
+        return capability >= (7, 5)
+    if cuda >= (12, 8) and torch >= (2, 8):
+        return capability >= (7, 0)
+    return capability >= (5, 0)
+
+
+def _cap(capability: Optional[Tuple[int, int]]) -> str:
+    return f"{capability[0]}.{capability[1]}" if capability else "?"
+
+
+def choose_torch(gpu: Optional[Gpu],
+                 resolve: Callable[[str], Tuple[int, Optional[str], List[str]]],
+                 log: Callable[[str], None]) -> Tuple[str, str]:
+    """The --torch-backend to install an engine with, and in a sentence why. `resolve(backend)`
+    is uv's dry run: (its exit code, the torch it would install, its output's last lines).
+    With an NVIDIA GPU, the newest CUDA build its driver runs that the packages resolve to and
+    whose PyTorch has the GPU's kernels; none, and the CPU. Without one, uv's own choice, or
+    the CPU if the packages don't resolve to it. A download that fails stops the install."""
+    def attempt(backend: str) -> Tuple[int, Optional[str]]:
+        code, torch, tail = resolve(backend)
+        if code == 2:
+            raise EngineError(_failure(["uv", "pip", "install"], code, tail))
+        return code, torch
+
+    if gpu is None or gpu.cuda is None:
+        if attempt("auto")[0] == 0:
+            return "auto", ""
+        return "cpu", "no PyTorch build these packages accept was found for this computer, " \
+                      "so it gets the CPU build"
+    for build, cuda in CUDA_BUILDS:
+        if cuda > gpu.cuda:
+            continue
+        code, torch = attempt(build)
+        if code != 0 or not torch:
+            log(f"PyTorch for CUDA {cuda[0]}.{cuda[1]} ({build}): these packages don't "
+                f"install with it")
+            continue
+        if not torch_runs_on(build, torch, gpu.capability):
+            log(f"PyTorch for CUDA {cuda[0]}.{cuda[1]} ({build}): {torch} has no kernels for "
+                f"{gpu.name} (compute {_cap(gpu.capability)})")
+            continue
+        return build, f"PyTorch {torch} for {gpu.name} (compute {_cap(gpu.capability)})"
+    newer = gpu.cuda < CUDA_BUILDS[0][1]
+    return "cpu", (f"no PyTorch these packages accept runs on {gpu.name} (compute "
+                   f"{_cap(gpu.capability)}, driver for CUDA {gpu.cuda[0]}.{gpu.cuda[1]}), so "
+                   f"it runs on the CPU" +
+                   ("; a newer NVIDIA driver may let it use the GPU" if newer else ""))
+
+
+def _resolve(uv: str, python: str, packages: Tuple[str, ...],
+             backend: str) -> Tuple[int, Optional[str], List[str]]:
+    """uv's dry run of an install with `backend`: what it would do, nothing downloaded but
+    the packages' metadata."""
+    proc = subprocess.run([uv, "pip", "install", "--python", python, "--dry-run",
+                           "--torch-backend", backend, *packages],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          timeout=900)
+    said = (proc.stdout or "") + (proc.stderr or "")
+    torch = re.search(r"^\s*\+\s*torch==(\S+)", said, re.MULTILINE)
+    return proc.returncode, (torch[1] if torch else None), said.splitlines()[-40:]
+
+
+# Runs in the engine's environment: whether its PyTorch can work on the GPU, by working on it.
+_GPU_CHECK = (
+    "import json, torch\n"
+    "r = {'torch': torch.__version__, 'cuda': torch.cuda.is_available()}\n"
+    "if r['cuda']:\n"
+    "    try:\n"
+    "        r['works'] = float((torch.ones(64, device='cuda') * 2).sum()) == 128.0\n"
+    "    except Exception as e:\n"
+    "        r['works'], r['error'] = False, str(e).splitlines()[0][:200]\n"
+    "print(json.dumps(r))\n")
+
+
+def gpu_works(python: str) -> Tuple[bool, str]:
+    """Whether the PyTorch in an engine's environment computes on the GPU, and if not, why."""
+    try:
+        proc = subprocess.run([python, "-c", _GPU_CHECK], capture_output=True, text=True,
+                              timeout=300)
+        seen = json.loads(proc.stdout.strip().splitlines()[-1])
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        return False, "PyTorch couldn't be started to check the GPU"
+    if not seen.get("cuda"):
+        return False, f"PyTorch {seen.get('torch')} doesn't see a CUDA GPU"
+    if not seen.get("works"):
+        return False, f"PyTorch {seen.get('torch')} can't compute on it ({seen.get('error')})"
+    return True, ""
+
+
 def install(engine_id: str, log: Callable[[str], None] = print) -> None:
     """Create the engine's environment from scratch and install it there. Re-running it
     reinstalls; a failed run leaves the engine uninstalled rather than half there."""
@@ -238,12 +406,33 @@ def install(engine_id: str, log: Callable[[str], None] = print) -> None:
     env = root / "env"
     python = str(env_python(engine_id))
     uv = find_uv()
+    runs: dict = {}
     if uv:
         _run([uv, "venv", "--python", engine.python, str(env)], log)
-        # --torch-backend auto picks the CPU build of PyTorch on a machine without a
-        # supported GPU, instead of the far larger CUDA build PyPI serves on Linux.
-        _run([uv, "pip", "install", "--python", python, "--torch-backend", "auto",
+        gpu = nvidia_gpu()
+        if gpu:
+            cuda = f"{gpu.cuda[0]}.{gpu.cuda[1]}" if gpu.cuda else "?"
+            log(f"GPU: {gpu.name}, compute {_cap(gpu.capability)}, its driver runs CUDA {cuda}")
+        backend, why = choose_torch(
+            gpu, lambda b: _resolve(uv, python, engine.packages, b), log)
+        if why:
+            log(f"PyTorch: {why}")
+        _run([uv, "pip", "install", "--python", python, "--torch-backend", backend,
               *engine.packages], log)
+        runs = {"torch": backend, "gpu": gpu.name if gpu else None,
+                "runsOn": ("cpu" if backend == "cpu" else None) if gpu else None}
+        if gpu and backend != "cpu":
+            works, why_not = gpu_works(python)
+            if works:
+                runs["runsOn"] = "gpu"
+                log(f"{engine.label} computes on {gpu.name}")
+            else:
+                # The table in torch_runs_on can be behind PyTorch: the GPU has the last word.
+                log(f"{gpu.name}: {why_not}. Installing the CPU build of PyTorch instead, "
+                    f"which is slower but runs")
+                _run([uv, "pip", "install", "--python", python, "--torch-backend", "cpu",
+                      "--reinstall", *engine.packages], log)
+                runs.update(torch="cpu", runsOn="cpu")
     else:
         wanted = tuple(int(p) for p in engine.python.split(".")[:2])
         if sys.version_info[:2] < wanted:
@@ -254,7 +443,7 @@ def install(engine_id: str, log: Callable[[str], None] = print) -> None:
         _run([python, "-m", "pip", "install", *engine.packages], log)
     _marker(engine_id).write_text(json.dumps({
         "engine": engine_id, "packages": list(engine.packages),
-        "installed": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "installed": datetime.now(timezone.utc).isoformat(timespec="seconds"), **runs,
     }, indent=2), encoding="utf-8")
     log(f"{engine.label} is installed in {root}")
 

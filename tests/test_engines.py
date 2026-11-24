@@ -22,8 +22,12 @@ import voxa_engines as ve
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    """Engines live in a fresh folder for each test."""
+    """Engines live in a fresh folder for each test, on a computer without an NVIDIA GPU whose
+    packages resolve to uv's own choice of PyTorch (no uv or nvidia-smi is run)."""
     monkeypatch.setenv("VOXA_ENGINES_DIR", str(tmp_path / "engines"))
+    monkeypatch.setattr(ve, "nvidia_gpu", lambda: None)
+    monkeypatch.setattr(ve, "_resolve", lambda uv, python, packages, backend:
+                        (0, "2.6.0+cpu", []))
     return tmp_path / "engines"
 
 
@@ -445,3 +449,110 @@ def test_an_install_step_that_fails_raises_with_its_own_lines():
         ve._run(cmd, seen.append)
     assert "exit code 3" in str(e.value) and "error: the disk is full" in str(e.value)
     assert "working" in seen
+
+
+# ── Which PyTorch an engine gets ─────────────────────────
+# What uv 0.13.8 resolved each engine's packages to, per PyTorch build (measured, Windows,
+# Python 3.11): None where they don't install together.
+RESOLVED = {
+    "chatterbox": {"cpu": "2.6.0+cpu", "cu118": "2.6.0+cu118", "cu124": "2.6.0+cu124",
+                   "cu126": "2.6.0+cu126"},
+    "voxcpm": {"cpu": "2.15.0+cpu", "cu126": "2.14.1+cu126", "cu130": "2.14.1+cu130"},
+    "demucs": {"cpu": "2.15.0+cpu", "cu118": "2.7.1+cu118", "cu124": "2.6.0+cu124",
+               "cu126": "2.14.1+cu126", "cu128": "2.11.0+cu128", "cu129": "2.9.0+cu129",
+               "cu130": "2.14.1+cu130", "auto": "2.15.0+cpu"},
+}
+RTX_4090 = ve.Gpu("NVIDIA GeForce RTX 4090", (8, 9), (13, 0))
+RTX_5090 = ve.Gpu("NVIDIA GeForce RTX 5090", (12, 0), (13, 0))
+GTX_1080 = ve.Gpu("NVIDIA GeForce GTX 1080", (6, 1), (12, 8))
+OLD_DRIVER = ve.Gpu("NVIDIA GeForce RTX 3060", (8, 6), (12, 4))
+
+
+def _resolver(engine_id):
+    def resolve(backend):
+        torch = RESOLVED[engine_id].get(backend)
+        return (0, torch, []) if torch else (1, None, ["× No solution found"])
+    return resolve
+
+
+def _choose(engine_id, gpu):
+    return ve.choose_torch(gpu, _resolver(engine_id), lambda line: None)[0]
+
+
+def test_nvidia_smi_is_read():
+    summary = "| NVIDIA-SMI 580.88    Driver Version: 580.88    CUDA Version: 13.0 |"
+    assert ve.parse_nvidia_smi("NVIDIA GeForce RTX 4090, 8.9\n", summary) == RTX_4090
+    assert ve.parse_nvidia_smi("Quadro P1000\n", summary) == \
+        ve.Gpu("Quadro P1000", None, (13, 0))                   # a driver without compute_cap
+    assert ve.parse_nvidia_smi("", summary) is None
+    assert ve.parse_nvidia_smi("Field \"compute_cap\" is not a valid field to query.", "") is None
+
+
+def test_which_gpus_a_pytorch_build_has_kernels_for():
+    assert ve.torch_runs_on("cu126", "2.6.0+cu126", (8, 9))
+    assert not ve.torch_runs_on("cu126", "2.6.0+cu126", (12, 0))       # Blackwell: 12.8, 2.7
+    assert ve.torch_runs_on("cu128", "2.7.1+cu128", (12, 0))
+    assert not ve.torch_runs_on("cu130", "2.14.1+cu130", (6, 1))       # CUDA 13: Turing on
+    assert ve.torch_runs_on("cu128", "2.7.1+cu128", (6, 1))
+    assert not ve.torch_runs_on("cu128", "2.8.0+cu128", (6, 1))        # 2.8: no Pascal
+    assert ve.torch_runs_on("cu128", "2.9.0+cu128", (7, 0))
+    assert not ve.torch_runs_on("cu128", "2.11.0+cu128", (7, 0))       # 2.11: no Volta
+    assert ve.torch_runs_on("cu126", "2.14.1+cu126", (5, 0))
+    assert ve.torch_runs_on("cu130", "2.14.1+cu130", None)             # unknown: the check decides
+    assert not ve.torch_runs_on("cpu", "2.6.0+cpu", (8, 9))
+
+
+def test_each_engine_gets_a_pytorch_the_gpu_runs():
+    # Chatterbox pins torch 2.6.0: no CUDA 12.8+ build, which uv's auto took on new drivers.
+    assert _choose("chatterbox", RTX_4090) == "cu126"
+    assert _choose("chatterbox", RTX_5090) == "cpu"          # 2.6 has nothing for Blackwell
+    assert _choose("chatterbox", GTX_1080) == "cu126"
+    assert _choose("chatterbox", OLD_DRIVER) == "cu124"
+    assert _choose("voxcpm", RTX_5090) == "cu130"
+    assert _choose("voxcpm", GTX_1080) == "cu126"            # no 12.8 build resolves
+    # Demucs resolves everywhere, but 2.11+cu128, auto's choice here, has no Pascal kernels.
+    assert _choose("demucs", GTX_1080) == "cu126"
+    assert _choose("demucs", None) == "auto"
+
+
+def test_a_cpu_install_says_why_and_whether_a_driver_would_help():
+    _, why = ve.choose_torch(OLD_DRIVER, _resolver("voxcpm"), lambda line: None)
+    assert "runs on the CPU" in why and "newer NVIDIA driver" in why
+    _, why = ve.choose_torch(RTX_5090, _resolver("chatterbox"), lambda line: None)
+    assert "runs on the CPU" in why and "driver" not in why.split("CPU")[-1]
+
+
+def test_a_failed_download_while_choosing_stops_the_install():
+    def unreachable(backend):
+        return 2, None, ["error: Request failed after 3 retries",
+                         "  Caused by: error sending request for url (https://download.pytorch.org/)"]
+    with pytest.raises(ve.EngineError, match="A download failed"):
+        ve.choose_torch(RTX_4090, unreachable, lambda line: None)
+
+
+def test_an_install_on_a_gpu_uses_the_build_chosen_and_says_where_it_runs(home, steps,
+                                                                           monkeypatch):
+    monkeypatch.setattr(ve, "find_uv", lambda: "uv")
+    monkeypatch.setattr(ve, "nvidia_gpu", lambda: RTX_4090)
+    monkeypatch.setattr(ve, "_resolve", lambda uv, python, packages, backend:
+                        _resolver("chatterbox")(backend))
+    monkeypatch.setattr(ve, "gpu_works", lambda python: (True, ""))
+    ve.install("chatterbox", log=lambda line: None)
+    assert steps[1][steps[1].index("--torch-backend") + 1] == "cu126"
+    status = ve.status("chatterbox")
+    assert status["runsOn"] == "gpu" and status["gpu"] == RTX_4090.name
+
+
+def test_an_install_the_gpu_cant_run_is_made_again_for_the_cpu(home, steps, monkeypatch):
+    monkeypatch.setattr(ve, "find_uv", lambda: "uv")
+    monkeypatch.setattr(ve, "nvidia_gpu", lambda: RTX_4090)
+    monkeypatch.setattr(ve, "_resolve", lambda uv, python, packages, backend:
+                        _resolver("chatterbox")(backend))
+    monkeypatch.setattr(ve, "gpu_works", lambda python: (
+        False, "PyTorch 2.6.0+cu126 can't compute on it (no kernel image is available)"))
+    said = []
+    ve.install("chatterbox", log=said.append)
+    backends = [cmd[cmd.index("--torch-backend") + 1] for cmd in steps if "--torch-backend" in cmd]
+    assert backends == ["cu126", "cpu"] and "--reinstall" in steps[-1]
+    assert ve.status("chatterbox")["runsOn"] == "cpu"
+    assert any("Installing the CPU build" in line for line in said)

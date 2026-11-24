@@ -503,6 +503,8 @@
       "removeConfirm": "Its environment is deleted. The model files it downloaded stay in the Hugging Face cache.",
       "installed": "Installed",
       "installFailed": "Install failed",
+      "runsOnGpu": "Runs on {gpu}",
+      "runsOnCpu": "Runs on the CPU: {gpu} can't run the PyTorch this engine needs. The install log says why.",
       "languages": "{count, plural, one {# language} other {# languages}}",
       "anyLanguage": "Any language",
       "homepage": "Project page",

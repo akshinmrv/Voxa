@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Chatterbox and VoxCPM2 couldn't be installed on newer NVIDIA drivers, and an engine could
+  install a PyTorch its GPU can't run.** Engines were installed with uv's `--torch-backend
+  auto`, which takes the newest CUDA build the driver runs. Chatterbox pins PyTorch 2.6, which
+  has no CUDA 12.8 or 13.0 build, and VoxCPM2's packages resolve for CUDA 12.6 and 13.0 only,
+  so with a driver for CUDA 12.8 or newer their install stopped with "No solution found". And
+  Demucs on a GTX 1080 with such a driver got PyTorch 2.11 for CUDA 12.8, which has no kernels
+  for Pascal cards. The install now picks the build itself: from the GPU and its driver
+  (`nvidia-smi`), the PyTorch uv resolves the engine's packages to for each CUDA build, and
+  which GPUs that PyTorch runs on; then it computes on the GPU, and installs the CPU build if
+  that fails. Chatterbox gets CUDA 12.6 on an RTX 4090 with a CUDA 13 driver, and the CPU on an
+  RTX 50 card, which its PyTorch 2.6 can't run. The engine's card says where it runs.
+
 - **After an update, Voxa Studio could keep running the console it had before.** The server
   sent the console's pages without Cache-Control, so the window kept them for a tenth of their
   files' age, hours for an install a few days old; 2.1.1's language fix ran as 2.0.0's code

@@ -43,6 +43,9 @@ export type InstallableEngine = {
   notice: string;
   installed: boolean;
   installedAt?: string;
+  /** Where it computes, when its install found out: "gpu" (on `gpu`) or "cpu". */
+  runsOn?: "gpu" | "cpu" | null;
+  gpu?: string | null;
   path: string;
   install: EngineInstall;
 };

@@ -503,6 +503,8 @@
       "removeConfirm": "Ortamı silinir. İndirdiği model dosyaları Hugging Face önbelleğinde kalır.",
       "installed": "Kurulu",
       "installFailed": "Kurulum başarısız",
+      "runsOnGpu": "{gpu} üzerinde çalışır",
+      "runsOnCpu": "CPU'da çalışır: {gpu} bu motorun istediği PyTorch'u çalıştıramıyor. Nedeni kurulum günlüğünde.",
       "languages": "{count} dil",
       "anyLanguage": "Her dil",
       "homepage": "Proje sayfası",

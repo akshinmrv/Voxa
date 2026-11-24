@@ -8,6 +8,7 @@ import {
   Ban,
   CheckCircle2,
   Copyright,
+  Cpu,
   Download,
   ExternalLink,
   HelpCircle,
@@ -139,6 +140,15 @@ function InstallableCard({
             : t("anyLanguage")}
         </Badge>
       </div>
+
+      {engine.installed && engine.runsOn && engine.gpu && (
+        <p className="flex gap-2 text-ui-small text-muted-foreground">
+          <Cpu className="mt-0.5 size-4 shrink-0" aria-hidden />
+          {engine.runsOn === "gpu"
+            ? t("runsOnGpu", { gpu: engine.gpu })
+            : t("runsOnCpu", { gpu: engine.gpu })}
+        </p>
+      )}
 
       {engine.notice && (
         <p className="flex gap-2 text-ui-small text-muted-foreground">

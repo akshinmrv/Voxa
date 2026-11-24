@@ -503,6 +503,8 @@
       "removeConfirm": "Onun mühiti silinir. Yüklədiyi model faylları Hugging Face keşində qalır.",
       "installed": "Quraşdırılıb",
       "installFailed": "Quraşdırma alınmadı",
+      "runsOnGpu": "{gpu} üzərində işləyir",
+      "runsOnCpu": "CPU-da işləyir: {gpu} bu mühərrikin istədiyi PyTorch-u işlədə bilmir. Səbəbi quraşdırma jurnalındadır.",
       "languages": "{count} dil",
       "anyLanguage": "İstənilən dil",
       "homepage": "Layihə səhifəsi",
